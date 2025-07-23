@@ -1,0 +1,107 @@
+// Auth Service Database Schema
+// PostgreSQL independiente para manejo de usuarios y autenticación
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Entidad principal de usuario
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  username  String   @unique
+  password  String   // Hashed with Argon2
+  
+  // Perfil básico
+  firstName String?
+  lastName  String?
+  avatar    String?
+  
+  // Metadata
+  isActive     Boolean   @default(true)
+  isVerified   Boolean   @default(false)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  
+  // Relaciones
+  refreshTokens RefreshToken[]
+  userSessions  UserSession[]
+  
+  @@map("users")
+  @@index([email])
+  @@index([username])
+  @@index([isActive])
+}
+
+// Tokens de refresh para manejo de JWT
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  
+  // Metadata del token
+  expiresAt DateTime
+  isRevoked Boolean  @default(false)
+  createdAt DateTime @default(now())
+  
+  // Device/Session info
+  userAgent String?
+  ipAddress String?
+  
+  // Relación
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("refresh_tokens")
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+// Sesiones activas de usuario para control de seguridad
+model UserSession {
+  id        String   @id @default(cuid())
+  userId    String
+  sessionId String   @unique
+  
+  // Session data
+  ipAddress   String?
+  userAgent   String?
+  device      String?
+  location    String?
+  
+  // Control de sesión
+  isActive    Boolean  @default(true)
+  lastSeen    DateTime @default(now())
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  
+  // Relación
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("user_sessions")
+  @@index([userId])
+  @@index([sessionId])
+  @@index([isActive])
+  @@index([expiresAt])
+}
+
+// Para auditoria de intentos de login
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  ipAddress String
+  userAgent String?
+  success   Boolean
+  createdAt DateTime @default(now())
+  
+  @@map("login_attempts")
+  @@index([email])
+  @@index([ipAddress])
+  @@index([createdAt])
+}

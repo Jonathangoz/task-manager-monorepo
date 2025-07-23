@@ -1,0 +1,28 @@
+
+{
+  "name": "task-manager",
+  "version": "1.0.0",
+  "description": "A task management application with microservices architecture",
+  "main": "index.js",
+  "scripts": {
+    "dev": "docker-compose -f docker-compose.dev.yml up --build",
+    "dev:auth": "cd services/auth-service && npm run dev",
+    "dev:tasks": "cd services/task-service && npm run dev",
+    "dev:frontend": "cd frontend/task-manager-ui && npm run dev",
+    "build:all": "npm run build:auth && npm run build:tasks && npm run build:frontend",
+    "build:auth": "cd services/auth-service && npm run build",
+    "build:tasks": "cd services/task-service && npm run build",
+    "build:frontend": "cd frontend/task-manager-ui && npm run build",
+    "setup": "./scripts/setup.sh"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.1.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.0",
+    "jose": "^6.0.12",
+    "argon2": "^0.43.1",
+    "redis": "^5.6.1"
+  }
+}

@@ -1,0 +1,37 @@
+# Task Service - Render Configuration
+services:
+  - type: web
+    name: task-manager-task-service
+    env: node
+    plan: starter
+    buildCommand: npm install && npm run build && npx prisma generate && npx prisma migrate deploy
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3002
+      - key: DATABASE_URL
+        fromDatabase:
+          name: task-service-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: task-manager-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: AUTH_SERVICE_URL
+        value: https://task-manager-auth-service.onrender.com
+      - key: CORS_ORIGIN
+        value: https://your-frontend.onrender.com,https://task-manager-auth-service.onrender.com
+    healthCheckPath: /api/v1/health
+    
+databases:
+  - name: task-service-db
+    plan: starter
+
+redis:
+  - name: task-manager-redis
+    plan: starter

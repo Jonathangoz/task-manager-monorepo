@@ -1,0 +1,86 @@
+# docker-compose.dev.yml
+version: '3.8'
+
+services:
+  # PostgreSQL para Auth Service
+  auth-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: auth_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+
+  # PostgreSQL para Task Service
+  task-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: task_db
+      POSTGRES_USER: task_user
+      POSTGRES_PASSWORD: task_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - task_db_data:/var/lib/postgresql/data
+
+  # Redis compartido
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # Auth Service
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://auth_user:auth_password@auth-db:5432/auth_db
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - auth-db
+      - redis
+
+  # Task Service
+  task-service:
+    build:
+      context: ./services/task-service
+      dockerfile: Dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://task_user:task_password@task-db:5432/task_db
+      REDIS_URL: redis://redis:6379
+      AUTH_SERVICE_URL: http://auth-service:3001
+    depends_on:
+      - task-db
+      - redis
+      - auth-service
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend/task-manager-ui
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_AUTH_SERVICE_URL: http://localhost:3001/api/v1
+      NEXT_PUBLIC_TASK_SERVICE_URL: http://localhost:3002/api/v1
+    depends_on:
+      - auth-service
+      - task-service
+
+volumes:
+  auth_db_data:
+  task_db_data:
+  redis_data:

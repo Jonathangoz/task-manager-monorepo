@@ -1,0 +1,118 @@
+// Task Service Database Schema
+// PostgreSQL independiente para manejo de tareas y categorías
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Modelo de Categorías
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  color       String?  // Hex color para UI
+  icon        String?  // Icono para UI
+  
+  // Metadata
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // User ownership (referencia al Auth Service)
+  userId      String   @map("user_id")
+  
+  // Relaciones
+  tasks       Task[]
+  
+  @@map("categories")
+  @@unique([userId, name]) // Un usuario no puede tener categorías duplicadas
+  @@index([userId])
+  @@index([isActive])
+}
+
+// Modelo principal de Tareas
+model Task {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  
+  // Estado y prioridad
+  status      TaskStatus @default(PENDING)
+  priority    Priority   @default(MEDIUM)
+  
+  // Fechas
+  dueDate     DateTime?
+  completedAt DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  
+  // User ownership (referencia al Auth Service)
+  userId      String     @map("user_id")
+  
+  // Categoría (opcional)
+  categoryId  String?    @map("category_id")
+  category    Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  
+  // Metadata adicional
+  tags        String[]   @default([])
+  estimatedHours Int?
+  actualHours    Int?
+  
+  // Archivos adjuntos (URLs)
+  attachments String[]   @default([])
+  
+  @@map("tasks")
+  @@index([userId])
+  @@index([status])
+  @@index([priority])
+  @@index([dueDate])
+  @@index([categoryId])
+  @@index([createdAt])
+}
+
+// Enum para estados de tareas
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  ON_HOLD
+}
+
+// Enum para prioridades
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// Modelo para estadísticas (opcional, para dashboard)
+model TaskStats {
+  id               String   @id @default(cuid())
+  userId           String   @unique @map("user_id")
+  
+  // Contadores
+  totalTasks       Int      @default(0)
+  completedTasks   Int      @default(0)
+  pendingTasks     Int      @default(0)
+  inProgressTasks  Int      @default(0)
+  overdueTasks     Int      @default(0)
+  
+  // Estadísticas por prioridad
+  urgentTasks      Int      @default(0)
+  highTasks        Int      @default(0)
+  mediumTasks      Int      @default(0)
+  lowTasks         Int      @default(0)
+  
+  // Metadata
+  lastUpdated      DateTime @updatedAt
+  
+  @@map("task_stats")
+  @@index([userId])
+}
