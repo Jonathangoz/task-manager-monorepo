@@ -1,0 +1,10 @@
+# Archivos generados
+dist/
+coverage/
+node_modules/
+
+# Prisma
+prisma/migrations/
+
+# Logs
+*.log

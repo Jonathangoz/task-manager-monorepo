@@ -1,51 +1,20 @@
+// services/auth-service/tsconfig.json
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022"],
-    "module": "commonjs",
-    "moduleResolution": "node",
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "strictFunctionTypes": true,
-    "noImplicitReturns": true,
-    "noImplicitThis": true,
-    "declaration": true,
-    "sourceMap": true,
     "outDir": "./dist",
     "rootDir": "./",
-    "removeComments": true,
-    "resolveJsonModule": true,
     "baseUrl": "./",
     "paths": {
       "@/*": ["src/*"],
-      "@/services/*": ["src/services/*"],
-      "@/controllers/*": ["src/controllers/*"],
-      "@/middlewares/*": ["src/middlewares/*"],
-      "@/models/*": ["src/models/*"],
-      "@/repositories/*": ["src/repositories/*"],
-      "@/routes/*": ["src/routes/*"],
-      "@/types/*": ["src/types/*"],
-      "@/interfaces/*": ["src/interfaces/*"],
       "@/config/*": ["src/config/*"],
       "@/core/*": ["src/core/*"],
       "@/presentation/*": ["src/presentation/*"],
-      "@/utils/*": ["src/utils/*"],
-      "@task-manager/types": ["../../shared/types"]
-    },
-    "references": [
-      { "path": "../../shared/types" } 
-    ],
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+      "@/utils/*": ["src/utils/*"]
+    }
   },
   "include": [
-    "src/**/*.ts", 
+    "src/**/*.ts",
     "prisma/**/*.ts"
   ],
   "exclude": [
@@ -53,12 +22,6 @@
     "dist",
     "**/*.test.ts",
     "**/*.spec.ts",
-    "coverage",
-    "build"
-  ],
-  "ts-node": {
-    "require": ["tsconfig-paths/register"],
-    "files": true,
-    "experimentalSpecifierResolution": "node"
-  }
+    "coverage"
+  ]
 }

@@ -1,38 +1,60 @@
-# services/auth-service/Dockerfile
-
-# 1. Etapa Base
+# Multi-stage Dockerfile para Auth Service
 FROM node:22-alpine AS base
+
+# Instalar pnpm globalmente
+RUN npm install -g pnpm@latest
+
+# Crear directorio de trabajo
 WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
 
-# 2. Etapa de Dependencias
+# Crear usuario no-root
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nextjs -u 1001
+
+# ==============================================
 FROM base AS dependencies
-# Copia la configuración del workspace y el lockfile raíz
-COPY ../../pnpm-workspace.yaml ./
-# Copia selectivamente el package.json de las dependencias
-COPY ../task-service/package.json ./services/task-service/package.json
-COPY ../../shared/types/package.json ./shared/types/package.json
-# Instala TODAS las dependencias de producción para el monorepo
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --prod --frozen-lockfile
 
-# 3. Etapa de Construcción
+# Copiar archivos de configuración
+COPY package.json pnpm-lock.yaml* ./
+COPY prisma ./prisma
+
+# Instalar dependencias de producción
+RUN pnpm install --frozen-lockfile --prod
+
+# ==============================================
 FROM base AS build
+
+# Copiar node_modules de dependencies
 COPY --from=dependencies /app/node_modules ./node_modules
+
+# Copiar código fuente
 COPY . .
+
+# Generar cliente de Prisma
+RUN pnpm prisma:generate
+
+# Compilar TypeScript
 RUN pnpm build
 
-# 4. Etapa de Producción
-FROM node:22-alpine AS production
-WORKDIR /app
-# Copia solo las dependencias de producción y el código compilado
-COPY --from=build /app/node_modules ./node_modules
+# ==============================================
+FROM base AS production
+
+# Copiar dependencias y archivos compilados
+COPY --from=dependencies /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
-COPY --from=build /app/package.json ./
-# Copia el esquema de Prisma para acceso en tiempo de ejecución
-COPY --from=build /app/prisma/schema.prisma ./prisma/schema.prisma
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/prisma ./prisma
 
-# Genera el cliente de Prisma
-RUN npx prisma generate
+# Cambiar ownership al usuario nodejs
+RUN chown -R nodejs:nodejs /app
+USER nodejs
 
+# Exponer puerto
 EXPOSE 3001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3001/api/v1/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+
+# Comando de inicio
 CMD ["node", "dist/server.js"]

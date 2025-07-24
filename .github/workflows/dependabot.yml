@@ -1,150 +1,60 @@
-# .github/dependabot.yml
-# Configuración de Dependabot para actualizaciones automáticas de dependencias
-
 version: 2
 updates:
-  # Auth Service Dependencies
-  - package-ecosystem: "npm"
-    directory: "/services/auth-service"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 5
-    reviewers:
-      - "your-username"
-    assignees:
-      - "your-username"
-    commit-message:
-      prefix: "🔐 auth"
-      include: "scope"
-    labels:
-      - "dependencies"
-      - "auth-service"
-    ignore:
-      # Ignore major version updates for critical packages
-      - dependency-name: "express"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "prisma"
-        update-types: ["version-update:semver-major"]
-
-  # Task Service Dependencies  
-  - package-ecosystem: "npm"
-    directory: "/services/task-service"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 5
-    reviewers:
-      - "your-username"
-    assignees:
-      - "your-username"
-    commit-message:
-      prefix: "✅ tasks"
-      include: "scope"
-    labels:
-      - "dependencies"
-      - "task-service"
-    ignore:
-      - dependency-name: "express"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "prisma"
-        update-types: ["version-update:semver-major"]
-
-  # Frontend Dependencies
-  - package-ecosystem: "npm"
-    directory: "/frontend/task-manager-ui"
-    schedule:
-      interval: "weekly"
-      day: "tuesday"
-      time: "09:00"
-    open-pull-requests-limit: 5
-    reviewers:
-      - "your-username"
-    assignees:
-      - "your-username"
-    commit-message:
-      prefix: "🎨 frontend"
-      include: "scope"
-    labels:
-      - "dependencies"
-      - "frontend"
-    ignore:
-      # Be more careful with Next.js major updates
-      - dependency-name: "next"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "react"
-        update-types: ["version-update:semver-major"]
-
-  # Root Monorepo Dependencies
+  # Enable version updates for npm (package.json)
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "wednesday"
+      day: "monday"
       time: "09:00"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 10
     reviewers:
-      - "your-username"
+      - "task-manager-team"
     assignees:
-      - "your-username"
+      - "task-manager-team"
     commit-message:
-      prefix: "🏗️ monorepo"
+      prefix: "chore"
       include: "scope"
-    labels:
-      - "dependencies"
-      - "monorepo"
 
-  # Docker Dependencies
-  - package-ecosystem: "docker"
+  # Auth Service dependencies
+  - package-ecosystem: "npm"
     directory: "/services/auth-service"
     schedule:
-      interval: "monthly"
-    reviewers:
-      - "your-username"
-    commit-message:
-      prefix: "🐳 docker"
-    labels:
-      - "dependencies"
-      - "docker"
-      - "auth-service"
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
 
-  - package-ecosystem: "docker"
+  # Task Service dependencies
+  - package-ecosystem: "npm"
     directory: "/services/task-service"
     schedule:
-      interval: "monthly"
-    reviewers:
-      - "your-username"
-    commit-message:
-      prefix: "🐳 docker"
-    labels:
-      - "dependencies"
-      - "docker"
-      - "task-service"
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
 
-  - package-ecosystem: "docker"
-    directory: "/frontend/task-manager-ui"
+  # Frontend dependencies
+  - package-ecosystem: "npm"
+    directory: "/frontend/task-frontend"
     schedule:
-      interval: "monthly"
-    reviewers:
-      - "your-username"
-    commit-message:
-      prefix: "🐳 docker"
-    labels:
-      - "dependencies"
-      - "docker"
-      - "frontend"
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
 
-  # GitHub Actions Dependencies
+  # Docker updates
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "10:00"
+
+  # GitHub Actions updates
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "monthly"
-    reviewers:
-      - "your-username"
-    commit-message:
-      prefix: "🔄 ci"
-    labels:
-      - "dependencies"
-      - "github-actions"
+      interval: "weekly"
+      day: "monday"
+      time: "10:00"

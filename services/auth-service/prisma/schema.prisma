@@ -1,6 +1,11 @@
 // Auth Service Database Schema
 // PostgreSQL independiente para manejo de usuarios y autenticación
 
+// - Modelos: PascalCase (User, RefreshToken)
+// - Campos: camelCase (firstName, lastName, createdAt)
+// - Tablas BD: snake_case (users, refresh_tokens, user_sessions)
+// - Índices: snake_case (email_idx, username_idx)
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -18,90 +23,131 @@ model User {
   password  String   // Hashed with Argon2
   
   // Perfil básico
-  firstName String?
-  lastName  String?
+  firstName String?  @map("first_name")
+  lastName  String?  @map("last_name")
   avatar    String?
   
   // Metadata
-  isActive     Boolean   @default(true)
-  isVerified   Boolean   @default(false)
-  lastLoginAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  isActive     Boolean   @default(true) @map("is_active")
+  isVerified   Boolean   @default(false) @map("is_verified")
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
   
   // Relaciones
   refreshTokens RefreshToken[]
-  userSessions  UserSession[]
+  userSessions  UserSession[]  @relation("UserSessions")
+  loginAttempts LoginAttempt[] @relation("UserLoginAttempts")
   
   @@map("users")
-  @@index([email])
-  @@index([username])
-  @@index([isActive])
+  @@index([email], name: "users_email_idx")
+  @@index([username], name: "users_username_idx")
+  @@index([isActive], name: "users_is_active_idx")
+  @@index([createdAt], name: "users_created_at_idx")
 }
 
 // Tokens de refresh para manejo de JWT
 model RefreshToken {
   id        String   @id @default(cuid())
   token     String   @unique
-  userId    String
+  userId    String   @map("user_id")
   
   // Metadata del token
-  expiresAt DateTime
-  isRevoked Boolean  @default(false)
-  createdAt DateTime @default(now())
+  expiresAt DateTime @map("expires_at")
+  isRevoked Boolean  @default(false) @map("is_revoked")
+  createdAt DateTime @default(now()) @map("created_at")
   
   // Device/Session info
-  userAgent String?
-  ipAddress String?
+  userAgent String? @map("user_agent")
+  ipAddress String? @map("ip_address")
   
   // Relación
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   @@map("refresh_tokens")
-  @@index([userId])
-  @@index([token])
-  @@index([expiresAt])
+  @@index([userId], name: "refresh_tokens_user_id_idx")
+  @@index([token], name: "refresh_tokens_token_idx")
+  @@index([expiresAt], name: "refresh_tokens_expires_at_idx")
+  @@index([isRevoked], name: "refresh_tokens_is_revoked_idx")
 }
 
 // Sesiones activas de usuario para control de seguridad
 model UserSession {
   id        String   @id @default(cuid())
-  userId    String
-  sessionId String   @unique
+  userId    String   @map("user_id")
+  sessionId String   @unique @map("session_id")
   
   // Session data
-  ipAddress   String?
-  userAgent   String?
+  ipAddress   String? @map("ip_address")
+  userAgent   String? @map("user_agent")
   device      String?
   location    String?
   
   // Control de sesión
-  isActive    Boolean  @default(true)
-  lastSeen    DateTime @default(now())
-  expiresAt   DateTime
-  createdAt   DateTime @default(now())
+  isActive    Boolean  @default(true) @map("is_active")
+  lastSeen    DateTime @default(now()) @map("last_seen")
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
   
   // Relación
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation("UserSessions", fields: [userId], references: [id], onDelete: Cascade)
   
   @@map("user_sessions")
-  @@index([userId])
-  @@index([sessionId])
-  @@index([isActive])
-  @@index([expiresAt])
+  @@index([userId], name: "user_sessions_user_id_idx")
+  @@index([sessionId], name: "user_sessions_session_id_idx")
+  @@index([isActive], name: "user_sessions_is_active_idx")
+  @@index([expiresAt], name: "user_sessions_expires_at_idx")
+  @@index([lastSeen], name: "user_sessions_last_seen_idx")
 }
 
 // Para auditoria de intentos de login
 model LoginAttempt {
   id        String   @id @default(cuid())
   email     String
-  ipAddress String
-  userAgent String?
+  userId    String?  @map("user_id") // Opcional, para casos donde el usuario no existe
+  ipAddress String   @map("ip_address")
+  userAgent String?  @map("user_agent")
   success   Boolean
-  createdAt DateTime @default(now())
+  reason    String?  // Razón del fallo: "invalid_password", "user_not_found", etc.
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  // Relación opcional
+  user User? @relation("UserLoginAttempts", fields: [userId], references: [id], onDelete: SetNull)
   
   @@map("login_attempts")
-  @@index([email])
-  @@index([ipAddress])
-  @@index([createdAt])
+  @@index([email], name: "login_attempts_email_idx")
+  @@index([ipAddress], name: "login_attempts_ip_address_idx")
+  @@index([createdAt], name: "login_attempts_created_at_idx")
+  @@index([success], name: "login_attempts_success_idx")
+  @@index([userId], name: "login_attempts_user_id_idx")
+}
+
+// Tabla para tokens de verificación de email y reset de password
+model VerificationToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  type      TokenType
+  userId    String   @map("user_id")
+  email     String   // Para verificación de cambio de email
+  expiresAt DateTime @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  // Relación
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("verification_tokens")
+  @@index([token], name: "verification_tokens_token_idx")
+  @@index([userId], name: "verification_tokens_user_id_idx")
+  @@index([type], name: "verification_tokens_type_idx")
+  @@index([expiresAt], name: "verification_tokens_expires_at_idx")
+}
+
+// Enum para tipos de tokens de verificación
+enum TokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+  EMAIL_CHANGE
+  
+  @@map("token_type")
 }

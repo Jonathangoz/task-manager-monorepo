@@ -1,25 +1,38 @@
 module.exports = {
-  parser: '@typescript-eslint/parser',
-  parserOptions: {
-    project: 'tsconfig.json',
-    tsconfigRootDir: __dirname,
-    sourceType: 'module',
-  },
-  plugins: ['@typescript-eslint/eslint-plugin'],
-  extends: [
-    '@typescript-eslint/recommended',
-    'prettier',
-  ],
   root: true,
   env: {
     node: true,
-    jest: true,
+    es2022: true,
   },
-  ignorePatterns: ['.eslintrc.js'],
+  extends: [
+    'eslint:recommended',
+    '@typescript-eslint/recommended',
+    'prettier'
+  ],
+  parser: '@typescript-eslint/parser',
+  parserOptions: {
+    ecmaVersion: 2022,
+    sourceType: 'module',
+    project: './tsconfig.json'
+  },
+  plugins: [
+    '@typescript-eslint',
+    'prettier'
+  ],
   rules: {
-    '@typescript-eslint/interface-name-prefix': 'off',
+    'prettier/prettier': 'error',
+    '@typescript-eslint/no-unused-vars': 'error',
+    '@typescript-eslint/no-explicit-any': 'warn',
     '@typescript-eslint/explicit-function-return-type': 'off',
     '@typescript-eslint/explicit-module-boundary-types': 'off',
-    '@typescript-eslint/no-explicit-any': 'warn',
+    '@typescript-eslint/no-inferrable-types': 'off',
+    'no-console': 'warn',
+    'prefer-const': 'error'
   },
+  ignorePatterns: [
+    'dist/',
+    'node_modules/',
+    'coverage/',
+    '*.js'
+  ]
 };
