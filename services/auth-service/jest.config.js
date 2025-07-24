@@ -17,14 +17,16 @@ module.exports = {
     '!src/**/*.interface.ts'
   ],
   moduleNameMapping: {
-    '^@/(.*)$': '<rootDir>/src/$1',
-    '^@/config/(.*)$': '<rootDir>/src/config/$1',
-    '^@/core/(.*)$': '<rootDir>/src/core/$1',
-    '^@/presentation/(.*)$': '<rootDir>/src/presentation/$1',
-    '^@/utils/(.*)$': '<rootDir>/src/utils/$1'
+    '^@/(.*)$': '<rootDir>/src/$1'
   },
   setupFilesAfterEnv: ['<rootDir>/__tests__/setup.ts'],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
-  testTimeout: 10000
+  testTimeout: 10000,
+  maxWorkers: 2,
+  detectOpenHandles: true,
+  forceExit: true,
+  clearMocks: true,
+  restoreMocks: true,
+  resetModules: true
 };

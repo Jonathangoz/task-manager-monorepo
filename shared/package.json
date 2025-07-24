@@ -1,0 +1,9 @@
+
+{
+  "name": "@task-manager/types",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "devDependencies": {
+    "zod": "^4.0.7"
+  }
+}

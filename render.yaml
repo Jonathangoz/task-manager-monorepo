@@ -1,0 +1,106 @@
+services:
+  # 🔐 Auth Service
+  - type: web
+    name: task-manager-auth-service
+    runtime: node
+    plan: free
+    rootDir: ./services/auth-service
+    buildCommand: pnpm install --frozen-lockfile && pnpm prisma:generate && pnpm build
+    startCommand: pnpm start:prod
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: DATABASE_URL
+        fromDatabase:
+          name: auth-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: task-manager-cache
+          property: connectionString
+      - key: REDIS_PREFIX
+        value: auth: 
+      - key: JWT_SECRET
+        generateValue: true
+      - key: REFRESH_TOKEN_SECRET
+        generateValue: true
+      - key: JWE_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        fromService:
+          type: web
+          name: task-manager-frontend
+          property: url
+
+  # ✅ Task Service
+  - type: web
+    name: task-manager-task-service
+    runtime: node
+    plan: free
+    rootDir: ./services/task-service
+    buildCommand: pnpm install --frozen-lockfile && pnpm prisma:generate && pnpm build
+    startCommand: pnpm start:prod
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3002
+      - key: DATABASE_URL
+        fromDatabase:
+          name: task-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: task-manager-cache
+          property: connectionString
+      - key: REDIS_PREFIX
+        value: tasks:
+      - key: AUTH_SERVICE_URL
+        fromService:
+          type: web
+          name: task-manager-auth-service
+          property: url
+      - key: JWT_SECRET
+        sync: false  
+        value: 
+
+  # 🎨 Frontend
+  - type: web
+    name: task-manager-frontend
+    runtime: node
+    plan: free
+    rootDir: ./frontend/task-frontend
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm start
+    envVars:
+      - key: NEXT_PUBLIC_AUTH_SERVICE_URL
+        fromService:
+          type: web
+          name: task-manager-auth-service
+          property: url
+      - key: NEXT_PUBLIC_TASK_SERVICE_URL
+        fromService:
+          type: web
+          name: task-manager-task-service
+          property: url
+
+databases:
+  - name: auth-db
+    databaseName: auth_db
+    user: auth_user
+    plan: free
+
+  - name: task-db
+    databaseName: task_db
+    user: task_user
+    plan: free
+
+redis:
+  - name: task-manager-cache
+    plan: free

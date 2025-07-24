@@ -99,6 +99,8 @@ export const TOKEN_CONFIG = {
 export const SECURITY_CONFIG = {
   MAX_LOGIN_ATTEMPTS: 5,
   LOGIN_ATTEMPT_WINDOW: 15 * 60 * 1000, // 15 minutos
+  JWT_SECRET_MIN_LENGTH: 64,
+  JWE_SECRET_LENGTH: 32,
   PASSWORD_MIN_LENGTH: 8,
   PASSWORD_MAX_LENGTH: 128,
   USERNAME_MIN_LENGTH: 3,
@@ -137,7 +139,7 @@ export const VALIDATION_PATTERNS = {
   EMAIL: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
   USERNAME: /^[a-zA-Z0-9_]+$/,
   PASSWORD_STRONG: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
-  CUID: /^c[^\s-]{8,}$/,
+  CUID: /^c[a-z0-9]{24}$/,
 } as const;
 
 // Event Types para logging y auditoria

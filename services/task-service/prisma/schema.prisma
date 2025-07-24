@@ -1,6 +1,11 @@
 // Task Service Database Schema
 // PostgreSQL independiente para manejo de tareas y categorías
 
+// - Modelos: PascalCase (Task, Category)
+// - Campos: camelCase (firstName, lastName, createdAt)
+// - Tablas BD: snake_case (tasks, categories, task_stats)
+// - Índices: snake_case (user_id_idx, status_idx)
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -73,6 +78,7 @@ model Task {
   @@index([dueDate])
   @@index([categoryId])
   @@index([createdAt])
+  @@check(dueDate > createdAt, name: "valid_due_date")
 }
 
 // Enum para estados de tareas

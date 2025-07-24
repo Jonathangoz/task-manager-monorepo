@@ -1,77 +1,60 @@
-# ==============================================
-# AUTH SERVICE DOCKERFILE
-# Multi-stage build para optimización
-# ==============================================
+# Multi-stage Dockerfile para Auth Service
+FROM node:22-alpine AS base
 
-# Etapa de construcción
-FROM node:18-alpine AS builder
+# Instalar pnpm globalmente
+RUN npm install -g pnpm@latest
 
-# Metadata
-LABEL maintainer="Task Manager Team"
-LABEL description="Auth Service - Task Manager Microservices"
-LABEL version="1.0.0"
-
-# Instalar dependencias del sistema
-RUN apk add --no-cache \
-    python3 \
-    make \
-    g++ \
-    libc6-compat
-
-# Establecer directorio de trabajo
+# Crear directorio de trabajo
 WORKDIR /app
-
-# Copiar archivos de dependencias
-COPY package*.json ./
-COPY tsconfig.json ./
-COPY prisma ./prisma/
-
-# Instalar dependencias
-RUN npm ci --only=production && npm cache clean --force
-
-# Generar Prisma Client
-RUN npx prisma generate
-
-# Copiar código fuente
-COPY src ./src
-
-# Construir aplicación
-RUN npm run build
-
-# ==============================================
-# Etapa de producción
-FROM node:18-alpine AS production
-
-# Instalar dumb-init para manejo de procesos
-RUN apk add --no-cache dumb-init
 
 # Crear usuario no-root
 RUN addgroup -g 1001 -S nodejs
-RUN adduser -S authuser -u 1001
+RUN adduser -S nextjs -u 1001
 
-# Establecer directorio de trabajo
-WORKDIR /app
+# ==============================================
+FROM base AS dependencies
 
-# Copiar archivos necesarios desde builder
-COPY --from=builder --chown=authuser:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=authuser:nodejs /app/dist ./dist
-COPY --from=builder --chown=authuser:nodejs /app/prisma ./prisma
-COPY --from=builder --chown=authuser:nodejs /app/package*.json ./
+# Copiar archivos de configuración
+COPY package.json pnpm-lock.yaml* ./
+COPY prisma ./prisma
 
-# Cambiar a usuario no-root
-USER authuser
+# Instalar dependencias de producción
+RUN pnpm install --frozen-lockfile --prod
+
+# ==============================================
+FROM base AS build
+
+# Copiar node_modules de dependencies
+COPY --from=dependencies /app/node_modules ./node_modules
+
+# Copiar código fuente
+COPY . .
+
+# Generar cliente de Prisma
+RUN pnpm prisma:generate
+
+# Compilar TypeScript
+RUN pnpm build
+
+# ==============================================
+FROM base AS production
+
+# Copiar dependencias y archivos compilados
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/prisma ./prisma
+
+# Cambiar ownership al usuario nodejs
+RUN chown -R nodejs:nodejs /app
+USER nodejs
 
 # Exponer puerto
 EXPOSE 3001
 
-# Variables de entorno por defecto
-ENV NODE_ENV=production
-ENV PORT=3001
-
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:3001/api/v1/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+  CMD node -e "require('http').get('http://localhost:3001/api/v1/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
-# Comando de inicio con dumb-init
-ENTRYPOINT ["dumb-init", "--"]
+# Comando de inicio
 CMD ["node", "dist/server.js"]

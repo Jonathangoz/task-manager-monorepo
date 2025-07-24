@@ -1,62 +1,59 @@
-# Task Service Dockerfile
-FROM node:18-alpine AS base
+FROM node:22-alpine AS base
 
-# Instalar dependencias del sistema
-RUN apk add --no-cache libc6-compat
+# Instalar pnpm globalmente
+RUN npm install -g pnpm@latest
 
+# Crear directorio de trabajo
 WORKDIR /app
 
-# Copiar archivos de dependencias
-COPY package*.json ./
-COPY prisma ./prisma/
+# Crear usuario no-root
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S taskservice -u 1001
 
-# Instalar dependencias
-RUN npm ci --only=production && npm cache clean --force
+# ==============================================
+FROM base AS dependencies
 
-# Generar Prisma Client
-RUN npx prisma generate
+# Copiar archivos de configuración
+COPY package.json pnpm-lock.yaml* ./
+COPY prisma ./prisma
 
-# Etapa de build
-FROM base AS builder
-WORKDIR /app
+# Instalar dependencias de producción
+RUN pnpm install --frozen-lockfile --prod
 
-# Instalar todas las dependencias (incluyendo dev)
-RUN npm ci
+# ==============================================
+FROM base AS build
+
+# Copiar node_modules de dependencies
+COPY --from=dependencies /app/node_modules ./node_modules
 
 # Copiar código fuente
 COPY . .
 
+# Generar cliente de Prisma
+RUN pnpm prisma:generate
+
 # Compilar TypeScript
-RUN npm run build
+RUN pnpm build
 
-# Etapa de producción
-FROM node:18-alpine AS runner
-WORKDIR /app
+# ==============================================
+FROM base AS production
 
-# Crear usuario no-root
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 taskservice
+# Copiar dependencias y archivos compilados
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/prisma ./prisma
 
-# Copiar archivos necesarios
-COPY --from=base /app/node_modules ./node_modules
-COPY --from=base /app/prisma ./prisma
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package*.json ./
-
-# Cambiar ownership
+# Cambiar ownership al usuario nodejs
 RUN chown -R taskservice:nodejs /app
 USER taskservice
 
 # Exponer puerto
 EXPOSE 3002
 
-# Variables de entorno
-ENV NODE_ENV=production
-ENV PORT=3002
-
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node dist/health-check.js || exit 1
+  CMD node -e "require('http').get('http://localhost:3002/api/v1/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
 # Comando de inicio
-CMD ["npm", "start"]
+CMD ["node", "dist/server.js"]

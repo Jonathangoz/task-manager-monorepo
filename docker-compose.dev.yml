@@ -1,86 +1,53 @@
-# docker-compose.dev.yml
-version: '3.8'
-
+# Agregar task-service al compose
 services:
-  # PostgreSQL para Auth Service
-  auth-db:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: auth_db
-      POSTGRES_USER: auth_user
-      POSTGRES_PASSWORD: auth_password
-    ports:
-      - "5432:5432"
-    volumes:
-      - auth_db_data:/var/lib/postgresql/data
-
-  # PostgreSQL para Task Service
-  task-db:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: task_db
-      POSTGRES_USER: task_user
-      POSTGRES_PASSWORD: task_password
-    ports:
-      - "5433:5432"
-    volumes:
-      - task_db_data:/var/lib/postgresql/data
-
-  # Redis compartido
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-
-  # Auth Service
-  auth-service:
-    build:
-      context: ./services/auth-service
-      dockerfile: Dockerfile
-    ports:
-      - "3001:3001"
-    environment:
-      NODE_ENV: development
-      DATABASE_URL: postgresql://auth_user:auth_password@auth-db:5432/auth_db
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      - auth-db
-      - redis
-
-  # Task Service
+  # ... servicios existentes
+  
   task-service:
     build:
       context: ./services/task-service
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
+    container_name: task-manager-task-service
     ports:
       - "3002:3002"
     environment:
       NODE_ENV: development
+      PORT: 3002
       DATABASE_URL: postgresql://task_user:task_password@task-db:5432/task_db
       REDIS_URL: redis://redis:6379
-      AUTH_SERVICE_URL: http://auth-service:3001
+      REDIS_PREFIX: "tasks:"
+      AUTH_SERVICE_URL: "http://auth-service:3001"
+      JWT_SECRET: "dev-jwt-secret-super-secure-for-development-only-minimum-64-characters"
+      CORS_ORIGIN: "http://localhost:3000,http://localhost:3001"
+    volumes:
+      - ./services/task-service:/app
+      - /app/node_modules
+      - /app/dist
     depends_on:
-      - task-db
-      - redis
-      - auth-service
+      task-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+    restart: unless-stopped
 
-  # Frontend
-  frontend:
+  # Agregar frontend al compose
+  task-frontend:
     build:
-      context: ./frontend/task-manager-ui
-      dockerfile: Dockerfile
+      context: ./frontend/task-frontend
+      dockerfile: Dockerfile.dev
+    container_name: task-manager-frontend
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_AUTH_SERVICE_URL: http://localhost:3001/api/v1
-      NEXT_PUBLIC_TASK_SERVICE_URL: http://localhost:3002/api/v1
+      NODE_ENV: development
+      NEXT_PUBLIC_AUTH_SERVICE_URL_DEV: "http://localhost:3001/api/v1"
+      NEXT_PUBLIC_TASK_SERVICE_URL_DEV: "http://localhost:3002/api/v1"
+    volumes:
+      - ./frontend/task-frontend:/app
+      - /app/node_modules
+      - /app/.next
     depends_on:
       - auth-service
       - task-service
-
-volumes:
-  auth_db_data:
-  task_db_data:
-  redis_data:
+    restart: unless-stopped
