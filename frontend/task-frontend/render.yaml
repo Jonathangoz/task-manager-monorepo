@@ -1,6 +1,0 @@
-services:
-  - type: web
-    name: task-manager-ui
-    env: node
-    buildCommand: npm ci && npm run build
-    startCommand: npm start

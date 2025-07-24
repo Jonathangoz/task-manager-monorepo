@@ -1,0 +1,73 @@
+# task-manager-monorepo/render.yaml
+services:
+  # 🔐 Servicio de Autenticación
+  - type: web
+    name: auth-service
+    env: node
+    rootDir: ./services/auth-service
+    plan: free # O tu plan preferido
+    buildCommand: 'pnpm install && pnpm prisma:generate && pnpm build'
+    startCommand: 'pnpm start:prod'
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: task-manager-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: task-manager-cache
+          property: connectionString
+      - key: NODE_ENV
+        value: production
+
+  # ✅ Servicio de Tareas
+  - type: web
+    name: task-service
+    env: node
+    rootDir: ./services/task-service
+    plan: free
+    buildCommand: 'pnpm install && pnpm prisma:generate && pnpm build'
+    startCommand: 'pnpm start:prod'
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: task-manager-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: task-manager-cache
+          property: connectionString
+      - key: NODE_ENV
+        value: production
+
+  # 🎨 Interfaz de Usuario Frontend
+  - type: web
+    name: task-frontend
+    env: node
+    rootDir: ./frontend/task-frontend
+    plan: free
+    buildCommand: 'pnpm install && pnpm build'
+    startCommand: 'pnpm start'
+    envVars:
+      - key: NEXT_PUBLIC_AUTH_API_URL
+        fromService:
+          type: web
+          name: auth-service
+          property: url
+      - key: NEXT_PUBLIC_TASK_API_URL
+        fromService:
+          type: web
+          name: task-service
+          property: url
+
+databases:
+  - name: task-manager-db
+    databaseName: taskmanager
+    user: taskmanager_user
+    plan: free
+
+redis:
+  - name: task-manager-cache
+    plan: free

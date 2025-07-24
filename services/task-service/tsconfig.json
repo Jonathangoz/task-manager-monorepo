@@ -1,4 +1,5 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022"],
@@ -17,7 +18,7 @@
     "declaration": true,
     "sourceMap": true,
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": "./",
     "removeComments": true,
     "resolveJsonModule": true,
     "baseUrl": "./",
@@ -26,13 +27,18 @@
       "@/config/*": ["src/config/*"],
       "@/core/*": ["src/core/*"],
       "@/presentation/*": ["src/presentation/*"],
-      "@/utils/*": ["src/utils/*"]
+      "@/utils/*": ["src/utils/*"],
+      "@task-manager/types": ["../../shared/types"]
     },
+      "references": [
+      { "path": "../../shared/types" } 
+    ],
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true
   },
   "include": [
-    "src/**/*"
+    "src/**/*.ts",
+    "prisma/**/*.ts"
   ],
   "exclude": [
     "node_modules",

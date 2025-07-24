@@ -48,6 +48,7 @@
     "npm": ">=8.0.0"
   },
   "dependencies": {
+    "@task-manager/types": "workspace:*",
     "@prisma/client": "^6.12.0",
     "axios": "^1.11.0",
     "compression": "^1.8.1",
@@ -68,38 +69,7 @@
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^11.1.0",
-    "zod": "^4.0.5"
-  },
-  "devDependencies": {
-    "@types/compression": "^1.8.1",
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.3",
-    "@types/jest": "^30.0.0",
-    "@types/morgan": "^1.9.9",
-    "@types/node": "^22.16.5",
-    "@types/swagger-jsdoc": "^6.0.4",
-    "@types/swagger-ui-express": "^4.1.8",
-    "@types/uuid": "^10.0.0",
-    "@typescript-eslint/eslint-plugin": "^8.38.0",
-    "@typescript-eslint/parser": "^8.38.0",
-    "@types/http-errors": "^2.0.5",
-    "@types/ioredis": "^5.0.0",
-    "@types/cookie-parser": "^1.4.9",
-    "@types/pino": "^7.0.5",
-    "@types/pino-pretty": "^5.0.0",
-    "eslint": "^9.31.0",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-prettier": "^5.5.3",
-    "husky": "^9.1.7",
-    "jest": "^30.0.5",
-    "nodemon": "^3.1.10",
-    "prettier": "^3.6.2",
-    "prisma": "^6.12.0",
-    "rimraf": "^6.0.1",
-    "ts-jest": "^29.4.0",
-    "ts-node": "^10.9.2",
-    "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.8.3"
+    "zod": "^4.0.7"
   },
   "prisma": {
     "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts"

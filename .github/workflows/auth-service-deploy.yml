@@ -1,0 +1,210 @@
+# .github/workflows/auth-service-deploy.yml
+name: 🔐 Auth Service CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'services/auth-service/**'
+      - 'shared/**'
+      - '.github/workflows/auth-service-deploy.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'services/auth-service/**'
+      - 'shared/**'
+
+env:
+  NODE_VERSION: '20'
+  SERVICE_PATH: './services/auth-service'
+
+jobs:
+  # ✅ Análisis de Código y Testing
+  test:
+    name: 🧪 Tests & Code Quality
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: auth_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: ${{ env.SERVICE_PATH }}/package-lock.json
+
+      - name: 📦 Install Dependencies
+        working-directory: ${{ env.SERVICE_PATH }}
+        run: npm ci
+
+      - name: 🔍 Lint Code
+        working-directory: ${{ env.SERVICE_PATH }}
+        run: npm run lint
+
+      - name: 🎨 Check Code Format
+        working-directory: ${{ env.SERVICE_PATH }}
+        run: npm run format:check
+
+      - name: 🏗️ Build Application
+        working-directory: ${{ env.SERVICE_PATH }}
+        run: npm run build
+
+      - name: 🗄️ Setup Test Database
+        working-directory: ${{ env.SERVICE_PATH }}
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/auth_test
+          REDIS_URL: redis://localhost:6379
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
+
+      - name: 🧪 Run Unit Tests
+        working-directory: ${{ env.SERVICE_PATH }}
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/auth_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-jwt-secret-for-testing-only-64-chars-minimum-length
+          JWE_SECRET: test-jwe-secret-32-chars-min!!
+          REFRESH_TOKEN_SECRET: test-refresh-secret-for-testing-only-64-chars-minimum-length
+        run: npm run test:coverage
+
+      - name: 🧪 Run Integration Tests
+        working-directory: ${{ env.SERVICE_PATH }}
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/auth_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-jwt-secret-for-testing-only-64-chars-minimum-length
+          JWE_SECRET: test-jwe-secret-32-chars-min!!
+          REFRESH_TOKEN_SECRET: test-refresh-secret-for-testing-only-64-chars-minimum-length
+        run: npm run test:integration
+
+      - name: 📊 Upload Coverage Reports
+        uses: codecov/codecov-action@v4
+        with:
+          files: ${{ env.SERVICE_PATH }}/coverage/lcov.info
+          flags: auth-service
+          name: auth-service-coverage
+
+  # 🚀 Deploy to Staging (develop branch)
+  deploy-staging:
+    name: 🚀 Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    
+    environment:
+      name: staging
+      url: ${{ vars.AUTH_SERVICE_STAGING_URL }}
+
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🚀 Deploy to Render Staging
+        uses: johnbeynon/render-deploy-action@v0.0.8
+        with:
+          service-id: ${{ secrets.RENDER_AUTH_SERVICE_STAGING_ID }}
+          api-key: ${{ secrets.RENDER_API_KEY }}
+          wait-for-success: true
+
+      - name: 🔍 Health Check Staging
+        run: |
+          echo "🏥 Waiting for staging service to be ready..."
+          sleep 30
+          curl -f ${{ vars.AUTH_SERVICE_STAGING_URL }}/api/v1/health || exit 1
+          echo "✅ Staging deployment successful!"
+
+  # 🌟 Deploy to Production (main branch)
+  deploy-production:
+    name: 🌟 Deploy to Production
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    environment:
+      name: production
+      url: ${{ vars.AUTH_SERVICE_PRODUCTION_URL }}
+
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🌟 Deploy to Render Production
+        uses: johnbeynon/render-deploy-action@v0.0.8
+        with:
+          service-id: ${{ secrets.RENDER_AUTH_SERVICE_PRODUCTION_ID }}
+          api-key: ${{ secrets.RENDER_API_KEY }}
+          wait-for-success: true
+
+      - name: 🔍 Health Check Production
+        run: |
+          echo "🏥 Waiting for production service to be ready..."
+          sleep 30
+          curl -f ${{ vars.AUTH_SERVICE_PRODUCTION_URL }}/api/v1/health || exit 1
+          echo "✅ Production deployment successful!"
+
+      - name: 📢 Notify Deployment Success
+        if: success()
+        run: |
+          echo "🎉 Auth Service deployed successfully to production!"
+          echo "🔗 URL: ${{ vars.AUTH_SERVICE_PRODUCTION_URL }}"
+
+  # 🏗️ Build Docker Image (for manual deployments)
+  build-docker:
+    name: 🐳 Build Docker Image
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🐳 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🔑 Log in to Docker Hub
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: 🏗️ Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ env.SERVICE_PATH }}
+          push: ${{ github.ref == 'refs/heads/main' }}
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/task-manager-auth:latest
+            ${{ secrets.DOCKER_USERNAME }}/task-manager-auth:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
