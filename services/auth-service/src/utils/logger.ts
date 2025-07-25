@@ -1,11 +1,11 @@
 // src/utils/logger.ts
 import pino from 'pino';
-import { config } from '@/config/environment';
+import { environment } from '@/config/environment';
 
-// Configuración del logger basada en el entorno
-const loggerConfig: pino.LoggerOptions = {
-  level: config.logging.level,
-  ...(config.logging.pretty && config.app.env !== 'production' 
+// configuración del logger basada en el entorno
+const loggerenvironment: pino.LoggerOptions = {
+  level: environment.LOG_LEVEL,
+  ...(environment.LOG_PRETTY && environment.NODE_ENV !== 'production' 
     ? {
         transport: {
           target: 'pino-pretty',
@@ -20,7 +20,7 @@ const loggerConfig: pino.LoggerOptions = {
     : {}),
   base: {
     service: 'auth-service',
-    env: config.app.env,
+    env: environment.NODE_ENV,
     version: process.env.npm_package_version || '1.0.0',
   },
   timestamp: () => `,"timestamp":"${new Date().toISOString()}"`,
@@ -32,7 +32,7 @@ const loggerConfig: pino.LoggerOptions = {
 };
 
 // Crear el logger principal
-export const logger = pino(loggerConfig);
+export const logger = pino(loggerenvironment);
 
 // Logger específico para requests HTTP
 export const httpLogger = logger.child({ component: 'http' });

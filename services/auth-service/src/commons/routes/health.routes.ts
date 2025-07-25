@@ -1,6 +1,10 @@
+// src/commons/routes/health.routes.ts
 import { Router } from 'express';
-import { HealthController } from '../controllers/health.controller';
-import { RateLimitMiddleware } from '../middlewares/rate-limit.middleware';
+import { HealthController } from '@/controllers/HealthController';
+import { rateLimitGeneral } from '@/middlewares/rateLimit.middleware';
+import { extractSessionInfo } from '@/middlewares/auth.middleware';
+import { asyncHandler } from '@/middlewares/error.middleware';
+import { environment } from '@/config/environment';
 
 export class HealthRoutes {
   static get routes(): Router {
@@ -8,58 +12,99 @@ export class HealthRoutes {
     const healthController = new HealthController();
 
     // Rate limiting más permisivo para health checks
-    const healthRateLimit = RateLimitMiddleware.createRateLimit({
+    const healthRateLimit = rateLimitGeneral({
       windowMs: 1 * 60 * 1000, // 1 minuto
-      max: 100, // máximo 100 requests por IP por minuto
+      maxRequests: 100, // máximo 100 requests por IP por minuto
       message: 'Demasiadas peticiones de health check'
     });
 
-    // Health check básico
+    // Middleware básico
+    router.use(extractSessionInfo);
+
+    // === HEALTH CHECKS BÁSICOS ===
+
+    /**
+     * GET /health
+     * Health check básico - respuesta rápida
+     */
     router.get(
       '/',
       healthRateLimit,
-      healthController.basicHealthCheck
+      asyncHandler(healthController.basicHealthCheck.bind(healthController))
     );
 
-    // Health check detallado con información del sistema
-    router.get(
-      '/detailed',
-      healthRateLimit,
-      healthController.detailedHealthCheck
-    );
-
-    // Health check de la base de datos
-    router.get(
-      '/database',
-      healthRateLimit,
-      healthController.databaseHealthCheck
-    );
-
-    // Health check de servicios externos
-    router.get(
-      '/external',
-      healthRateLimit,
-      healthController.externalServicesHealthCheck
-    );
-
-    // Métricas del sistema
-    router.get(
-      '/metrics',
-      healthRateLimit,
-      healthController.getMetrics
-    );
-
-    // Readiness probe (para Kubernetes)
+    /**
+     * GET /health/ready
+     * Readiness probe - verifica si el servicio está listo para recibir tráfico
+     * Usado por Kubernetes/Docker Compose
+     */
     router.get(
       '/ready',
-      healthController.readinessCheck
+      asyncHandler(healthController.readinessCheck.bind(healthController))
     );
 
-    // Liveness probe (para Kubernetes)
+    /**
+     * GET /health/live
+     * Liveness probe - verifica si el servicio está vivo
+     * Usado por Kubernetes/Docker Compose
+     */
     router.get(
       '/live',
-      healthController.livenessCheck
+      asyncHandler(healthController.livenessCheck.bind(healthController))
     );
+
+    // === HEALTH CHECKS DETALLADOS (solo en desarrollo/staging) ===
+    if (environment.NODE_ENV !== 'production') {
+      /**
+       * GET /health/detailed
+       * Health check detallado con información del sistema
+       */
+      router.get(
+        '/detailed',
+        healthRateLimit,
+        asyncHandler(healthController.detailedHealthCheck.bind(healthController))
+      );
+
+      /**
+       * GET /health/database
+       * Health check específico de la base de datos
+       */
+      router.get(
+        '/database',
+        healthRateLimit,
+        asyncHandler(healthController.databaseHealthCheck.bind(healthController))
+      );
+
+      /**
+       * GET /health/redis
+       * Health check específico de Redis
+       */
+      router.get(
+        '/redis',
+        healthRateLimit,
+        asyncHandler(healthController.redisHealthCheck.bind(healthController))
+      );
+
+      /**
+       * GET /health/dependencies
+       * Health check de dependencias externas
+       */
+      router.get(
+        '/dependencies',
+        healthRateLimit,
+        asyncHandler(healthController.dependenciesHealthCheck.bind(healthController))
+      );
+
+      /**
+       * GET /health/metrics
+       * Métricas del sistema
+       */
+      router.get(
+        '/metrics',
+        healthRateLimit,
+        asyncHandler(healthController.getMetrics.bind(healthController))
+      );
+    }
 
     return router;
   }

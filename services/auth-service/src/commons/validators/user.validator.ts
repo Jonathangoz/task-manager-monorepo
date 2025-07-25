@@ -1,270 +1,388 @@
-import { z } from 'zod';
+// src/commons/validators/user.validator.ts
+import { body, query, param, ValidationChain } from 'express-validator';
+import { 
+  VALIDATION_PATTERNS, 
+  SECURITY_CONFIG,
+  DEFAULT_VALUES,
+  PASSWORD_VALIDATION 
+} from '@/utils/constants';
 
-// Schema para consulta de usuarios con paginación y filtros
-export const getUsersQuerySchema = z.object({
-  page: z
-    .string()
-    .transform((val) => parseInt(val, 10))
-    .refine((val) => val > 0, 'La página debe ser mayor a 0')
-    .default('1'),
-  
-  limit: z
-    .string()
-    .transform((val) => parseInt(val, 10))
-    .refine((val) => val > 0 && val <= 100, 'El límite debe estar entre 1 y 100')
-    .default('10'),
-  
-  search: z
-    .string()
-    .min(1, 'El término de búsqueda debe tener al menos 1 carácter')
-    .max(100, 'El término de búsqueda no puede exceder 100 caracteres')
-    .optional(),
-  
-  status: z
-    .enum(['active', 'inactive', 'pending', 'suspended'])
-    .optional(),
-  
-  role: z
-    .enum(['admin', 'user', 'moderator'])
-    .optional(),
-  
-  sortBy: z
-    .enum(['createdAt', 'updatedAt', 'email', 'firstName', 'lastName'])
-    .default('createdAt'),
-  
-  sortOrder: z
-    .enum(['asc', 'desc'])
-    .default('desc'),
-  
-  dateFrom: z
-    .string()
-    .datetime('La fecha debe tener formato ISO 8601')
-    .optional(),
-  
-  dateTo: z
-    .string()
-    .datetime('La fecha debe tener formato ISO 8601')
-    .optional(),
-}).refine(
-  (data) => {
-    if (data.dateFrom && data.dateTo) {
-      return new Date(data.dateFrom) <= new Date(data.dateTo);
-    }
-    return true;
-  },
-  {
-    message: 'La fecha de inicio debe ser anterior a la fecha de fin',
-    path: ['dateTo'],
-  }
-);
+/**
+ * Validaciones para consulta de usuarios con paginación y filtros
+ */
+export const getUsersQueryValidation: ValidationChain[] = [
+  query('page')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('La página debe ser un número entero mayor a 0')
+    .toInt(),
 
-// Schema para parámetros de usuario por ID
-export const userParamsSchema = z.object({
-  userId: z
-    .string()
-    .uuid('El ID del usuario debe ser un UUID válido'),
-});
+  query('limit')
+    .optional()
+    .isInt({ min: 1, max: DEFAULT_VALUES.PAGINATION_MAX_LIMIT })
+    .withMessage(`El límite debe estar entre 1 y ${DEFAULT_VALUES.PAGINATION_MAX_LIMIT}`)
+    .toInt(),
 
-// Schema para actualización de usuario (admin)
-export const updateUserSchema = z.object({
-  firstName: z
-    .string()
-    .min(1, 'El nombre es requerido')
-    .max(50, 'El nombre no puede exceder 50 caracteres')
-    .regex(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/, 'El nombre solo puede contener letras y espacios')
-    .optional(),
-  
-  lastName: z
-    .string()
-    .min(1, 'El apellido es requerido')
-    .max(50, 'El apellido no puede exceder 50 caracteres')
-    .regex(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/, 'El apellido solo puede contener letras y espacios')
-    .optional(),
-  
-  email: z
-    .string()
-    .email('El email debe tener un formato válido')
-    .max(255, 'El email no puede exceder 255 caracteres')
-    .optional(),
-  
-  phone: z
-    .string()
-    .regex(/^[+]?[\d\s\-()]+$/, 'El teléfono debe tener un formato válido')
-    .min(10, 'El teléfono debe tener al menos 10 dígitos')
-    .max(20, 'El teléfono no puede exceder 20 caracteres')
-    .optional(),
-  
-  role: z
-    .enum(['admin', 'user', 'moderator'])
-    .optional(),
-  
-  status: z
-    .enum(['active', 'inactive', 'pending', 'suspended'])
-    .optional(),
-  
-  avatar: z
-    .string()
-    .url('La URL del avatar debe ser válida')
-    .optional(),
-  
-  metadata: z
-    .record(z.any())
-    .optional(),
-}).refine(
-  (data) => Object.keys(data).length > 0,
-  {
-    message: 'Debe proporcionar al menos un campo para actualizar',
-  }
-);
+  query('search')
+    .optional()
+    .isLength({ min: 1, max: 100 })
+    .withMessage('El término de búsqueda debe tener entre 1 y 100 caracteres')
+    .trim()
+    .escape(), // Escapar caracteres HTML
 
-// Schema para crear usuario (admin)
-export const createUserSchema = z.object({
-  email: z
-    .string()
-    .email('El email debe tener un formato válido')
-    .min(1, 'El email es requerido')
-    .max(255, 'El email no puede exceder 255 caracteres'),
-  
-  password: z
-    .string()
-    .min(8, 'La contraseña debe tener al menos 8 caracteres')
-    .max(128, 'La contraseña no puede exceder 128 caracteres')
-    .regex(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
-      'La contraseña debe contener al menos: 1 mayúscula, 1 minúscula, 1 número y 1 carácter especial'
-    ),
-  
-  firstName: z
-    .string()
-    .min(1, 'El nombre es requerido')
-    .max(50, 'El nombre no puede exceder 50 caracteres')
-    .regex(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/, 'El nombre solo puede contener letras y espacios'),
-  
-  lastName: z
-    .string()
-    .min(1, 'El apellido es requerido')
-    .max(50, 'El apellido no puede exceder 50 caracteres')
-    .regex(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/, 'El apellido solo puede contener letras y espacios'),
-  
-  role: z
-    .enum(['admin', 'user', 'moderator'])
-    .default('user'),
-  
-  phone: z
-    .string()
-    .regex(/^[+]?[\d\s\-()]+$/, 'El teléfono debe tener un formato válido')
-    .min(10, 'El teléfono debe tener al menos 10 dígitos')
-    .max(20, 'El teléfono no puede exceder 20 caracteres')
-    .optional(),
-  
-  avatar: z
-    .string()
-    .url('La URL del avatar debe ser válida')
-    .optional(),
-  
-  metadata: z
-    .record(z.any())
-    .optional(),
-});
+  query('sortBy')
+    .optional()
+    .isIn(['createdAt', 'updatedAt', 'email', 'username', 'firstName', 'lastName'])
+    .withMessage('Campo de ordenamiento inválido'),
 
-// Schema para cambio de estado de usuario
-export const changeUserStatusSchema = z.object({
-  status: z
-    .enum(['active', 'inactive', 'suspended']),
-  
-  reason: z
-    .string()
-    .min(1, 'La razón del cambio de estado es requerida')
-    .max(500, 'La razón no puede exceder 500 caracteres')
-    .optional(),
-});
+  query('sortOrder')
+    .optional()
+    .isIn(['asc', 'desc'])
+    .withMessage('El orden debe ser "asc" o "desc"'),
 
-// Schema para asignación de rol
-export const assignRoleSchema = z.object({
-  role: z
-    .enum(['admin', 'user', 'moderator']),
-  
-  assignedBy: z
-    .string()
-    .uuid('El ID del usuario asignador debe ser un UUID válido')
-    .optional(),
-});
+  query('isActive')
+    .optional()
+    .isBoolean()
+    .withMessage('isActive debe ser un valor booleano')
+    .toBoolean(),
 
-// Schema para búsqueda avanzada de usuarios
-export const searchUsersSchema = z.object({
-  query: z
-    .string()
-    .min(1, 'El término de búsqueda es requerido')
-    .max(100, 'El término de búsqueda no puede exceder 100 caracteres'),
-  
-  fields: z
-    .array(z.enum(['email', 'firstName', 'lastName', 'phone']))
-    .min(1, 'Debe especificar al menos un campo para buscar')
-    .default(['email', 'firstName', 'lastName']),
-  
-  exactMatch: z
-    .boolean()
-    .default(false),
-  
-  caseSensitive: z
-    .boolean()
-    .default(false),
-});
+  query('isVerified')
+    .optional()
+    .isBoolean()
+    .withMessage('isVerified debe ser un valor booleano')
+    .toBoolean(),
 
-// Schema para exportación de usuarios
-export const exportUsersSchema = z.object({
-  format: z
-    .enum(['csv', 'excel', 'json'])
-    .default('csv'),
-  
-  fields: z
-    .array(z.enum(['id', 'email', 'firstName', 'lastName', 'role', 'status', 'createdAt', 'updatedAt', 'phone']))
-    .min(1, 'Debe especificar al menos un campo para exportar')
-    .optional(),
-  
-  filters: getUsersQuerySchema.omit({ page: true, limit: true }).optional(),
-});
+  query('dateFrom')
+    .optional()
+    .isISO8601()
+    .withMessage('La fecha de inicio debe estar en formato ISO 8601')
+    .toDate(),
 
-// Schema para importación masiva de usuarios
-export const bulkCreateUsersSchema = z.object({
-  users: z
-    .array(createUserSchema.omit({ password: true }).extend({
-      password: z.string().optional(), // Password opcional para bulk import
-      sendInvite: z.boolean().default(true),
-    }))
-    .min(1, 'Debe proporcionar al menos un usuario')
-    .max(1000, 'No se pueden importar más de 1000 usuarios a la vez'),
-  
-  skipDuplicates: z
-    .boolean()
-    .default(true),
-  
-  notifyUsers: z
-    .boolean()
-    .default(false),
-});
+  query('dateTo')
+    .optional()
+    .isISO8601()
+    .withMessage('La fecha de fin debe estar en formato ISO 8601')
+    .toDate()
+    .custom((value, { req }) => {
+      if (req.query.dateFrom && value < new Date(req.query.dateFrom as string)) {
+        throw new Error('La fecha de fin debe ser posterior a la fecha de inicio');
+      }
+      return true;
+    }),
+];
 
-// Tipos TypeScript derivados de los schemas
-export type GetUsersQuery = z.infer<typeof getUsersQuerySchema>;
-export type UserParams = z.infer<typeof userParamsSchema>;
-export type UpdateUserRequest = z.infer<typeof updateUserSchema>;
-export type CreateUserRequest = z.infer<typeof createUserSchema>;
-export type ChangeUserStatusRequest = z.infer<typeof changeUserStatusSchema>;
-export type AssignRoleRequest = z.infer<typeof assignRoleSchema>;
-export type SearchUsersRequest = z.infer<typeof searchUsersSchema>;
-export type ExportUsersRequest = z.infer<typeof exportUsersSchema>;
-export type BulkCreateUsersRequest = z.infer<typeof bulkCreateUsersSchema>;
+/**
+ * Validaciones para parámetros de usuario por ID (CUID)
+ */
+export const userParamsValidation: ValidationChain[] = [
+  param('id')
+    .matches(VALIDATION_PATTERNS.CUID)
+    .withMessage('El ID del usuario debe ser un CUID válido'),
+];
 
-// Función helper para validar UUID
-export const validateUUID = (id: string): boolean => {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(id);
+/**
+ * Validaciones para actualización de usuario
+ */
+export const updateUserValidation: ValidationChain[] = [
+  body('email')
+    .optional()
+    .isEmail()
+    .withMessage('El email debe tener un formato válido')
+    .isLength({ max: SECURITY_CONFIG.EMAIL_MAX_LENGTH })
+    .withMessage(`El email no puede exceder ${SECURITY_CONFIG.EMAIL_MAX_LENGTH} caracteres`)
+    .normalizeEmail()
+    .matches(VALIDATION_PATTERNS.EMAIL)
+    .withMessage('Formato de email inválido'),
+
+  body('username')
+    .optional()
+    .isLength({ 
+      min: SECURITY_CONFIG.USERNAME_MIN_LENGTH, 
+      max: SECURITY_CONFIG.USERNAME_MAX_LENGTH 
+    })
+    .withMessage(`El username debe tener entre ${SECURITY_CONFIG.USERNAME_MIN_LENGTH} y ${SECURITY_CONFIG.USERNAME_MAX_LENGTH} caracteres`)
+    .matches(VALIDATION_PATTERNS.USERNAME)
+    .withMessage('El username solo puede contener letras, números y guiones bajos')
+    .trim(),
+
+  body('firstName')
+    .optional()
+    .isLength({ min: 1, max: 50 })
+    .withMessage('El nombre debe tener entre 1 y 50 caracteres')
+    .matches(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/)
+    .withMessage('El nombre solo puede contener letras y espacios')
+    .trim(),
+
+  body('lastName')
+    .optional()
+    .isLength({ min: 1, max: 50 })
+    .withMessage('El apellido debe tener entre 1 y 50 caracteres')
+    .matches(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/)
+    .withMessage('El apellido solo puede contener letras y espacios')
+    .trim(),
+
+  body('avatar')
+    .optional()
+    .isURL()
+    .withMessage('El avatar debe ser una URL válida')
+    .isLength({ max: 500 })
+    .withMessage('La URL del avatar no puede exceder 500 caracteres'),
+
+  // Validación personalizada para asegurar que al menos un campo esté presente
+  body()
+    .custom((value, { req }) => {
+      const allowedFields = ['email', 'username', 'firstName', 'lastName', 'avatar'];
+      const providedFields = Object.keys(req.body).filter(key => 
+        allowedFields.includes(key) && req.body[key] !== undefined && req.body[key] !== ''
+      );
+      
+      if (providedFields.length === 0) {
+        throw new Error('Debe proporcionar al menos un campo para actualizar');
+      }
+      return true;
+    }),
+];
+
+/**
+ * Validaciones para crear usuario (admin/system use)
+ */
+export const createUserValidation: ValidationChain[] = [
+  body('email')
+    .isEmail()
+    .withMessage('El email debe tener un formato válido')
+    .isLength({ max: SECURITY_CONFIG.EMAIL_MAX_LENGTH })
+    .withMessage(`El email no puede exceder ${SECURITY_CONFIG.EMAIL_MAX_LENGTH} caracteres`)
+    .normalizeEmail()
+    .matches(VALIDATION_PATTERNS.EMAIL)
+    .withMessage('Formato de email inválido'),
+
+  body('username')
+    .isLength({ 
+      min: SECURITY_CONFIG.USERNAME_MIN_LENGTH, 
+      max: SECURITY_CONFIG.USERNAME_MAX_LENGTH 
+    })
+    .withMessage(`El username debe tener entre ${SECURITY_CONFIG.USERNAME_MIN_LENGTH} y ${SECURITY_CONFIG.USERNAME_MAX_LENGTH} caracteres`)
+    .matches(VALIDATION_PATTERNS.USERNAME)
+    .withMessage('El username solo puede contener letras, números y guiones bajos')
+    .trim(),
+
+  body('password')
+    .isLength({ 
+      min: SECURITY_CONFIG.PASSWORD_MIN_LENGTH, 
+      max: SECURITY_CONFIG.PASSWORD_MAX_LENGTH 
+    })
+    .withMessage(`La contraseña debe tener entre ${SECURITY_CONFIG.PASSWORD_MIN_LENGTH} y ${SECURITY_CONFIG.PASSWORD_MAX_LENGTH} caracteres`)
+    .matches(VALIDATION_PATTERNS.PASSWORD_STRONG)
+    .withMessage('La contraseña debe contener al menos: 1 mayúscula, 1 minúscula, 1 número y 1 carácter especial')
+    .custom((value) => {
+      // Verificar patrones prohibidos
+      for (const pattern of PASSWORD_VALIDATION.FORBIDDEN_PATTERNS) {
+        if (pattern.test(value)) {
+          throw new Error('La contraseña contiene un patrón no permitido');
+        }
+      }
+      return true;
+    }),
+
+  body('firstName')
+    .isLength({ min: 1, max: 50 })
+    .withMessage('El nombre debe tener entre 1 y 50 caracteres')
+    .matches(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/)
+    .withMessage('El nombre solo puede contener letras y espacios')
+    .trim(),
+
+  body('lastName')
+    .isLength({ min: 1, max: 50 })
+    .withMessage('El apellido debe tener entre 1 y 50 caracteres')
+    .matches(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/)
+    .withMessage('El apellido solo puede contener letras y espacios')
+    .trim(),
+
+  body('avatar')
+    .optional()
+    .isURL()
+    .withMessage('El avatar debe ser una URL válida')
+    .isLength({ max: 500 })
+    .withMessage('La URL del avatar no puede exceder 500 caracteres'),
+];
+
+/**
+ * Validaciones para desactivar usuario
+ */
+export const deactivateUserValidation: ValidationChain[] = [
+  body('reason')
+    .optional()
+    .isLength({ min: 1, max: 500 })
+    .withMessage('La razón debe tener entre 1 y 500 caracteres')
+    .trim()
+    .escape(),
+];
+
+/**
+ * Validaciones para actualizar avatar
+ */
+export const updateAvatarValidation: ValidationChain[] = [
+  body('avatar')
+    .isURL()
+    .withMessage('El avatar debe ser una URL válida')
+    .isLength({ max: 500 })
+    .withMessage('La URL del avatar no puede exceder 500 caracteres'),
+];
+
+/**
+ * Validaciones para búsqueda avanzada de usuarios
+ */
+export const searchUsersValidation: ValidationChain[] = [
+  query('q')
+    .isLength({ min: 1, max: 100 })
+    .withMessage('El término de búsqueda debe tener entre 1 y 100 caracteres')
+    .trim()
+    .escape(),
+
+  query('fields')
+    .optional()
+    .isString()
+    .withMessage('Los campos deben ser una cadena separada por comas')
+    .custom((value) => {
+      const allowedFields = ['email', 'username', 'firstName', 'lastName'];
+      const fields = value.split(',').map((f: string) => f.trim());
+      const invalidFields = fields.filter((f: string) => !allowedFields.includes(f));
+      
+      if (invalidFields.length > 0) {
+        throw new Error(`Campos inválidos: ${invalidFields.join(', ')}`);
+      }
+      return true;
+    }),
+
+  query('exactMatch')
+    .optional()
+    .isBoolean()
+    .withMessage('exactMatch debe ser un valor booleano')
+    .toBoolean(),
+
+  query('caseSensitive')
+    .optional()
+    .isBoolean()
+    .withMessage('caseSensitive debe ser un valor booleano')
+    .toBoolean(),
+];
+
+/**
+ * Validaciones for token de verificación de email
+ */
+export const verifyEmailTokenValidation: ValidationChain[] = [
+  param('token')
+    .notEmpty()
+    .withMessage('El token de verificación es requerido')
+    .isString()
+    .withMessage('El token debe ser una cadena válida')
+    .isLength({ min: 10 })
+    .withMessage('El token debe tener al menos 10 caracteres'),
+];
+
+/**
+ * Validaciones para parámetro de sesión
+ */
+export const sessionParamsValidation: ValidationChain[] = [
+  param('sessionId')
+    .matches(VALIDATION_PATTERNS.CUID)
+    .withMessage('El ID de sesión debe ser un CUID válido'),
+];
+
+/**
+ * Validaciones para exportación de datos de usuario
+ */
+export const exportUserDataValidation: ValidationChain[] = [
+  query('format')
+    .optional()
+    .isIn(['json', 'csv'])
+    .withMessage('El formato debe ser "json" o "csv"'),
+
+  query('includeHistory')
+    .optional()
+    .isBoolean()
+    .withMessage('includeHistory debe ser un valor booleano')
+    .toBoolean(),
+];
+
+// Tipos TypeScript para las requests
+export interface GetUsersQuery {
+  page?: number;
+  limit?: number;
+  search?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  isActive?: boolean;
+  isVerified?: boolean;
+  dateFrom?: Date;
+  dateTo?: Date;
+}
+
+export interface UserParams {
+  id: string;
+}
+
+export interface UpdateUserRequest {
+  email?: string;
+  username?: string;
+  firstName?: string;
+  lastName?: string;
+  avatar?: string;
+}
+
+export interface CreateUserRequest {
+  email: string;
+  username: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  avatar?: string;
+}
+
+export interface DeactivateUserRequest {
+  reason?: string;
+}
+
+export interface UpdateAvatarRequest {
+  avatar: string;
+}
+
+export interface SearchUsersQuery {
+  q: string;
+  fields?: string;
+  exactMatch?: boolean;
+  caseSensitive?: boolean;
+}
+
+export interface VerifyEmailTokenParams {
+  token: string;
+}
+
+export interface SessionParams {
+  sessionId: string;
+}
+
+export interface ExportUserDataQuery {
+  format?: 'json' | 'csv';
+  includeHistory?: boolean;
+}
+
+// Funciones helper para validación
+export const validateCUID = (id: string): boolean => {
+  return VALIDATION_PATTERNS.CUID.test(id);
 };
 
-// Función helper para sanitizar query de búsqueda
 export const sanitizeSearchQuery = (query: string): string => {
   return query
     .trim()
     .replace(/[<>\"'%;()&+]/g, '') // Remover caracteres peligrosos
     .substring(0, 100); // Limitar longitud
+};
+
+export const validateEmail = (email: string): boolean => {
+  return VALIDATION_PATTERNS.EMAIL.test(email);
+};
+
+export const validateUsername = (username: string): boolean => {
+  return VALIDATION_PATTERNS.USERNAME.test(username);
 };

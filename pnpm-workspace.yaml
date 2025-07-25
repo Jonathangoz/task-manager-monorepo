@@ -1,5 +1,12 @@
-# task-manager-monorepo/pnpm-workspace.yaml
 packages:
-  - 'services/*'
-  - 'frontend/*'
-  - 'shared/*'
+  - services/*
+  - frontend/*
+  - shared/*
+
+onlyBuiltDependencies:
+  - '@prisma/client'
+  - '@prisma/engines'
+  - '@scarf/scarf'
+  - argon2
+  - prisma
+  - sharp

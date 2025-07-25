@@ -78,7 +78,6 @@ model Task {
   @@index([dueDate])
   @@index([categoryId])
   @@index([createdAt])
-  @@check(dueDate > createdAt, name: "valid_due_date")
 }
 
 // Enum para estados de tareas

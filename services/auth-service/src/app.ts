@@ -13,13 +13,13 @@ import { logger, httpLogger } from '@/utils/logger';
 import { HTTP_STATUS, ERROR_MESSAGES } from '@/utils/constants';
 
 // Middlewares
-import { errorMiddleware } from '@/presentation/middlewares/error.middleware';
-import { rateLimitMiddleware } from '@/presentation/middlewares/rateLimit.middleware';
+import { errorMiddleware } from '@/middlewares/error.middleware';
+import { rateLimitMiddleware } from '@/middlewares/rateLimit.middleware';
 
 // Routes
-import authRoutes from '@/presentation/routes/auth.routes';
-import userRoutes from '@/presentation/routes/user.routes';
-import healthRoutes from '@/presentation/routes/health.routes';
+import authRoutes from '@/routes/auth.routes';
+import userRoutes from '@/routes/user.routes';
+import healthRoutes from '@/routes/health.routes';
 
 class App {
   public app: Express;

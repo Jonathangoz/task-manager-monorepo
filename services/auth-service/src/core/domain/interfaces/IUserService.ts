@@ -1,6 +1,5 @@
-// src/core/domain/interfaces/IUserRepository.ts
+// src/core/domain/interfaces/IUserService.ts
 import { User } from '@/entities/User';
-import { UserSession, UserFilters, PaginationOptions, PaginatedUsers } from './IUserService';
 
 export interface CreateUserData {
   email: string;
@@ -18,7 +17,50 @@ export interface UpdateUserData {
   isVerified?: boolean;
 }
 
-export interface IUserRepository {
+export interface UpdateProfileData {
+  firstName?: string;
+  lastName?: string;
+  avatar?: string;
+}
+
+export interface UserFilters {
+  isActive?: boolean;
+  isVerified?: boolean;
+  search?: string;
+  createdAfter?: Date;
+  createdBefore?: Date;
+}
+
+export interface PaginationOptions {
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+export interface UserSession {
+  id: string;
+  sessionId: string;
+  userId: string;
+  device?: string;
+  ipAddress?: string;
+  location?: string;
+  userAgent?: string;
+  isActive: boolean;
+  lastSeen: Date;
+  createdAt: Date;
+  expiresAt: Date;
+}
+
+export interface PaginatedUsers {
+  users: User[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface IUserService {
   // Crear usuario
   create(data: CreateUserData): Promise<User>;
   
@@ -29,6 +71,7 @@ export interface IUserRepository {
   
   // Actualizar usuario
   update(id: string, data: UpdateUserData): Promise<User>;
+  updateProfile(id: string, data: UpdateProfileData): Promise<User>;
   updateLastLogin(id: string): Promise<void>;
   updatePassword(id: string, hashedPassword: string): Promise<void>;
   
@@ -42,7 +85,11 @@ export interface IUserRepository {
   getUserSessions(userId: string): Promise<UserSession[]>;
   
   // Eliminar usuario (soft delete)
-  deactivate(id: string): Promise<void>;
+  deactivate(id: string, reason?: string): Promise<void>;
   activate(id: string): Promise<void>;
   delete(id: string): Promise<void>;
+  
+  // Email verification
+  sendEmailVerification(userId: string): Promise<void>;
+  verifyEmail(userId: string, token: string): Promise<void>;
 }

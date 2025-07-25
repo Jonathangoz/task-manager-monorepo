@@ -1,16 +1,17 @@
-// src/presentation/controllers/UserController.ts
+// src/commons/controllers/UserController.ts
 
 import { Request, Response, NextFunction } from 'express';
-import { IUserService } from '@/core/domain/interfaces/IUserService';
-import { IAuthService } from '@/core/domain/interfaces/IAuthService';
-import { logger, authLogger } from '@/utils/logger';
+import { IUserService } from '@/interfaces/IUserService';
+import { IAuthService } from '@/interfaces/IAuthService';
+import { logger } from '@/utils/logger';
 import { 
   HTTP_STATUS, 
   ERROR_CODES, 
   SUCCESS_MESSAGES, 
-  ERROR_MESSAGES 
+  ERROR_MESSAGES,
+  DEFAULT_VALUES
 } from '@/utils/constants';
-import { ApiResponse } from '@/utils/constants';
+import type { ApiResponse, PaginationOptions, UserFilters } from '@/utils/constants';
 
 export class UserController {
   constructor(
@@ -20,42 +21,160 @@ export class UserController {
 
   /**
    * @swagger
-   * /api/v1/auth/me:
+   * /api/v1/users:
    *   get:
-   *     tags: [User]
-   *     summary: Get current user profile
+   *     tags: [Users]
+   *     summary: Get users with pagination and filters
    *     security:
    *       - bearerAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: page
+   *         schema:
+   *           type: integer
+   *           minimum: 1
+   *         description: Page number
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           minimum: 1
+   *           maximum: 100
+   *         description: Items per page
+   *       - in: query
+   *         name: search
+   *         schema:
+   *           type: string
+   *         description: Search term
+   *       - in: query
+   *         name: sortBy
+   *         schema:
+   *           type: string
+   *           enum: [createdAt, updatedAt, email, username, firstName, lastName]
+   *         description: Sort field
+   *       - in: query
+   *         name: sortOrder
+   *         schema:
+   *           type: string
+   *           enum: [asc, desc]
+   *         description: Sort order
+   *       - in: query
+   *         name: isActive
+   *         schema:
+   *           type: boolean
+   *         description: Filter by active status
+   *       - in: query
+   *         name: isVerified
+   *         schema:
+   *           type: boolean
+   *         description: Filter by verified status
    *     responses:
    *       200:
-   *         description: User profile retrieved successfully
+   *         description: Users retrieved successfully
+   *       401:
+   *         description: Unauthorized
+   */
+  public getUsers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const {
+        page = 1,
+        limit = DEFAULT_VALUES.PAGINATION_LIMIT,
+        search,
+        sortBy = 'createdAt',
+        sortOrder = 'desc',
+        isActive,
+        isVerified,
+        dateFrom,
+        dateTo
+      } = req.query;
+
+      const filters: UserFilters = {
+        ...(search && { search: search as string }),
+        ...(isActive !== undefined && { isActive: isActive === 'true' }),
+        ...(isVerified !== undefined && { isVerified: isVerified === 'true' }),
+        ...(dateFrom && { createdAfter: new Date(dateFrom as string) }),
+        ...(dateTo && { createdBefore: new Date(dateTo as string) }),
+      };
+
+      const pagination: PaginationOptions = {
+        page: parseInt(page as string, 10),
+        limit: Math.min(parseInt(limit as string, 10), DEFAULT_VALUES.PAGINATION_MAX_LIMIT),
+        sortBy: sortBy as string,
+        sortOrder: sortOrder as 'asc' | 'desc',
+      };
+
+      const result = await this.userService.findMany(filters, pagination);
+
+      const response: ApiResponse = {
+        success: true,
+        message: 'Users retrieved successfully',
+        data: {
+          users: result.users.map(user => ({
+            id: user.id,
+            email: user.email,
+            username: user.username,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            fullName: user.fullName,
+            avatar: user.avatar,
+            isActive: user.isActive,
+            isVerified: user.isVerified,
+            lastLoginAt: user.lastLoginAt,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
+          }))
+        },
+        meta: {
+          timestamp: new Date().toISOString(),
+          requestId: req.headers['x-request-id'] as string,
+          pagination: {
+            page: result.page,
+            limit: result.limit,
+            total: result.total,
+            pages: result.totalPages,
+          },
+        },
+      };
+
+      res.status(HTTP_STATUS.OK).json(response);
+    } catch (error) {
+      logger.error({
+        event: 'get_users_error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        query: req.query
+      });
+      next(error);
+    }
+  };
+
+  /**
+   * @swagger
+   * /api/v1/users/{id}:
+   *   get:
+   *     tags: [Users]
+   *     summary: Get user by ID
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: User ID (CUID)
+   *     responses:
+   *       200:
+   *         description: User retrieved successfully
    *       401:
    *         description: Unauthorized
    *       404:
    *         description: User not found
    */
-  public getProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public getUserById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.user?.id;
+      const { id } = req.params;
 
-      if (!userId) {
-        const response: ApiResponse = {
-          success: false,
-          message: ERROR_MESSAGES.USER_NOT_FOUND,
-          error: {
-            code: ERROR_CODES.USER_NOT_FOUND,
-          },
-          meta: {
-            timestamp: new Date().toISOString(),
-            requestId: req.headers['x-request-id'] as string,
-          },
-        };
-        
-        res.status(HTTP_STATUS.UNAUTHORIZED).json(response);
-        return;
-      }
-
-      const user = await this.userService.findById(userId);
+      const user = await this.userService.findById(id);
 
       if (!user) {
         const response: ApiResponse = {
@@ -63,6 +182,7 @@ export class UserController {
           message: ERROR_MESSAGES.USER_NOT_FOUND,
           error: {
             code: ERROR_CODES.USER_NOT_FOUND,
+            message: ERROR_MESSAGES.USER_NOT_FOUND
           },
           meta: {
             timestamp: new Date().toISOString(),
@@ -76,19 +196,22 @@ export class UserController {
 
       const response: ApiResponse = {
         success: true,
-        message: 'User profile retrieved successfully',
+        message: 'User retrieved successfully',
         data: {
-          id: user.id,
-          email: user.email,
-          username: user.username,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          avatar: user.avatar,
-          isActive: user.isActive,
-          isVerified: user.isVerified,
-          lastLoginAt: user.lastLoginAt,
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt,
+          user: {
+            id: user.id,
+            email: user.email,
+            username: user.username,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            fullName: user.fullName,
+            avatar: user.avatar,
+            isActive: user.isActive,
+            isVerified: user.isVerified,
+            lastLoginAt: user.lastLoginAt,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
+          }
         },
         meta: {
           timestamp: new Date().toISOString(),
@@ -98,19 +221,110 @@ export class UserController {
 
       res.status(HTTP_STATUS.OK).json(response);
     } catch (error) {
-      logger.error({ error, userId: req.user?.id }, 'Failed to get user profile');
+      logger.error({
+        event: 'get_user_by_id_error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId: req.params.id
+      });
       next(error);
     }
   };
 
   /**
    * @swagger
-   * /api/v1/auth/me:
-   *   put:
-   *     tags: [User]
-   *     summary: Update current user profile
+   * /api/v1/users/{id}/profile:
+   *   get:
+   *     tags: [Users]
+   *     summary: Get public user profile
    *     security:
    *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: User ID (CUID)
+   *     responses:
+   *       200:
+   *         description: Public profile retrieved successfully
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: User not found
+   */
+  public getUserProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+
+      const user = await this.userService.findById(id);
+
+      if (!user || !user.isActive) {
+        const response: ApiResponse = {
+          success: false,
+          message: ERROR_MESSAGES.USER_NOT_FOUND,
+          error: {
+            code: ERROR_CODES.USER_NOT_FOUND,
+            message: ERROR_MESSAGES.USER_NOT_FOUND
+          },
+          meta: {
+            timestamp: new Date().toISOString(),
+            requestId: req.headers['x-request-id'] as string,
+          },
+        };
+        
+        res.status(HTTP_STATUS.NOT_FOUND).json(response);
+        return;
+      }
+
+      // Perfil público (sin información sensible)
+      const response: ApiResponse = {
+        success: true,
+        message: 'Public profile retrieved successfully',
+        data: {
+          user: {
+            id: user.id,
+            username: user.username,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            fullName: user.fullName,
+            avatar: user.avatar,
+            isVerified: user.isVerified,
+            createdAt: user.createdAt,
+          }
+        },
+        meta: {
+          timestamp: new Date().toISOString(),
+          requestId: req.headers['x-request-id'] as string,
+        },
+      };
+
+      res.status(HTTP_STATUS.OK).json(response);
+    } catch (error) {
+      logger.error({
+        event: 'get_user_profile_error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId: req.params.id
+      });
+      next(error);
+    }
+  };
+
+  /**
+   * @swagger
+   * /api/v1/users/{id}:
+   *   put:
+   *     tags: [Users]
+   *     summary: Update user information (owner only)
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: User ID (CUID)
    *     requestBody:
    *       required: true
    *       content:
@@ -118,6 +332,11 @@ export class UserController {
    *           schema:
    *             type: object
    *             properties:
+   *               email:
+   *                 type: string
+   *                 format: email
+   *               username:
+   *                 type: string
    *               firstName:
    *                 type: string
    *               lastName:
@@ -127,25 +346,32 @@ export class UserController {
    *                 format: uri
    *     responses:
    *       200:
-   *         description: Profile updated successfully
+   *         description: User updated successfully
    *       400:
    *         description: Validation error
    *       401:
    *         description: Unauthorized
+   *       403:
+   *         description: Forbidden - not owner
    *       404:
    *         description: User not found
+   *       409:
+   *         description: Email or username already exists
    */
-  public updateProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public updateUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.user?.id;
-      const { firstName, lastName, avatar } = req.body;
+      const { id } = req.params;
+      const currentUserId = req.user?.id;
+      const { email, username, firstName, lastName, avatar } = req.body;
 
-      if (!userId) {
+      // Verificar ownership (middleware requireOwnership debería manejar esto)
+      if (currentUserId !== id) {
         const response: ApiResponse = {
           success: false,
-          message: ERROR_MESSAGES.USER_NOT_FOUND,
+          message: 'Forbidden: You can only update your own profile',
           error: {
-            code: ERROR_CODES.USER_NOT_FOUND,
+            code: ERROR_CODES.FORBIDDEN,
+            message: 'Forbidden: You can only update your own profile'
           },
           meta: {
             timestamp: new Date().toISOString(),
@@ -153,36 +379,108 @@ export class UserController {
           },
         };
         
-        res.status(HTTP_STATUS.UNAUTHORIZED).json(response);
+        res.status(HTTP_STATUS.FORBIDDEN).json(response);
         return;
       }
 
-      const updatedUser = await this.userService.updateProfile(userId, {
-        firstName,
-        lastName,
-        avatar,
+      // Verificar si email/username ya existen (si se están actualizando)
+      if (email || username) {
+        const currentUser = await this.userService.findById(id);
+        if (!currentUser) {
+          const response: ApiResponse = {
+            success: false,
+            message: ERROR_MESSAGES.USER_NOT_FOUND,
+            error: {
+              code: ERROR_CODES.USER_NOT_FOUND,
+              message: ERROR_MESSAGES.USER_NOT_FOUND
+            },
+            meta: {
+              timestamp: new Date().toISOString(),
+              requestId: req.headers['x-request-id'] as string,
+            },
+          };
+          
+          res.status(HTTP_STATUS.NOT_FOUND).json(response);
+          return;
+        }
+
+        // Verificar email duplicado
+        if (email && email !== currentUser.email) {
+          const existingUserByEmail = await this.userService.findByEmail(email);
+          if (existingUserByEmail) {
+            const response: ApiResponse = {
+              success: false,
+              message: ERROR_MESSAGES.USER_ALREADY_EXISTS,
+              error: {
+                code: ERROR_CODES.USER_ALREADY_EXISTS,
+                message: 'Email already in use'
+              },
+              meta: {
+                timestamp: new Date().toISOString(),
+                requestId: req.headers['x-request-id'] as string,
+              },
+            };
+            
+            res.status(HTTP_STATUS.CONFLICT).json(response);
+            return;
+          }
+        }
+
+        // Verificar username duplicado
+        if (username && username !== currentUser.username) {
+          const existingUserByUsername = await this.userService.findByUsername(username);
+          if (existingUserByUsername) {
+            const response: ApiResponse = {
+              success: false,
+              message: ERROR_MESSAGES.USER_ALREADY_EXISTS,
+              error: {
+                code: ERROR_CODES.USER_ALREADY_EXISTS,
+                message: 'Username already in use'
+              },
+              meta: {
+                timestamp: new Date().toISOString(),
+                requestId: req.headers['x-request-id'] as string,
+              },
+            };
+            
+            res.status(HTTP_STATUS.CONFLICT).json(response);
+            return;
+          }
+        }
+      }
+
+      const updatedUser = await this.userService.update(id, {
+        ...(email && { email }),
+        ...(username && { username }),
+        ...(firstName !== undefined && { firstName }),
+        ...(lastName !== undefined && { lastName }),
+        ...(avatar !== undefined && { avatar }),
       });
 
-      authLogger.info(
-        { userId, changes: { firstName, lastName, avatar } },
-        'User profile updated'
-      );
+      logger.info({
+        event: 'user_updated',
+        userId: id,
+        changes: { email: email ? 'updated' : 'unchanged', username, firstName, lastName, avatar: avatar ? 'updated' : 'unchanged' }
+      });
 
       const response: ApiResponse = {
         success: true,
-        message: SUCCESS_MESSAGES.PROFILE_UPDATED,
+        message: 'User updated successfully',
         data: {
-          id: updatedUser.id,
-          email: updatedUser.email,
-          username: updatedUser.username,
-          firstName: updatedUser.firstName,
-          lastName: updatedUser.lastName,
-          avatar: updatedUser.avatar,
-          isActive: updatedUser.isActive,
-          isVerified: updatedUser.isVerified,
-          lastLoginAt: updatedUser.lastLoginAt,
-          createdAt: updatedUser.createdAt,
-          updatedAt: updatedUser.updatedAt,
+          user: {
+            id: updatedUser.id,
+            email: updatedUser.email,
+            username: updatedUser.username,
+            firstName: updatedUser.firstName,
+            lastName: updatedUser.lastName,
+            fullName: updatedUser.fullName,
+            avatar: updatedUser.avatar,
+            isActive: updatedUser.isActive,
+            isVerified: updatedUser.isVerified,
+            lastLoginAt: updatedUser.lastLoginAt,
+            createdAt: updatedUser.createdAt,
+            updatedAt: updatedUser.updatedAt,
+          }
         },
         meta: {
           timestamp: new Date().toISOString(),
@@ -192,19 +490,31 @@ export class UserController {
 
       res.status(HTTP_STATUS.OK).json(response);
     } catch (error) {
-      logger.error({ error, userId: req.user?.id }, 'Failed to update user profile');
+      logger.error({
+        event: 'update_user_error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId: req.params.id,
+        requesterId: req.user?.id
+      });
       next(error);
     }
   };
 
   /**
    * @swagger
-   * /api/v1/auth/change-password:
-   *   post:
-   *     tags: [User]
-   *     summary: Change user password
+   * /api/v1/users/{id}/avatar:
+   *   patch:
+   *     tags: [Users]
+   *     summary: Update user avatar (owner only)
    *     security:
    *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: User ID (CUID)
    *     requestBody:
    *       required: true
    *       content:
@@ -212,103 +522,37 @@ export class UserController {
    *           schema:
    *             type: object
    *             required:
-   *               - currentPassword
-   *               - newPassword
+   *               - avatar
    *             properties:
-   *               currentPassword:
+   *               avatar:
    *                 type: string
-   *               newPassword:
-   *                 type: string
-   *                 minLength: 8
+   *                 format: uri
    *     responses:
    *       200:
-   *         description: Password changed successfully
+   *         description: Avatar updated successfully
    *       400:
    *         description: Validation error
    *       401:
-   *         description: Invalid current password
-   */
-  public changePassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const userId = req.user?.id;
-      const { currentPassword, newPassword } = req.body;
-
-      if (!userId) {
-        const response: ApiResponse = {
-          success: false,
-          message: ERROR_MESSAGES.USER_NOT_FOUND,
-          error: {
-            code: ERROR_CODES.USER_NOT_FOUND,
-          },
-          meta: {
-            timestamp: new Date().toISOString(),
-            requestId: req.headers['x-request-id'] as string,
-          },
-        };
-        
-        res.status(HTTP_STATUS.UNAUTHORIZED).json(response);
-        return;
-      }
-
-      await this.authService.changePassword(userId, currentPassword, newPassword);
-
-      // Log de seguridad
-      authLogger.info(
-        { 
-          userId, 
-          ipAddress: req.ip,
-          userAgent: req.get('User-Agent')
-        },
-        'Password changed successfully'
-      );
-
-      const response: ApiResponse = {
-        success: true,
-        message: SUCCESS_MESSAGES.PASSWORD_UPDATED,
-        meta: {
-          timestamp: new Date().toISOString(),
-          requestId: req.headers['x-request-id'] as string,
-        },
-      };
-
-      res.status(HTTP_STATUS.OK).json(response);
-    } catch (error) {
-      authLogger.warn(
-        { 
-          error: error.message, 
-          userId: req.user?.id,
-          ipAddress: req.ip
-        },
-        'Password change failed'
-      );
-      next(error);
-    }
-  };
-
-  /**
-   * @swagger
-   * /api/v1/auth/sessions:
-   *   get:
-   *     tags: [User]
-   *     summary: Get user active sessions
-   *     security:
-   *       - bearerAuth: []
-   *     responses:
-   *       200:
-   *         description: Sessions retrieved successfully
-   *       401:
    *         description: Unauthorized
+   *       403:
+   *         description: Forbidden - not owner
+   *       404:
+   *         description: User not found
    */
-  public getSessions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public updateAvatar = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.user?.id;
+      const { id } = req.params;
+      const currentUserId = req.user?.id;
+      const { avatar } = req.body;
 
-      if (!userId) {
+      // Verificar ownership
+      if (currentUserId !== id) {
         const response: ApiResponse = {
           success: false,
-          message: ERROR_MESSAGES.USER_NOT_FOUND,
+          message: 'Forbidden: You can only update your own avatar',
           error: {
-            code: ERROR_CODES.USER_NOT_FOUND,
+            code: ERROR_CODES.FORBIDDEN,
+            message: 'Forbidden: You can only update your own avatar'
           },
           meta: {
             timestamp: new Date().toISOString(),
@@ -316,28 +560,35 @@ export class UserController {
           },
         };
         
-        res.status(HTTP_STATUS.UNAUTHORIZED).json(response);
+        res.status(HTTP_STATUS.FORBIDDEN).json(response);
         return;
       }
 
-      const sessions = await this.userService.getUserSessions(userId);
+      const updatedUser = await this.userService.updateProfile(id, { avatar });
+
+      logger.info({
+        event: 'avatar_updated',
+        userId: id
+      });
 
       const response: ApiResponse = {
         success: true,
-        message: 'Sessions retrieved successfully',
+        message: 'Avatar updated successfully',
         data: {
-          sessions: sessions.map(session => ({
-            id: session.id,
-            sessionId: session.sessionId,
-            device: session.device,
-            ipAddress: session.ipAddress,
-            location: session.location,
-            isActive: session.isActive,
-            lastSeen: session.lastSeen,
-            createdAt: session.createdAt,
-            expiresAt: session.expiresAt,
-          })),
-          total: sessions.length,
+          user: {
+            id: updatedUser.id,
+            email: updatedUser.email,
+            username: updatedUser.username,
+            firstName: updatedUser.firstName,
+            lastName: updatedUser.lastName,
+            fullName: updatedUser.fullName,
+            avatar: updatedUser.avatar,
+            isActive: updatedUser.isActive,
+            isVerified: updatedUser.isVerified,
+            lastLoginAt: updatedUser.lastLoginAt,
+            createdAt: updatedUser.createdAt,
+            updatedAt: updatedUser.updatedAt,
+          }
         },
         meta: {
           timestamp: new Date().toISOString(),
@@ -347,44 +598,64 @@ export class UserController {
 
       res.status(HTTP_STATUS.OK).json(response);
     } catch (error) {
-      logger.error({ error, userId: req.user?.id }, 'Failed to get user sessions');
+      logger.error({
+        event: 'update_avatar_error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId: req.params.id,
+        requesterId: req.user?.id
+      });
       next(error);
     }
   };
 
   /**
    * @swagger
-   * /api/v1/auth/sessions/{sessionId}:
+   * /api/v1/users/{id}:
    *   delete:
-   *     tags: [User]
-   *     summary: Terminate a specific session
+   *     tags: [Users]
+   *     summary: Deactivate user account (soft delete, owner only)
    *     security:
    *       - bearerAuth: []
    *     parameters:
    *       - in: path
-   *         name: sessionId
+   *         name: id
    *         required: true
    *         schema:
    *           type: string
+   *         description: User ID (CUID)
+   *     requestBody:
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               reason:
+   *                 type: string
+   *                 maxLength: 500
    *     responses:
    *       200:
-   *         description: Session terminated successfully
+   *         description: User deactivated successfully
    *       401:
    *         description: Unauthorized
+   *       403:
+   *         description: Forbidden - not owner
    *       404:
-   *         description: Session not found
+   *         description: User not found
    */
-  public terminateSession = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public deactivateUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.user?.id;
-      const { sessionId } = req.params;
+      const { id } = req.params;
+      const currentUserId = req.user?.id;
+      const { reason } = req.body;
 
-      if (!userId) {
+      // Verificar ownership
+      if (currentUserId !== id) {
         const response: ApiResponse = {
           success: false,
-          message: ERROR_MESSAGES.USER_NOT_FOUND,
+          message: 'Forbidden: You can only deactivate your own account',
           error: {
-            code: ERROR_CODES.USER_NOT_FOUND,
+            code: ERROR_CODES.FORBIDDEN,
+            message: 'Forbidden: You can only deactivate your own account'
           },
           meta: {
             timestamp: new Date().toISOString(),
@@ -392,20 +663,24 @@ export class UserController {
           },
         };
         
-        res.status(HTTP_STATUS.UNAUTHORIZED).json(response);
+        res.status(HTTP_STATUS.FORBIDDEN).json(response);
         return;
       }
 
-      await this.authService.terminateSession(sessionId);
+      await this.userService.deactivate(id, reason);
 
-      authLogger.info(
-        { userId, sessionId },
-        'Session terminated by user'
-      );
+      // Logout all sessions when deactivating
+      await this.authService.logoutAll(id);
+
+      logger.info({
+        event: 'user_deactivated',
+        userId: id,
+        reason: reason || 'No reason provided'
+      });
 
       const response: ApiResponse = {
         success: true,
-        message: SUCCESS_MESSAGES.SESSION_TERMINATED,
+        message: 'Account deactivated successfully',
         meta: {
           timestamp: new Date().toISOString(),
           requestId: req.headers['x-request-id'] as string,
@@ -414,36 +689,54 @@ export class UserController {
 
       res.status(HTTP_STATUS.OK).json(response);
     } catch (error) {
-      logger.error({ error, userId: req.user?.id }, 'Failed to terminate session');
+      logger.error({
+        event: 'deactivate_user_error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId: req.params.id,
+        requesterId: req.user?.id
+      });
       next(error);
     }
   };
 
   /**
    * @swagger
-   * /api/v1/auth/sessions:
-   *   delete:
-   *     tags: [User]
-   *     summary: Terminate all user sessions except current
+   * /api/v1/users/{id}/activate:
+   *   patch:
+   *     tags: [Users]
+   *     summary: Reactivate user account (owner only)
    *     security:
    *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: User ID (CUID)
    *     responses:
    *       200:
-   *         description: All sessions terminated successfully
+   *         description: User reactivated successfully
    *       401:
    *         description: Unauthorized
+   *       403:
+   *         description: Forbidden - not owner
+   *       404:
+   *         description: User not found
    */
-  public terminateAllSessions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public activateUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const userId = req.user?.id;
-      const currentSessionId = req.user?.sessionId;
+      const { id } = req.params;
+      const currentUserId = req.user?.id;
 
-      if (!userId) {
+      // Verificar ownership
+      if (currentUserId !== id) {
         const response: ApiResponse = {
           success: false,
-          message: ERROR_MESSAGES.USER_NOT_FOUND,
+          message: 'Forbidden: You can only reactivate your own account',
           error: {
-            code: ERROR_CODES.USER_NOT_FOUND,
+            code: ERROR_CODES.FORBIDDEN,
+            message: 'Forbidden: You can only reactivate your own account'
           },
           meta: {
             timestamp: new Date().toISOString(),
@@ -451,20 +744,20 @@ export class UserController {
           },
         };
         
-        res.status(HTTP_STATUS.UNAUTHORIZED).json(response);
+        res.status(HTTP_STATUS.FORBIDDEN).json(response);
         return;
       }
 
-      await this.authService.terminateAllSessions(userId, currentSessionId);
+      await this.userService.activate(id);
 
-      authLogger.info(
-        { userId, currentSessionId },
-        'All user sessions terminated except current'
-      );
+      logger.info({
+        event: 'user_reactivated',
+        userId: id
+      });
 
       const response: ApiResponse = {
         success: true,
-        message: 'All sessions terminated successfully',
+        message: 'Account reactivated successfully',
         meta: {
           timestamp: new Date().toISOString(),
           requestId: req.headers['x-request-id'] as string,
@@ -473,7 +766,174 @@ export class UserController {
 
       res.status(HTTP_STATUS.OK).json(response);
     } catch (error) {
-      logger.error({ error, userId: req.user?.id }, 'Failed to terminate all sessions');
+      logger.error({
+        event: 'activate_user_error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId: req.params.id,
+        requesterId: req.user?.id
+      });
+      next(error);
+    }
+  };
+
+  /**
+   * @swagger
+   * /api/v1/users/{id}/verify-email:
+   *   post:
+   *     tags: [Users]
+   *     summary: Send email verification token (owner only)
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: User ID (CUID)
+   *     responses:
+   *       200:
+   *         description: Verification email sent
+   *       401:
+   *         description: Unauthorized
+   *       403:
+   *         description: Forbidden - not owner
+   *       404:
+   *         description: User not found
+   */
+  public sendEmailVerification = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const currentUserId = req.user?.id;
+
+      // Verificar ownership
+      if (currentUserId !== id) {
+        const response: ApiResponse = {
+          success: false,
+          message: 'Forbidden: You can only request verification for your own email',
+          error: {
+            code: ERROR_CODES.FORBIDDEN,
+            message: 'Forbidden: You can only request verification for your own email'
+          },
+          meta: {
+            timestamp: new Date().toISOString(),
+            requestId: req.headers['x-request-id'] as string,
+          },
+        };
+        
+        res.status(HTTP_STATUS.FORBIDDEN).json(response);
+        return;
+      }
+
+      await this.userService.sendEmailVerification(id);
+
+      logger.info({
+        event: 'email_verification_sent',
+        userId: id
+      });
+
+      const response: ApiResponse = {
+        success: true,
+        message: 'Verification email sent successfully',
+        meta: {
+          timestamp: new Date().toISOString(),
+          requestId: req.headers['x-request-id'] as string,
+        },
+      };
+
+      res.status(HTTP_STATUS.OK).json(response);
+    } catch (error) {
+      logger.error({
+        event: 'send_email_verification_error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId: req.params.id,
+        requesterId: req.user?.id
+      });
+      next(error);
+    }
+  };
+
+  /**
+   * @swagger
+   * /api/v1/users/{id}/verify-email/{token}:
+   *   patch:
+   *     tags: [Users]
+   *     summary: Verify email with token (owner only)
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: User ID (CUID)
+   *       - in: path
+   *         name: token
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Verification token
+   *     responses:
+   *       200:
+   *         description: Email verified successfully
+   *       400:
+   *         description: Invalid or expired token
+   *       401:
+   *         description: Unauthorized
+   *       403:
+   *         description: Forbidden - not owner
+   *       404:
+   *         description: User not found
+   */
+  public verifyEmail = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id, token } = req.params;
+      const currentUserId = req.user?.id;
+
+      // Verificar ownership
+      if (currentUserId !== id) {
+        const response: ApiResponse = {
+          success: false,
+          message: 'Forbidden: You can only verify your own email',
+          error: {
+            code: ERROR_CODES.FORBIDDEN,
+            message: 'Forbidden: You can only verify your own email'
+          },
+          meta: {
+            timestamp: new Date().toISOString(),
+            requestId: req.headers['x-request-id'] as string,
+          },
+        };
+        
+        res.status(HTTP_STATUS.FORBIDDEN).json(response);
+        return;
+      }
+
+      await this.userService.verifyEmail(id, token);
+
+      logger.info({
+        event: 'email_verified',
+        userId: id
+      });
+
+      const response: ApiResponse = {
+        success: true,
+        message: 'Email verified successfully',
+        meta: {
+          timestamp: new Date().toISOString(),
+          requestId: req.headers['x-request-id'] as string,
+        },
+      };
+
+      res.status(HTTP_STATUS.OK).json(response);
+    } catch (error) {
+      logger.error({
+        event: 'verify_email_error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId: req.params.id,
+        requesterId: req.user?.id
+      });
       next(error);
     }
   };

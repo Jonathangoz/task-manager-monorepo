@@ -1,7 +1,110 @@
-# Agregar task-service al compose
+# task-manager-monorepo/docker-compose.dev.yml
+version: '3.8'
+
 services:
-  # ... servicios existentes
+  # ==============================================
+  # DATABASES
+  # ==============================================
   
+  # Auth Service Database
+  auth-db:
+    image: postgres:16-alpine
+    container_name: task-manager-auth-db
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: auth_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+      - ./services/auth-service/prisma/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth_user -d auth_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Task Service Database
+  task-db:
+    image: postgres:16-alpine
+    container_name: task-manager-task-db
+    environment:
+      POSTGRES_DB: task_db
+      POSTGRES_USER: task_user
+      POSTGRES_PASSWORD: task_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    ports:
+      - "5433:5432"
+    volumes:
+      - task_db_data:/var/lib/postgresql/data
+      - ./services/task-service/prisma/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U task_user -d task_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ==============================================
+  # REDIS CACHE
+  # ==============================================
+  
+  redis:
+    image: redis:7-alpine
+    container_name: task-manager-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --requirepass redis_password
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis_password", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ==============================================
+  # MICROSERVICES
+  # ==============================================
+
+  # Auth Service
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile.dev
+    container_name: task-manager-auth-service
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgresql://auth_user:auth_password@auth-db:5432/auth_db
+      REDIS_URL: redis://:redis_password@redis:6379
+      REDIS_PREFIX: "auth:"
+      JWT_SECRET: "dev-jwt-secret-super-secure-for-development-only-minimum-64-characters-long"
+      REFRESH_TOKEN_SECRET: "dev-refresh-secret-super-secure-for-development-only-minimum-64-characters"
+      JWE_SECRET: "dev-jwe-secret-exactly-32-chars!!"
+      CORS_ORIGIN: "http://localhost:3000,http://localhost:3002"
+      LOG_LEVEL: "debug"
+      LOG_PRETTY: "true"
+    volumes:
+      - ./services/auth-service:/app
+      - /app/node_modules
+      - /app/dist
+    depends_on:
+      auth-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - task-manager-network
+
+  # Task Service
   task-service:
     build:
       context: ./services/task-service
@@ -13,11 +116,13 @@ services:
       NODE_ENV: development
       PORT: 3002
       DATABASE_URL: postgresql://task_user:task_password@task-db:5432/task_db
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://:redis_password@redis:6379
       REDIS_PREFIX: "tasks:"
       AUTH_SERVICE_URL: "http://auth-service:3001"
-      JWT_SECRET: "dev-jwt-secret-super-secure-for-development-only-minimum-64-characters"
+      JWT_SECRET: "dev-jwt-secret-super-secure-for-development-only-minimum-64-characters-long"
       CORS_ORIGIN: "http://localhost:3000,http://localhost:3001"
+      LOG_LEVEL: "debug"
+      LOG_PRETTY: "true"
     volumes:
       - ./services/task-service:/app
       - /app/node_modules
@@ -30,8 +135,10 @@ services:
       auth-service:
         condition: service_started
     restart: unless-stopped
+    networks:
+      - task-manager-network
 
-  # Agregar frontend al compose
+  # Frontend
   task-frontend:
     build:
       context: ./frontend/task-frontend
@@ -43,6 +150,8 @@ services:
       NODE_ENV: development
       NEXT_PUBLIC_AUTH_SERVICE_URL_DEV: "http://localhost:3001/api/v1"
       NEXT_PUBLIC_TASK_SERVICE_URL_DEV: "http://localhost:3002/api/v1"
+      NEXT_PUBLIC_AUTH_SERVICE_URL: "http://localhost:3001/api/v1"
+      NEXT_PUBLIC_TASK_SERVICE_URL: "http://localhost:3002/api/v1"
     volumes:
       - ./frontend/task-frontend:/app
       - /app/node_modules
@@ -51,3 +160,24 @@ services:
       - auth-service
       - task-service
     restart: unless-stopped
+    networks:
+      - task-manager-network
+
+# ==============================================
+# VOLUMES
+# ==============================================
+volumes:
+  auth_db_data:
+    name: task_manager_auth_db_data
+  task_db_data:
+    name: task_manager_task_db_data
+  redis_data:
+    name: task_manager_redis_data
+
+# ==============================================
+# NETWORKS
+# ==============================================
+networks:
+  task-manager-network:
+    name: task-manager-network
+    driver: bridge

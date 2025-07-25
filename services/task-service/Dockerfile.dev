@@ -1,4 +1,4 @@
-# services/auth-service/Dockerfile.dev
+# services/task-service/Dockerfile.dev
 FROM node:22-alpine
 
 # Instalar pnpm globalmente
@@ -8,7 +8,7 @@ RUN npm install -g pnpm@latest
 WORKDIR /app
 
 # Instalar herramientas necesarias
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl redis
 
 # Copiar archivos de configuración
 COPY package.json pnpm-lock.yaml* ./
@@ -24,7 +24,7 @@ RUN pnpm prisma:generate
 COPY . .
 
 # Exponer puerto
-EXPOSE 3001
+EXPOSE 3002
 
 # Variables de entorno para desarrollo
 ENV NODE_ENV=development

@@ -1,72 +1,145 @@
+// src/commons/routes/user.routes.ts
 import { Router } from 'express';
-import { UserController } from '../controllers/user.controller';
-import { AuthMiddleware } from '../middlewares/auth.middleware';
-import { ValidationMiddleware } from '../middlewares/validation.middleware';
-import { RateLimitMiddleware } from '../middlewares/rate-limit.middleware';
+import { UserController } from '@/controllers/UserController';
 import { 
-  updateUserSchema,
-  changePasswordSchema,
-  getUsersQuerySchema 
-} from '../schemas/user.schemas';
+  verifyToken, 
+  requireOwnership, 
+  extractSessionInfo 
+} from '@/middlewares/auth.middleware';
+import { 
+  validate, 
+  validatePagination, 
+  requireBody, 
+  validateCUID, 
+  sanitizeInput 
+} from '@/middlewares/validation.middleware';
+import { rateLimitPerUser } from '@/middlewares/rateLimit.middleware';
+import { 
+  updateUserValidation,
+  getUsersQueryValidation,
+  deactivateUserValidation
+} from '@/validators/user.validator';
+import { asyncHandler } from '@/middlewares/error.middleware';
 
 export class UserRoutes {
   static get routes(): Router {
     const router = Router();
     const userController = new UserController();
 
-    // Rate limiting para operaciones de usuarios
-    const userRateLimit = RateLimitMiddleware.createRateLimit({
-      windowMs: 15 * 60 * 1000, // 15 minutos
-      max: 50, // máximo 50 requests por IP
-      message: 'Demasiadas peticiones, intenta de nuevo más tarde'
-    });
+    // Middleware global para todas las rutas de usuario
+    router.use(extractSessionInfo);
+    router.use(sanitizeInput);
+    router.use(verifyToken); // Todas las rutas de usuario requieren autenticación
+    router.use(rateLimitPerUser);
 
-    // Todas las rutas de usuario requieren autenticación
-    router.use(AuthMiddleware.validateJWT);
-    router.use(userRateLimit);
+    // === RUTAS DE CONSULTA ===
 
-    // Obtener lista de usuarios (con paginación y filtros)
+    /**
+     * GET /users
+     * Obtener lista de usuarios con paginación y filtros
+     */
     router.get(
       '/',
-      ValidationMiddleware.validateQuery(getUsersQuerySchema),
-      userController.getUsers
+      validatePagination,
+      validate(getUsersQueryValidation),
+      asyncHandler(userController.getUsers.bind(userController))
     );
 
-    // Obtener usuario por ID
+    /**
+     * GET /users/:id
+     * Obtener usuario por ID
+     */
     router.get(
       '/:id',
-      ValidationMiddleware.validateParams({ id: 'string' }),
-      userController.getUserById
+      validateCUID('id'),
+      asyncHandler(userController.getUserById.bind(userController))
     );
 
-    // Actualizar usuario
+    /**
+     * GET /users/:id/profile
+     * Obtener perfil público de usuario
+     */
+    router.get(
+      '/:id/profile',
+      validateCUID('id'),
+      asyncHandler(userController.getUserProfile.bind(userController))
+    );
+
+    // === RUTAS DE MODIFICACIÓN (requieren ownership) ===
+
+    /**
+     * PUT /users/:id
+     * Actualizar información del usuario
+     * Solo el propietario puede actualizar sus datos
+     */
     router.put(
       '/:id',
-      ValidationMiddleware.validateParams({ id: 'string' }),
-      ValidationMiddleware.validateBody(updateUserSchema),
-      userController.updateUser
+      validateCUID('id'),
+      requireOwnership('id'),
+      requireBody,
+      validate(updateUserValidation),
+      asyncHandler(userController.updateUser.bind(userController))
     );
 
-    // Cambiar contraseña
+    /**
+     * PATCH /users/:id/avatar
+     * Actualizar avatar del usuario
+     */
     router.patch(
-      '/:id/password',
-      ValidationMiddleware.validateParams({ id: 'string' }),
-      ValidationMiddleware.validateBody(changePasswordSchema),
-      userController.changePassword
+      '/:id/avatar',
+      validateCUID('id'),
+      requireOwnership('id'),
+      requireBody,
+      asyncHandler(userController.updateAvatar.bind(userController))
     );
 
-    // Desactivar usuario (soft delete)
+    /**
+     * DELETE /users/:id
+     * Desactivar usuario (soft delete)
+     * Solo el propietario puede desactivar su cuenta
+     */
     router.delete(
       '/:id',
-      ValidationMiddleware.validateParams({ id: 'string' }),
-      userController.deactivateUser
+      validateCUID('id'),
+      requireOwnership('id'),
+      validate(deactivateUserValidation),
+      asyncHandler(userController.deactivateUser.bind(userController))
     );
 
-    // Reactivar usuario
+    /**
+     * PATCH /users/:id/activate
+     * Reactivar usuario
+     * Solo el propietario puede reactivar su cuenta
+     */
     router.patch(
       '/:id/activate',
-      ValidationMiddleware.validateParams({ id: 'string' }),
-      userController.activateUser
+      validateCUID('id'),
+      requireOwnership('id'),
+      asyncHandler(userController.activateUser.bind(userController))
+    );
+
+    // === RUTAS DE VERIFICACIÓN ===
+
+    /**
+     * POST /users/:id/verify-email
+     * Enviar token de verificación de email
+     */
+    router.post(
+      '/:id/verify-email',
+      validateCUID('id'),
+      requireOwnership('id'),
+      asyncHandler(userController.sendEmailVerification.bind(userController))
+    );
+
+    /**
+     * PATCH /users/:id/verify-email/:token
+     * Verificar email con token
+     */
+    router.patch(
+      '/:id/verify-email/:token',
+      validateCUID('id'),
+      requireOwnership('id'),
+      asyncHandler(userController.verifyEmail.bind(userController))
     );
 
     return router;

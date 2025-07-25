@@ -1,7 +1,7 @@
 // src/config/redis.ts
 import Redis from 'ioredis';
 import { logger } from '@/utils/logger';
-import { config } from './environment';
+import { environment } from './environment';
 
 class RedisConnection {
   private static instance: RedisConnection;
@@ -9,11 +9,11 @@ class RedisConnection {
   private isConnected = false;
 
   private constructor() {
-    this.client = new Redis(config.redis.url, {
+    this.client = new Redis(environment.REDIS_URL, {
       retryDelayOnFailover: 1000,
       maxRetriesPerRequest: 3,
       lazyConnect: true,
-      keyPrefix: config.redis.prefix,
+      keyPrefix: environment.REDIS_PREFIX,
       // Configuración para producción
       connectTimeout: 10000,
       commandTimeout: 5000,

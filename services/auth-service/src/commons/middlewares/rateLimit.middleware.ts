@@ -1,9 +1,16 @@
 // src/presentation/middlewares/rateLimit.middleware.ts
 import { Request, Response, NextFunction } from 'express';
-import { redisConnection } from '@/config/redis';
-import { logger, securityLogger } from '@/utils/logger';
-import { config } from '@/config/environment';
-import { HTTP_STATUS, ERROR_CODES, ERROR_MESSAGES, CACHE_KEYS, CACHE_TTL, SECURITY_CONFIG } from '@/utils/constants';
+import { RedisCache } from '@/core/infrastructure/cache/RedisCache';
+import { logger } from '@/utils/logger';
+import { environment } from '@/config/environment';
+import { 
+  HTTP_STATUS, 
+  ERROR_CODES, 
+  ERROR_MESSAGES, 
+  CACHE_KEYS, 
+  CACHE_TTL, 
+  SECURITY_CONFIG 
+} from '@/utils/constants';
 
 interface RateLimitRequest extends Request {
   correlationId?: string;
@@ -11,6 +18,7 @@ interface RateLimitRequest extends Request {
     id: string;
     email: string;
     username: string;
+    sessionId?: string;
   };
 }
 
@@ -36,13 +44,15 @@ interface RateLimitInfo {
 const rateLimitStore = new Map<string, RateLimitInfo>();
 
 export class RateLimitMiddleware {
+  private static cache = new RedisCache();
+
   /**
    * Rate limiter general basado en IP
    */
   static general(options: Partial<RateLimitConfig> = {}) {
     const defaultOptions: RateLimitConfig = {
-      windowMs: config.rateLimit.windowMs,
-      maxRequests: config.rateLimit.maxRequests,
+      windowMs: parseInt(environment.RATE_LIMIT_WINDOW_MS) || 900000, // 15 minutos
+      maxRequests: parseInt(environment.RATE_LIMIT_MAX_REQUESTS) || 100,
       message: ERROR_MESSAGES.RATE_LIMIT_EXCEEDED,
       skipSuccessfulRequests: false,
       skipFailedRequests: false,
@@ -75,19 +85,19 @@ export class RateLimitMiddleware {
         RateLimitMiddleware.setRateLimitHeaders(res, rateLimitInfo, finalOptions.maxRequests);
 
         // Log de la petición
-        logger.debug({
+        logger.debug('Rate limit check completed', {
           correlationId: req.correlationId,
           ip: req.ip,
           key,
           count: rateLimitInfo.count,
           remaining: rateLimitInfo.remaining,
           resetTime: rateLimitInfo.resetTime,
-        }, 'Rate limit check completed');
+        });
 
         // Verificar si se excedió el límite
         if (rateLimitInfo.count > finalOptions.maxRequests) {
           // Log de seguridad
-          securityLogger.warn({
+          logger.warn('Rate limit exceeded', {
             correlationId: req.correlationId,
             ip: req.ip,
             userAgent: req.get('User-Agent'),
@@ -96,7 +106,7 @@ export class RateLimitMiddleware {
             count: rateLimitInfo.count,
             maxRequests: finalOptions.maxRequests,
             event: 'RATE_LIMIT_EXCEEDED',
-          }, 'Rate limit exceeded');
+          });
 
           // Callback personalizado
           if (finalOptions.onLimitReached) {
@@ -110,20 +120,24 @@ export class RateLimitMiddleware {
               message: finalOptions.message,
             },
             meta: {
+              correlationId: req.correlationId,
               rateLimitExceeded: true,
               resetTime: new Date(rateLimitInfo.resetTime).toISOString(),
               retryAfter: Math.ceil((rateLimitInfo.resetTime - Date.now()) / 1000),
+              timestamp: new Date().toISOString(),
+              path: req.path,
+              method: req.method
             },
           });
         }
 
         next();
       } catch (error) {
-        logger.error({
-          error,
+        logger.error('Rate limit middleware error', {
+          error: error instanceof Error ? error.message : 'Error desconocido',
           correlationId: req.correlationId,
           ip: req.ip,
-        }, 'Rate limit middleware error');
+        });
         
         // En caso de error, permitir la petición pero logear
         next();
@@ -138,21 +152,21 @@ export class RateLimitMiddleware {
     const defaultOptions: RateLimitConfig = {
       windowMs: SECURITY_CONFIG.LOGIN_ATTEMPT_WINDOW,
       maxRequests: SECURITY_CONFIG.MAX_LOGIN_ATTEMPTS,
-      message: ERROR_MESSAGES.RATE_LIMIT_EXCEEDED,
+      message: 'Demasiados intentos de login, intenta de nuevo más tarde',
       keyGenerator: (req) => {
         const body = req.body as { email?: string };
         const email = body?.email || req.ip || 'unknown';
         return `auth:${email}`;
       },
       onLimitReached: (req, rateLimitInfo) => {
-        securityLogger.error({
+        logger.error('Authentication rate limit exceeded - potential brute force attack', {
           correlationId: req.correlationId,
           ip: req.ip,
           email: (req.body as { email?: string })?.email,
           userAgent: req.get('User-Agent'),
           count: rateLimitInfo.count,
           event: 'AUTH_RATE_LIMIT_EXCEEDED',
-        }, 'Authentication rate limit exceeded - potential brute force attack');
+        });
       },
     };
 
@@ -169,7 +183,7 @@ export class RateLimitMiddleware {
       message: ERROR_MESSAGES.RATE_LIMIT_EXCEEDED,
       keyGenerator: (req) => {
         const typedReq = req as RateLimitRequest;
-        return typedReq.user?.id || req.ip || 'unknown';
+        return `user:${typedReq.user?.id || req.ip || 'unknown'}`;
       },
       skip: (req) => {
         const typedReq = req as RateLimitRequest;
@@ -187,7 +201,7 @@ export class RateLimitMiddleware {
     return RateLimitMiddleware.general({
       windowMs: 60 * 1000, // 1 minuto
       maxRequests: 10, // Máximo 10 refresh por minuto
-      message: 'Too many token refresh attempts',
+      message: 'Demasiados intentos de renovación de token',
       keyGenerator: (req) => {
         const typedReq = req as RateLimitRequest;
         return `refresh:${typedReq.user?.id || req.ip}`;
@@ -202,8 +216,23 @@ export class RateLimitMiddleware {
     return RateLimitMiddleware.general({
       windowMs: 60 * 60 * 1000, // 1 hora
       maxRequests: 5, // Máximo 5 registros por hora por IP
-      message: 'Too many registration attempts',
+      message: 'Demasiados intentos de registro',
       keyGenerator: (req) => `register:${req.ip}`,
+    });
+  }
+
+  /**
+   * Rate limiter para recuperación de contraseña
+   */
+  static passwordReset() {
+    return RateLimitMiddleware.general({
+      windowMs: 60 * 60 * 1000, // 1 hora
+      maxRequests: 3, // Máximo 3 intentos por hora
+      message: 'Demasiados intentos de recuperación de contraseña',
+      keyGenerator: (req) => {
+        const email = (req.body as { email?: string })?.email || req.ip;
+        return `password-reset:${email}`;
+      },
     });
   }
 
@@ -220,11 +249,13 @@ export class RateLimitMiddleware {
 
     try {
       // Intentar usar Redis primero
-      if (redisConnection.isHealthy()) {
+      if (await RateLimitMiddleware.cache.isHealthy()) {
         return await RateLimitMiddleware.checkRateLimitRedis(key, windowMs, maxRequests, now);
       }
     } catch (error) {
-      logger.warn({ error }, 'Redis unavailable for rate limiting, falling back to memory store');
+      logger.warn('Redis unavailable for rate limiting, falling back to memory store', {
+        error: error instanceof Error ? error.message : 'Error desconocido'
+      });
     }
 
     // Fallback a store en memoria
@@ -232,7 +263,7 @@ export class RateLimitMiddleware {
   }
 
   /**
-   * Rate limiting usando Redis
+   * Rate limiting usando Redis con sliding window
    */
   private static async checkRateLimitRedis(
     key: string,
@@ -240,32 +271,51 @@ export class RateLimitMiddleware {
     maxRequests: number,
     now: number
   ): Promise<RateLimitInfo> {
-    const redis = redisConnection.getClient();
     const redisKey = CACHE_KEYS.RATE_LIMIT(key);
-    
-    // Usar pipeline para operaciones atómicas
-    const pipeline = redis.pipeline();
-    
-    // Incrementar contador
-    pipeline.incr(redisKey);
-    pipeline.expire(redisKey, Math.ceil(windowMs / 1000));
-    
-    const results = await pipeline.exec();
-    
-    if (!results || results.length < 2) {
-      throw new Error('Redis pipeline failed');
+    const windowStart = now - windowMs;
+
+    try {
+      // Usar sorted set para sliding window
+      const client = RateLimitMiddleware.cache.getClient();
+      
+      // Pipeline para operaciones atómicas
+      const pipeline = client.pipeline();
+      
+      // Remover entradas expiradas
+      pipeline.zremrangebyscore(redisKey, 0, windowStart);
+      
+      // Agregar nueva entrada
+      pipeline.zadd(redisKey, now, `${now}-${Math.random()}`);
+      
+      // Contar entradas en la ventana
+      pipeline.zcard(redisKey);
+      
+      // Establecer TTL
+      pipeline.expire(redisKey, Math.ceil(windowMs / 1000));
+      
+      const results = await pipeline.exec();
+      
+      if (!results || results.length < 4) {
+        throw new Error('Redis pipeline failed');
+      }
+
+      const count = results[2][1] as number;
+      const resetTime = now + windowMs;
+      const remaining = Math.max(0, maxRequests - count);
+
+      return {
+        count,
+        resetTime,
+        firstRequest: now,
+        remaining,
+      };
+    } catch (error) {
+      logger.error('Error in Redis rate limiting', {
+        error: error instanceof Error ? error.message : 'Error desconocido',
+        key: redisKey
+      });
+      throw error;
     }
-
-    const count = results[0][1] as number;
-    const resetTime = now + windowMs;
-    const remaining = Math.max(0, maxRequests - count);
-
-    return {
-      count,
-      resetTime,
-      firstRequest: now,
-      remaining,
-    };
   }
 
   /**
@@ -336,7 +386,7 @@ export class RateLimitMiddleware {
   }
 
   /**
-   * Middleware para limpiar rate limits (útil para testing)
+   * Middleware para limpiar todos los rate limits (útil para testing)
    */
   static clearAll() {
     return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -345,18 +395,20 @@ export class RateLimitMiddleware {
         rateLimitStore.clear();
 
         // Limpiar Redis si está disponible
-        if (redisConnection.isHealthy()) {
-          const redis = redisConnection.getClient();
-          const keys = await redis.keys('ratelimit:*');
+        if (await RateLimitMiddleware.cache.isHealthy()) {
+          const client = RateLimitMiddleware.cache.getClient();
+          const keys = await client.keys('auth:ratelimit:*');
           if (keys.length > 0) {
-            await redis.del(...keys);
+            await client.del(...keys);
           }
         }
 
-        logger.info('Rate limit store cleared');
+        logger.info('All rate limits cleared');
         next();
       } catch (error) {
-        logger.error({ error }, 'Failed to clear rate limit store');
+        logger.error('Failed to clear all rate limits', {
+          error: error instanceof Error ? error.message : 'Error desconocido'
+        });
         next();
       }
     };
@@ -368,6 +420,8 @@ export class RateLimitMiddleware {
   static getStats() {
     return async (req: Request, res: Response): Promise<void> => {
       try {
+        const correlationId = `stats-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
         const memoryStats = {
           totalKeys: rateLimitStore.size,
           keys: Array.from(rateLimitStore.entries()).map(([key, info]) => ({
@@ -379,18 +433,28 @@ export class RateLimitMiddleware {
         };
 
         let redisStats = null;
-        if (redisConnection.isHealthy()) {
-          const redis = redisConnection.getClient();
-          const keys = await redis.keys('ratelimit:*');
-          const values = keys.length > 0 ? await redis.mget(...keys) : [];
-          
-          redisStats = {
-            totalKeys: keys.length,
-            keys: keys.map((key, index) => ({
-              key: key.replace('auth:ratelimit:', ''),
-              count: parseInt(values[index] || '0'),
-            })),
-          };
+        if (await RateLimitMiddleware.cache.isHealthy()) {
+          try {
+            const client = RateLimitMiddleware.cache.getClient();
+            const keys = await client.keys('auth:ratelimit:*');
+            
+            redisStats = {
+              totalKeys: keys.length,
+              keys: await Promise.all(
+                keys.map(async (key) => {
+                  const count = await client.zcard(key);
+                  return {
+                    key: key.replace('auth:ratelimit:', ''),
+                    count,
+                  };
+                })
+              ),
+            };
+          } catch (error) {
+            logger.warn('Error getting Redis stats', {
+              error: error instanceof Error ? error.message : 'Error desconocido'
+            });
+          }
         }
 
         res.json({
@@ -400,17 +464,114 @@ export class RateLimitMiddleware {
             redis: redisStats,
             timestamp: new Date().toISOString(),
           },
+          meta: {
+            correlationId,
+            timestamp: new Date().toISOString(),
+            path: req.path,
+            method: req.method
+          }
         });
       } catch (error) {
-        logger.error({ error }, 'Failed to get rate limit stats');
+        logger.error('Failed to get rate limit stats', {
+          error: error instanceof Error ? error.message : 'Error desconocido'
+        });
+        
         res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
           success: false,
           error: {
             code: ERROR_CODES.INTERNAL_ERROR,
             message: ERROR_MESSAGES.INTERNAL_ERROR,
           },
+          meta: {
+            timestamp: new Date().toISOString(),
+            path: req.path,
+            method: req.method
+          }
         });
       }
+    };
+  }
+
+  /**
+   * Middleware para verificar si un IP está en whitelist
+   */
+  static whitelist(whitelistedIPs: string[] = []) {
+    return (req: Request, res: Response, next: NextFunction): void => {
+      const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
+      
+      // Si está en whitelist, skip rate limiting
+      if (whitelistedIPs.includes(clientIP)) {
+        logger.debug('IP whitelisted, skipping rate limit', { ip: clientIP });
+        return next();
+      }
+
+      // Continuar con rate limiting normal
+      next();
+    };
+  }
+
+  /**
+   * Middleware de rate limiting adaptativo basado en carga del sistema
+   */
+  static adaptive(baseOptions: Partial<RateLimitConfig> = {}) {
+    return (req: Request, res: Response, next: NextFunction): void => {
+      // Obtener métricas básicas del sistema
+      const memUsage = process.memoryUsage();
+      const cpuUsage = process.cpuUsage();
+      
+      // Calcular factor de ajuste basado en uso de memoria
+      const memUsagePercent = (memUsage.heapUsed / memUsage.heapTotal) * 100;
+      let adjustmentFactor = 1;
+      
+      if (memUsagePercent > 80) {
+        adjustmentFactor = 0.5; // Reducir límites si memoria alta
+      } else if (memUsagePercent > 60) {
+        adjustmentFactor = 0.75;
+      }
+
+      // Aplicar factor de ajuste a las opciones
+      const adaptedOptions = {
+        ...baseOptions,
+        maxRequests: Math.floor((baseOptions.maxRequests || 100) * adjustmentFactor),
+      };
+
+      logger.debug('Adaptive rate limiting applied', {
+        memUsagePercent,
+        adjustmentFactor,
+        originalLimit: baseOptions.maxRequests || 100,
+        adaptedLimit: adaptedOptions.maxRequests,
+      });
+
+      // Aplicar rate limiting con opciones adaptadas
+      RateLimitMiddleware.general(adaptedOptions)(req, res, next);
+    };
+  }
+
+  /**
+   * Middleware para aplicar diferentes límites según el método HTTP
+   */
+  static byMethod(methodLimits: Record<string, Partial<RateLimitConfig>> = {}) {
+    const defaultLimits: Record<string, Partial<RateLimitConfig>> = {
+      'GET': { maxRequests: 100, windowMs: 60000 },
+      'POST': { maxRequests: 20, windowMs: 60000 },
+      'PUT': { maxRequests: 20, windowMs: 60000 },
+      'PATCH': { maxRequests: 20, windowMs: 60000 },
+      'DELETE': { maxRequests: 10, windowMs: 60000 },
+    };
+
+    return (req: Request, res: Response, next: NextFunction): void => {
+      const method = req.method.toUpperCase();
+      const limits = methodLimits[method] || defaultLimits[method] || defaultLimits['GET'];
+      
+      logger.debug('Method-based rate limiting applied', {
+        method,
+        limits: {
+          maxRequests: limits.maxRequests,
+          windowMs: limits.windowMs
+        }
+      });
+
+      RateLimitMiddleware.general(limits)(req, res, next);
     };
   }
 }
@@ -421,3 +582,44 @@ export const rateLimitAuth = RateLimitMiddleware.auth();
 export const rateLimitPerUser = RateLimitMiddleware.perUser();
 export const rateLimitRefreshToken = RateLimitMiddleware.refreshToken();
 export const rateLimitRegistration = RateLimitMiddleware.registration();
+export const rateLimitPasswordReset = RateLimitMiddleware.passwordReset();
+
+// Exportar clase para uso avanzado
+export { RateLimitMiddleware }; para limpiar rate limits específicos
+   */
+  static clearRateLimit(keyPattern: string) {
+    return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+      try {
+        // Limpiar de memoria
+        for (const [key] of rateLimitStore.entries()) {
+          if (key.includes(keyPattern)) {
+            rateLimitStore.delete(key);
+          }
+        }
+
+        // Limpiar de Redis si está disponible
+        if (await RateLimitMiddleware.cache.isHealthy()) {
+          const client = RateLimitMiddleware.cache.getClient();
+          const pattern = `*${keyPattern}*`;
+          const keys = await client.keys(pattern);
+          
+          if (keys.length > 0) {
+            await client.del(...keys);
+          }
+        }
+
+        logger.info('Rate limit cleared', { keyPattern });
+        next();
+      } catch (error) {
+        logger.error('Failed to clear rate limit', {
+          error: error instanceof Error ? error.message : 'Error desconocido',
+          keyPattern
+        });
+        next();
+      }
+    };
+  }
+
+  /**
+   * Middleware para verificar si un IP está en whitelist
+   */

@@ -1,79 +1,183 @@
+// src/commons/routes/auth.routes.ts
 import { Router } from 'express';
-import { AuthController } from '../controllers/auth.controller';
-import { AuthMiddleware } from '../middlewares/auth.middleware';
-import { ValidationMiddleware } from '../middlewares/validation.middleware';
-import { RateLimitMiddleware } from '../middlewares/rate-limit.middleware';
+import { AuthController } from '@/controllers/AuthController';
+import { verifyToken, extractSessionInfo, checkConcurrentSessions } from '@/middlewares/auth.middleware';
+import { validate, requireBody, sanitizeInput, validateEmail } from '@/middlewares/validation.middleware';
 import { 
-  registerSchema, 
-  loginSchema, 
-  updateProfileSchema,
-  verifyTokenSchema 
-} from '../schemas/auth.schemas';
+  rateLimitAuth, 
+  rateLimitRefreshToken, 
+  rateLimitRegistration, 
+  rateLimitPasswordReset 
+} from '@/middlewares/rateLimit.middleware';
+import { 
+  registerValidation, 
+  loginValidation, 
+  refreshTokenValidation,
+  verifyTokenValidation,
+  updateProfileValidation,
+  changePasswordValidation,
+  forgotPasswordValidation,
+  resetPasswordValidation
+} from '@/validators/auth.validator';
+import { asyncHandler } from '@/middlewares/error.middleware';
 
 export class AuthRoutes {
   static get routes(): Router {
     const router = Router();
     const authController = new AuthController();
 
-    // Rate limiting para rutas de autenticación
-    const authRateLimit = RateLimitMiddleware.createRateLimit({
-      windowMs: 15 * 60 * 1000, // 15 minutos
-      max: 10, // máximo 10 intentos por IP
-      message: 'Demasiados intentos de autenticación, intenta de nuevo más tarde'
-    });
+    // Middleware global para todas las rutas
+    router.use(extractSessionInfo);
+    router.use(sanitizeInput);
 
-    const loginRateLimit = RateLimitMiddleware.createRateLimit({
-      windowMs: 15 * 60 * 1000,
-      max: 5, // máximo 5 intentos de login por IP
-      message: 'Demasiados intentos de login, intenta de nuevo más tarde'
-    });
+    // === RUTAS PÚBLICAS ===
 
-    // Rutas públicas
+    /**
+     * POST /auth/register
+     * Registro de nuevo usuario
+     */
     router.post(
       '/register',
-      authRateLimit,
-      ValidationMiddleware.validateBody(registerSchema),
-      authController.register
+      rateLimitRegistration,
+      requireBody,
+      validate(registerValidation),
+      asyncHandler(authController.register.bind(authController))
     );
 
+    /**
+     * POST /auth/login
+     * Inicio de sesión
+     */
     router.post(
       '/login',
-      loginRateLimit,
-      ValidationMiddleware.validateBody(loginSchema),
-      authController.login
+      rateLimitAuth,
+      requireBody,
+      validate(loginValidation),
+      asyncHandler(authController.login.bind(authController))
     );
 
+    /**
+     * POST /auth/refresh
+     * Renovar token de acceso usando refresh token
+     */
     router.post(
       '/refresh',
-      authRateLimit,
-      authController.refreshToken
+      rateLimitRefreshToken,
+      requireBody,
+      validate(refreshTokenValidation),
+      asyncHandler(authController.refreshToken.bind(authController))
     );
 
-    // Verificación de token para comunicación entre servicios
+    /**
+     * POST /auth/verify-token
+     * Verificar token (para comunicación entre servicios)
+     */
     router.post(
       '/verify-token',
-      ValidationMiddleware.validateBody(verifyTokenSchema),
-      authController.verifyToken
+      requireBody,
+      validate(verifyTokenValidation),
+      asyncHandler(authController.verifyToken.bind(authController))
     );
 
-    // Rutas protegidas
+    /**
+     * POST /auth/forgot-password
+     * Solicitar reset de contraseña
+     */
+    router.post(
+      '/forgot-password',
+      rateLimitPasswordReset,
+      requireBody,
+      validateEmail,
+      validate(forgotPasswordValidation),
+      asyncHandler(authController.forgotPassword.bind(authController))
+    );
+
+    /**
+     * POST /auth/reset-password
+     * Confirmar reset de contraseña con token
+     */
+    router.post(
+      '/reset-password',
+      rateLimitPasswordReset,
+      requireBody,
+      validate(resetPasswordValidation),
+      asyncHandler(authController.resetPassword.bind(authController))
+    );
+
+    // === RUTAS PROTEGIDAS ===
+
+    /**
+     * POST /auth/logout
+     * Cerrar sesión
+     */
     router.post(
       '/logout',
-      AuthMiddleware.validateJWT,
-      authController.logout
+      verifyToken,
+      asyncHandler(authController.logout.bind(authController))
     );
 
+    /**
+     * POST /auth/logout-all
+     * Cerrar todas las sesiones del usuario
+     */
+    router.post(
+      '/logout-all',
+      verifyToken,
+      asyncHandler(authController.logoutAll.bind(authController))
+    );
+
+    /**
+     * GET /auth/me
+     * Obtener perfil del usuario autenticado
+     */
     router.get(
       '/me',
-      AuthMiddleware.validateJWT,
-      authController.getProfile
+      verifyToken,
+      asyncHandler(authController.getProfile.bind(authController))
     );
 
+    /**
+     * PUT /auth/me
+     * Actualizar perfil del usuario autenticado
+     */
     router.put(
       '/me',
-      AuthMiddleware.validateJWT,
-      ValidationMiddleware.validateBody(updateProfileSchema),
-      authController.updateProfile
+      verifyToken,
+      requireBody,
+      validate(updateProfileValidation),
+      asyncHandler(authController.updateProfile.bind(authController))
+    );
+
+    /**
+     * PATCH /auth/change-password
+     * Cambiar contraseña del usuario autenticado
+     */
+    router.patch(
+      '/change-password',
+      verifyToken,
+      requireBody,
+      validate(changePasswordValidation),
+      asyncHandler(authController.changePassword.bind(authController))
+    );
+
+    /**
+     * GET /auth/sessions
+     * Obtener sesiones activas del usuario
+     */
+    router.get(
+      '/sessions',
+      verifyToken,
+      asyncHandler(authController.getActiveSessions.bind(authController))
+    );
+
+    /**
+     * DELETE /auth/sessions/:sessionId
+     * Terminar sesión específica
+     */
+    router.delete(
+      '/sessions/:sessionId',
+      verifyToken,
+      asyncHandler(authController.terminateSession.bind(authController))
     );
 
     return router;

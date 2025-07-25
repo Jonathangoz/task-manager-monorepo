@@ -1,7 +1,7 @@
 // src/utils/swagger.ts
 import swaggerJsdoc from 'swagger-jsdoc';
 import { SwaggerDefinition } from 'swagger-jsdoc';
-import { config } from '@/config/environment';
+import { environment } from '@/config/environment';
 
 // Definición básica de Swagger
 const swaggerDefinition: SwaggerDefinition = {
@@ -21,11 +21,11 @@ const swaggerDefinition: SwaggerDefinition = {
   },
   servers: [
     {
-      url: `http://localhost:${config.app.port}/api/${config.app.apiVersion}`,
+      url: `http://localhost:${environment.app.port}/api/${environment.app.apiVersion}`,
       description: 'Desarrollo Local',
     },
     {
-      url: `https://auth-service.render.com/api/${config.app.apiVersion}`,
+      url: `https://auth-service.render.com/api/${environment.app.apiVersion}`,
       description: 'Producción',
     },
   ],

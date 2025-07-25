@@ -5,6 +5,11 @@ export interface CacheOptions {
   nx?: boolean; // Only set if not exists
 }
 
+export interface RateLimitResult {
+  count: number;
+  resetTime: number;
+}
+
 export interface ICacheService {
   // Operaciones básicas
   get<T>(key: string): Promise<T | null>;
@@ -38,10 +43,7 @@ export interface ICacheService {
   deleteRefreshToken(tokenId: string): Promise<boolean>;
 
   // Rate limiting
-  incrementRateLimit(key: string, windowSeconds: number): Promise<{
-    count: number;
-    resetTime: number;
-  }>;
+  incrementRateLimit(key: string, windowSeconds: number): Promise<RateLimitResult>;
 
   // Login attempts tracking
   recordLoginAttempt(email: string): Promise<number>;

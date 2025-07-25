@@ -1,15 +1,15 @@
 // src/core/domain/interfaces/ITokenService.ts
-export interface SessionInfo {
-  ipAddress?: string;
-  userAgent?: string;
-  device?: string;
-  location?: string;
-}
 
 export interface TokenOptions {
   expiresIn?: string;
   issuer?: string;
   audience?: string;
+}
+
+export interface RefreshTokenData {
+  token: string;
+  tokenId: string;
+  expiresAt: Date;
 }
 
 export interface ITokenService {
@@ -18,11 +18,7 @@ export interface ITokenService {
   validateAccessToken(token: string): Promise<TokenPayload>;
   
   // Refresh Tokens
-  generateRefreshToken(userId: string, sessionId: string, options?: TokenOptions): Promise<{
-    token: string;
-    tokenId: string;
-    expiresAt: Date;
-  }>;
+  generateRefreshToken(userId: string, sessionId: string, options?: TokenOptions): Promise<RefreshTokenData>;
   validateRefreshToken(token: string): Promise<RefreshTokenPayload>;
   
   // JWE (Encrypted tokens)

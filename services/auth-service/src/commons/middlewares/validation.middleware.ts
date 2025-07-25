@@ -1,8 +1,15 @@
 // src/presentation/middlewares/validation.middleware.ts
 import { Request, Response, NextFunction } from 'express';
 import { validationResult, ValidationChain } from 'express-validator';
-import { AppError } from '../errors/AppError';
-import { logger } from '../../utils/logger';
+import { logger } from '@/utils/logger';
+import { 
+  HTTP_STATUS, 
+  ERROR_CODES, 
+  ERROR_MESSAGES,
+  DEFAULT_VALUES,
+  VALIDATION_PATTERNS 
+} from '@/utils/constants';
+import { AppError } from './error.middleware';
 
 interface ValidationRequest extends Request {
   correlationId?: string;
@@ -17,7 +24,9 @@ export class ValidationMiddleware {
     res: Response,
     next: NextFunction
   ): void {
-    const correlationId = req.correlationId || `req-${Date.now()}-${Math.random()}`;
+    const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    req.correlationId = correlationId;
+    
     const errors = validationResult(req);
 
     if (!errors.isEmpty()) {
@@ -34,11 +43,19 @@ export class ValidationMiddleware {
         method: req.method
       });
 
-      res.status(400).json({
+      res.status(HTTP_STATUS.BAD_REQUEST).json({
         success: false,
-        message: 'Errores de validación',
-        errors: formattedErrors,
-        correlationId
+        error: {
+          code: ERROR_CODES.VALIDATION_ERROR,
+          message: ERROR_MESSAGES.VALIDATION_ERROR,
+          details: formattedErrors
+        },
+        meta: {
+          correlationId,
+          timestamp: new Date().toISOString(),
+          path: req.path,
+          method: req.method
+        }
       });
       return;
     }
@@ -51,7 +68,7 @@ export class ValidationMiddleware {
    */
   static validate(validations: ValidationChain[]) {
     return async (req: ValidationRequest, res: Response, next: NextFunction): Promise<void> => {
-      const correlationId = req.correlationId || `req-${Date.now()}-${Math.random()}`;
+      const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       req.correlationId = correlationId;
 
       try {
@@ -75,11 +92,19 @@ export class ValidationMiddleware {
             method: req.method
           });
 
-          res.status(400).json({
+          res.status(HTTP_STATUS.BAD_REQUEST).json({
             success: false,
-            message: 'Errores de validación',
-            errors: formattedErrors,
-            correlationId
+            error: {
+              code: ERROR_CODES.VALIDATION_ERROR,
+              message: ERROR_MESSAGES.VALIDATION_ERROR,
+              details: formattedErrors
+            },
+            meta: {
+              correlationId,
+              timestamp: new Date().toISOString(),
+              path: req.path,
+              method: req.method
+            }
           });
           return;
         }
@@ -99,10 +124,18 @@ export class ValidationMiddleware {
           method: req.method
         });
 
-        res.status(500).json({
+        res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
           success: false,
-          message: 'Error interno durante validación',
-          correlationId
+          error: {
+            code: ERROR_CODES.INTERNAL_ERROR,
+            message: ERROR_MESSAGES.INTERNAL_ERROR
+          },
+          meta: {
+            correlationId,
+            timestamp: new Date().toISOString(),
+            path: req.path,
+            method: req.method
+          }
         });
       }
     };
@@ -116,28 +149,45 @@ export class ValidationMiddleware {
     res: Response,
     next: NextFunction
   ): void {
-    const correlationId = req.correlationId || `req-${Date.now()}-${Math.random()}`;
+    const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     req.correlationId = correlationId;
 
     try {
-      const { page = '1', limit = '10', sortBy, sortOrder = 'asc' } = req.query;
+      const { 
+        page = '1', 
+        limit = DEFAULT_VALUES.PAGINATION_LIMIT.toString(), 
+        sortBy, 
+        sortOrder = 'asc' 
+      } = req.query;
 
       // Validar y sanitizar página
       const pageNum = parseInt(page as string, 10);
       if (isNaN(pageNum) || pageNum < 1) {
-        throw new AppError('El parámetro "page" debe ser un número entero mayor a 0', 400);
+        throw new AppError(
+          'El parámetro "page" debe ser un número entero mayor a 0', 
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_CODES.VALIDATION_ERROR
+        );
       }
 
       // Validar y sanitizar límite
       const limitNum = parseInt(limit as string, 10);
-      if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
-        throw new AppError('El parámetro "limit" debe ser un número entre 1 y 100', 400);
+      if (isNaN(limitNum) || limitNum < 1 || limitNum > DEFAULT_VALUES.PAGINATION_MAX_LIMIT) {
+        throw new AppError(
+          `El parámetro "limit" debe ser un número entre 1 y ${DEFAULT_VALUES.PAGINATION_MAX_LIMIT}`, 
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_CODES.VALIDATION_ERROR
+        );
       }
 
       // Validar orden de clasificación
       const validSortOrders = ['asc', 'desc'];
       if (sortOrder && !validSortOrders.includes(sortOrder as string)) {
-        throw new AppError('El parámetro "sortOrder" debe ser "asc" o "desc"', 400);
+        throw new AppError(
+          'El parámetro "sortOrder" debe ser "asc" o "desc"', 
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_CODES.VALIDATION_ERROR
+        );
       }
 
       // Adjuntar parámetros sanitizados a la request
@@ -148,6 +198,13 @@ export class ValidationMiddleware {
       if (sortBy) {
         // Sanitizar campo de ordenamiento (remover caracteres peligrosos)
         const sanitizedSortBy = (sortBy as string).replace(/[^a-zA-Z0-9_]/g, '');
+        if (sanitizedSortBy !== sortBy) {
+          throw new AppError(
+            'El parámetro "sortBy" contiene caracteres no válidos', 
+            HTTP_STATUS.BAD_REQUEST,
+            ERROR_CODES.VALIDATION_ERROR
+          );
+        }
         req.query.sortBy = sanitizedSortBy;
       }
 
@@ -166,14 +223,30 @@ export class ValidationMiddleware {
       if (error instanceof AppError) {
         res.status(error.statusCode).json({
           success: false,
-          message: error.message,
-          correlationId
+          error: {
+            code: error.code,
+            message: error.message
+          },
+          meta: {
+            correlationId,
+            timestamp: new Date().toISOString(),
+            path: req.path,
+            method: req.method
+          }
         });
       } else {
-        res.status(400).json({
+        res.status(HTTP_STATUS.BAD_REQUEST).json({
           success: false,
-          message: 'Error en parámetros de paginación',
-          correlationId
+          error: {
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: 'Error en parámetros de paginación'
+          },
+          meta: {
+            correlationId,
+            timestamp: new Date().toISOString(),
+            path: req.path,
+            method: req.method
+          }
         });
       }
     }
@@ -187,7 +260,7 @@ export class ValidationMiddleware {
     res: Response,
     next: NextFunction
   ): void {
-    const correlationId = req.correlationId || `req-${Date.now()}-${Math.random()}`;
+    const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     req.correlationId = correlationId;
 
     if (!req.body || Object.keys(req.body).length === 0) {
@@ -197,10 +270,18 @@ export class ValidationMiddleware {
         method: req.method
       });
 
-      res.status(400).json({
+      res.status(HTTP_STATUS.BAD_REQUEST).json({
         success: false,
-        message: 'El cuerpo de la petición es requerido',
-        correlationId
+        error: {
+          code: ERROR_CODES.VALIDATION_ERROR,
+          message: 'El cuerpo de la petición es requerido'
+        },
+        meta: {
+          correlationId,
+          timestamp: new Date().toISOString(),
+          path: req.path,
+          method: req.method
+        }
       });
       return;
     }
@@ -209,11 +290,49 @@ export class ValidationMiddleware {
   }
 
   /**
-   * Valida formato de UUID en parámetros
+   * Valida formato de CUID en parámetros (usado por Prisma)
+   */
+  static validateCUID(paramName: string) {
+    return (req: ValidationRequest, res: Response, next: NextFunction): void => {
+      const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      req.correlationId = correlationId;
+
+      const paramValue = req.params[paramName];
+      
+      if (!paramValue || !VALIDATION_PATTERNS.CUID.test(paramValue)) {
+        logger.warn('CUID inválido en parámetro', {
+          correlationId,
+          paramName,
+          paramValue,
+          path: req.path
+        });
+
+        res.status(HTTP_STATUS.BAD_REQUEST).json({
+          success: false,
+          error: {
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: `El parámetro "${paramName}" debe ser un CUID válido`
+          },
+          meta: {
+            correlationId,
+            timestamp: new Date().toISOString(),
+            path: req.path,
+            method: req.method
+          }
+        });
+        return;
+      }
+
+      next();
+    };
+  }
+
+  /**
+   * Valida formato de UUID en parámetros (para compatibilidad)
    */
   static validateUUID(paramName: string) {
     return (req: ValidationRequest, res: Response, next: NextFunction): void => {
-      const correlationId = req.correlationId || `req-${Date.now()}-${Math.random()}`;
+      const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       req.correlationId = correlationId;
 
       const paramValue = req.params[paramName];
@@ -227,10 +346,18 @@ export class ValidationMiddleware {
           path: req.path
         });
 
-        res.status(400).json({
+        res.status(HTTP_STATUS.BAD_REQUEST).json({
           success: false,
-          message: `El parámetro "${paramName}" debe ser un UUID válido`,
-          correlationId
+          error: {
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: `El parámetro "${paramName}" debe ser un UUID válido`
+          },
+          meta: {
+            correlationId,
+            timestamp: new Date().toISOString(),
+            path: req.path,
+            method: req.method
+          }
         });
         return;
       }
@@ -247,7 +374,7 @@ export class ValidationMiddleware {
     res: Response,
     next: NextFunction
   ): void {
-    const correlationId = req.correlationId || `req-${Date.now()}-${Math.random()}`;
+    const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     req.correlationId = correlationId;
 
     try {
@@ -268,12 +395,98 @@ export class ValidationMiddleware {
         error: error instanceof Error ? error.message : 'Error desconocido'
       });
 
-      res.status(500).json({
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
         success: false,
-        message: 'Error interno durante sanitización',
-        correlationId
+        error: {
+          code: ERROR_CODES.INTERNAL_ERROR,
+          message: ERROR_MESSAGES.INTERNAL_ERROR
+        },
+        meta: {
+          correlationId,
+          timestamp: new Date().toISOString(),
+          path: req.path,
+          method: req.method
+        }
       });
     }
+  }
+
+  /**
+   * Valida formato de email
+   */
+  static validateEmail(
+    req: ValidationRequest,
+    res: Response,
+    next: NextFunction
+  ): void {
+    const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    req.correlationId = correlationId;
+
+    const { email } = req.body;
+
+    if (email && !VALIDATION_PATTERNS.EMAIL.test(email)) {
+      logger.warn('Formato de email inválido', {
+        correlationId,
+        email: email.substring(0, 3) + '***', // Log parcial por privacidad
+        path: req.path
+      });
+
+      res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.INVALID_EMAIL,
+          message: 'Formato de email inválido'
+        },
+        meta: {
+          correlationId,
+          timestamp: new Date().toISOString(),
+          path: req.path,
+          method: req.method
+        }
+      });
+      return;
+    }
+
+    next();
+  }
+
+  /**
+   * Valida formato de username
+   */
+  static validateUsername(
+    req: ValidationRequest,
+    res: Response,
+    next: NextFunction
+  ): void {
+    const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    req.correlationId = correlationId;
+
+    const { username } = req.body;
+
+    if (username && !VALIDATION_PATTERNS.USERNAME.test(username)) {
+      logger.warn('Formato de username inválido', {
+        correlationId,
+        username: username.substring(0, 3) + '***',
+        path: req.path
+      });
+
+      res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.INVALID_USERNAME,
+          message: 'El username solo puede contener letras, números y guiones bajos'
+        },
+        meta: {
+          correlationId,
+          timestamp: new Date().toISOString(),
+          path: req.path,
+          method: req.method
+        }
+      });
+      return;
+    }
+
+    next();
   }
 
   /**
@@ -307,6 +520,44 @@ export class ValidationMiddleware {
 
     return obj;
   }
+
+  /**
+   * Middleware para validar Content-Type
+   */
+  static requireContentType(expectedType: string = 'application/json') {
+    return (req: ValidationRequest, res: Response, next: NextFunction): void => {
+      const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      req.correlationId = correlationId;
+
+      const contentType = req.get('Content-Type');
+
+      if (!contentType || !contentType.includes(expectedType)) {
+        logger.warn('Content-Type inválido', {
+          correlationId,
+          expectedType,
+          receivedType: contentType,
+          path: req.path
+        });
+
+        res.status(HTTP_STATUS.BAD_REQUEST).json({
+          success: false,
+          error: {
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: `Content-Type debe ser ${expectedType}`
+          },
+          meta: {
+            correlationId,
+            timestamp: new Date().toISOString(),
+            path: req.path,
+            method: req.method
+          }
+        });
+        return;
+      }
+
+      next();
+    };
+  }
 }
 
 // Exportar métodos estáticos para uso directo
@@ -314,5 +565,9 @@ export const handleValidationErrors = ValidationMiddleware.handleValidationError
 export const validate = ValidationMiddleware.validate;
 export const validatePagination = ValidationMiddleware.validatePagination;
 export const requireBody = ValidationMiddleware.requireBody;
+export const validateCUID = ValidationMiddleware.validateCUID;
 export const validateUUID = ValidationMiddleware.validateUUID;
 export const sanitizeInput = ValidationMiddleware.sanitizeInput;
+export const validateEmail = ValidationMiddleware.validateEmail;
+export const validateUsername = ValidationMiddleware.validateUsername;
+export const requireContentType = ValidationMiddleware.requireContentType;
