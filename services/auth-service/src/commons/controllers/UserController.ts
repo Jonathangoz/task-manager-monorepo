@@ -1,8 +1,8 @@
 // src/commons/controllers/UserController.ts
 
 import { Request, Response, NextFunction } from 'express';
-import { IUserService } from '@/interfaces/IUserService';
-import { IAuthService } from '@/interfaces/IAuthService';
+import { IUserService } from '@/core/interfaces/IUserService';
+import { IAuthService } from '@/core/interfaces/IAuthService';
 import { logger } from '@/utils/logger';
 import { 
   HTTP_STATUS, 

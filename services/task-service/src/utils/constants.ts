@@ -62,46 +62,46 @@ export const ERROR_CODES = {
 
 // Success Messages
 export const SUCCESS_MESSAGES = {
-  TASK_CREATED: 'Task created successfully',
-  TASK_UPDATED: 'Task updated successfully',
-  TASK_DELETED: 'Task deleted successfully',
-  TASK_STATUS_UPDATED: 'Task status updated successfully',
-  TASK_PRIORITY_UPDATED: 'Task priority updated successfully',
-  TASK_COMPLETED: 'Task marked as completed',
+  TASK_CREATED: 'Tarea creada exitosamente',
+  TASK_UPDATED: 'Tarea actualizada exitosamente',
+  TASK_DELETED: 'Tarea eliminada exitosamente',
+  TASK_STATUS_UPDATED: 'Estado de tarea actualizado exitosamente',
+  TASK_PRIORITY_UPDATED: 'Prioridad de tarea actualizada exitosamente',
+  TASK_COMPLETED: 'Tarea completada exitosamente',
   
-  CATEGORY_CREATED: 'Category created successfully',
-  CATEGORY_UPDATED: 'Category updated successfully',
-  CATEGORY_DELETED: 'Category deleted successfully',
+  CATEGORY_CREATED: 'Categoria creada exitosamente',
+  CATEGORY_UPDATED: 'Categoria actualizada exitosamente',
+  CATEGORY_DELETED: 'Categoria eliminada exitosamente',
   
-  TASKS_RETRIEVED: 'Tasks retrieved successfully',
-  CATEGORIES_RETRIEVED: 'Categories retrieved successfully',
-  STATS_RETRIEVED: 'Statistics retrieved successfully',
+  TASKS_RETRIEVED: 'Tareas obtenidas exitosamente',
+  CATEGORIES_RETRIEVED: 'Categorias obtenidas exitosamente',
+  STATS_RETRIEVED: 'Estatísticas obtenidas exitosamente',
 } as const;
 
 // Error Messages
 export const ERROR_MESSAGES = {
-  TASK_NOT_FOUND: 'Task not found or access denied',
-  TASK_ALREADY_EXISTS: 'A task with this title already exists',
-  CATEGORY_NOT_FOUND: 'Category not found or access denied',
-  CATEGORY_ALREADY_EXISTS: 'A category with this name already exists',
-  CATEGORY_HAS_TASKS: 'Cannot delete category that contains tasks',
+  TASK_NOT_FOUND: 'Tarea no encontrada o acceso denegado',
+  TASK_ALREADY_EXISTS: 'Una tarea con este título ya existe',
+  CATEGORY_NOT_FOUND: 'Categoria no encontrada o acceso denegado',
+  CATEGORY_ALREADY_EXISTS: 'Una categoria con este nombre ya existe',
+  CATEGORY_HAS_TASKS: 'No se puede eliminar la categoria porque tiene tareas asociadas',
   
-  INVALID_TOKEN: 'Invalid or malformed token',
-  TOKEN_EXPIRED: 'Token has expired',
-  TOKEN_REQUIRED: 'Authentication token is required',
-  UNAUTHORIZED_ACCESS: 'Access denied',
+  INVALID_TOKEN: 'Token de autenticación inválido',
+  TOKEN_EXPIRED: 'Token expirado',
+  TOKEN_REQUIRED: 'Token de autenticación requerido',
+  UNAUTHORIZED_ACCESS: 'Acceso no autorizado',
   
-  VALIDATION_ERROR: 'Validation failed',
-  INVALID_DATE_FORMAT: 'Invalid date format',
-  INVALID_DUE_DATE: 'Due date cannot be in the past',
+  VALIDATION_ERROR: 'Validación fallida',
+  INVALID_DATE_FORMAT: 'Formato de fecha inválido',
+  INVALID_DUE_DATE: 'No se puede establecer una fecha de vencimiento en el pasado',
   
-  AUTH_SERVICE_ERROR: 'Authentication service unavailable',
-  DATABASE_ERROR: 'Database operation failed',
-  REDIS_ERROR: 'Cache service error',
-  INTERNAL_ERROR: 'Internal server error',
-  SERVICE_UNAVAILABLE: 'Service temporarily unavailable',
+  AUTH_SERVICE_ERROR: 'Servicio de autenticación no disponible',
+  DATABASE_ERROR: 'Base de datos no disponible',
+  REDIS_ERROR: 'Servicio Redis no disponible',
+  INTERNAL_ERROR: 'Error interno del servidor',
+  SERVICE_UNAVAILABLE: 'Servicio temporalmente no disponible',
   
-  RATE_LIMIT_EXCEEDED: 'Too many requests, please try again later',
+  RATE_LIMIT_EXCEEDED: 'Límite de solicitudes excedido, por favor intente más tarde',
 } as const;
 
 // Task Configuration

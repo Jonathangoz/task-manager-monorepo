@@ -1,14 +1,14 @@
 // src/commons/routes/auth.routes.ts
 import { Router } from 'express';
-import { AuthController } from '@/controllers/AuthController';
-import { verifyToken, extractSessionInfo, checkConcurrentSessions } from '@/middlewares/auth.middleware';
-import { validate, requireBody, sanitizeInput, validateEmail } from '@/middlewares/validation.middleware';
+import { AuthController } from '@/commons/controllers/AuthController';
+import { verifyToken, extractSessionInfo, checkConcurrentSessions } from '@/commons/middlewares/auth.middleware';
+import { validate, requireBody, sanitizeInput, validateEmail } from '@/commons/middlewares/validation.middleware';
 import { 
   rateLimitAuth, 
   rateLimitRefreshToken, 
   rateLimitRegistration, 
   rateLimitPasswordReset 
-} from '@/middlewares/rateLimit.middleware';
+} from '@/commons/middlewares/rateLimit.middleware';
 import { 
   registerValidation, 
   loginValidation, 
@@ -18,8 +18,8 @@ import {
   changePasswordValidation,
   forgotPasswordValidation,
   resetPasswordValidation
-} from '@/validators/auth.validator';
-import { asyncHandler } from '@/middlewares/error.middleware';
+} from '@/commons/validators/auth.validator';
+import { asyncHandler } from '@/commons/middlewares/error.middleware';
 
 export class AuthRoutes {
   static get routes(): Router {

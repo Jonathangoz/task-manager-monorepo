@@ -1,5 +1,6 @@
 // src/utils/constants.ts
 
+
 // HTTP Status Codes
 export const HTTP_STATUS = {
   OK: 200,
@@ -62,32 +63,32 @@ export const ERROR_CODES = {
 
 // Success Messages
 export const SUCCESS_MESSAGES = {
-  USER_REGISTERED: 'User registered successfully',
-  LOGIN_SUCCESSFUL: 'Login successful',
-  LOGOUT_SUCCESSFUL: 'Logout successful',
-  TOKEN_REFRESHED: 'Token refreshed successfully',
-  PASSWORD_UPDATED: 'Password updated successfully',
-  PROFILE_UPDATED: 'Profile updated successfully',
-  SESSION_TERMINATED: 'Session terminated successfully',
-  EMAIL_VERIFIED: 'Email verified successfully',
+  USER_REGISTERED: 'Usuario registrado exitosamente',
+  LOGIN_SUCCESSFUL: 'Inicio de sesión exitoso',
+  LOGOUT_SUCCESSFUL: 'Cierre de sesión exitoso',
+  TOKEN_REFRESHED: 'Token actualizado exitosamente',
+  PASSWORD_UPDATED: 'Contraseña actualizada exitosamente',
+  PROFILE_UPDATED: 'Perfil actualizado exitosamente',
+  SESSION_TERMINATED: 'Sesión terminada exitosamente',
+  EMAIL_VERIFIED: 'Correo electrónico verificado exitosamente',
 } as const;
 
 // Error Messages
 export const ERROR_MESSAGES = {
-  INVALID_CREDENTIALS: 'Invalid email or password',
-  TOKEN_EXPIRED: 'Token has expired',
-  TOKEN_INVALID: 'Invalid token',
-  TOKEN_REQUIRED: 'Authentication token is required',
-  USER_NOT_FOUND: 'User not found',
-  USER_ALREADY_EXISTS: 'User already exists with this email or username',
-  USER_INACTIVE: 'User account is inactive',
-  PASSWORD_TOO_WEAK: 'Password does not meet security requirements',
-  VALIDATION_ERROR: 'Validation failed',
-  RATE_LIMIT_EXCEEDED: 'Too many requests, please try again later',
-  INTERNAL_ERROR: 'Internal server error',
-  SERVICE_UNAVAILABLE: 'Service temporarily unavailable',
-  DATABASE_CONNECTION_ERROR: 'Database connection error',
-  REDIS_CONNECTION_ERROR: 'Cache service connection error',
+  INVALID_CREDENTIALS: 'Correo electrónico o contraseña inválidos',
+  TOKEN_EXPIRED: 'El token ha expirado',
+  TOKEN_INVALID: 'Token inválido',
+  TOKEN_REQUIRED: 'Se requiere un token de autenticación',
+  USER_NOT_FOUND: 'Usuario no encontrado',
+  USER_ALREADY_EXISTS: 'El usuario ya existe con este correo electrónico o nombre de usuario',
+  USER_INACTIVE: 'La cuenta de usuario está inactiva',
+  PASSWORD_TOO_WEAK: 'La contraseña no cumple con los requisitos de seguridad',
+  VALIDATION_ERROR: 'La validación falló',
+  RATE_LIMIT_EXCEEDED: 'Demasiadas solicitudes, por favor inténtalo de nuevo más tarde',
+  INTERNAL_ERROR: 'Error interno del servidor',
+  SERVICE_UNAVAILABLE: 'Servicio temporalmente no disponible',
+  DATABASE_CONNECTION_ERROR: 'Error de conexión con la base de datos',
+  REDIS_CONNECTION_ERROR: 'Error de conexión con el servicio de caché',
 } as const;
 
 // Token Configuration
@@ -229,20 +230,20 @@ export const TOKEN_TYPES = {
 
 // Session Status
 export const SESSION_STATUS = {
-  ACTIVE: 'active',
-  EXPIRED: 'expired',
-  TERMINATED: 'terminated',
-  INVALID: 'invalid',
+  ACTIVE: 'activa',
+  EXPIRED: 'expirada',
+  TERMINATED: 'terminada',
+  INVALID: 'invalida',
 } as const;
 
 // Login Attempt Reasons
 export const LOGIN_ATTEMPT_REASONS = {
-  INVALID_PASSWORD: 'invalid_password',
-  USER_NOT_FOUND: 'user_not_found',
-  USER_INACTIVE: 'user_inactive',
-  USER_NOT_VERIFIED: 'user_not_verified',
-  RATE_LIMITED: 'rate_limited',
-  ACCOUNT_LOCKED: 'account_locked',
+  INVALID_PASSWORD: 'contraseña_incorrecta',
+  USER_NOT_FOUND: 'userio_no_encontrado',
+  USER_INACTIVE: 'userio_inactivo',
+  USER_NOT_VERIFIED: 'userio_no_verificado',
+  RATE_LIMITED: 'rate_limitado',
+  ACCOUNT_LOCKED: 'cuenta_bloqueada',
 } as const;
 
 // Password Validation
@@ -295,15 +296,15 @@ export const CONSTANTS = {
 
 // Mensajes de éxito adicionales
 export const ADDITIONAL_SUCCESS_MESSAGES = {
-  PROFILE_RETRIEVED: 'Profile retrieved successfully',
-  AVATAR_UPDATED: 'Avatar updated successfully',
-  ACCOUNT_DEACTIVATED: 'Account deactivated successfully',
-  ACCOUNT_REACTIVATED: 'Account reactivated successfully',
-  EMAIL_VERIFICATION_SENT: 'Email verification sent successfully',
-  EMAIL_VERIFIED: 'Email verified successfully',
-  PASSWORD_RESET_SENT: 'Password reset email sent',
-  PASSWORD_RESET_SUCCESS: 'Password reset successfully',
-  ALL_SESSIONS_TERMINATED: 'All sessions terminated successfully',
+  PROFILE_RETRIEVED: 'Perfil obtenido exitosamente',
+  AVATAR_UPDATED: 'Avatar actualizado exitosamente',
+  ACCOUNT_DEACTIVATED: 'Cuenta desactivada exitosamente',
+  ACCOUNT_REACTIVATED: 'Cuenta reactivada exitosamente',
+  EMAIL_VERIFICATION_SENT: 'Correo de verificación enviado exitosamente',
+  EMAIL_VERIFIED: 'Correo electrónico verificado exitosamente',
+  PASSWORD_RESET_SENT: 'Correo para restablecer la contraseña enviado',
+  PASSWORD_RESET_SUCCESS: 'Contraseña restablecida exitosamente',
+  ALL_SESSIONS_TERMINATED: 'Todas las sesiones se han cerrado exitosamente',
 } as const;
 
 // Códigos de error adicionales
@@ -324,18 +325,18 @@ export const ADDITIONAL_ERROR_CODES = {
 
 // Mensajes de error adicionales
 export const ADDITIONAL_ERROR_MESSAGES = {
-  PROFILE_UPDATE_FAILED: 'Failed to update profile',
-  AVATAR_UPDATE_FAILED: 'Failed to update avatar',
-  ACCOUNT_ALREADY_DEACTIVATED: 'Account is already deactivated',
-  ACCOUNT_ALREADY_ACTIVE: 'Account is already active',
-  EMAIL_ALREADY_VERIFIED: 'Email is already verified',
-  VERIFICATION_TOKEN_EXPIRED: 'Email verification token has expired',
-  VERIFICATION_TOKEN_INVALID: 'Invalid email verification token',
-  PASSWORD_RESET_TOKEN_EXPIRED: 'Password reset token has expired',
-  PASSWORD_RESET_TOKEN_INVALID: 'Invalid password reset token',
-  SAME_PASSWORD: 'New password must be different from current password',
-  EMAIL_ALREADY_EXISTS: 'Email is already in use',
-  USERNAME_ALREADY_EXISTS: 'Username is already in use',
+  PROFILE_UPDATE_FAILED: 'Error al actualizar el perfil',
+  AVATAR_UPDATE_FAILED: 'Error al actualizar el avatar',
+  ACCOUNT_ALREADY_DEACTIVATED: 'La cuenta ya está desactivada',
+  ACCOUNT_ALREADY_ACTIVE: 'La cuenta ya está activa',
+  EMAIL_ALREADY_VERIFIED: 'El correo electrónico ya está verificado',
+  VERIFICATION_TOKEN_EXPIRED: 'El token de verificación de correo ha expirado',
+  VERIFICATION_TOKEN_INVALID: 'Token de verificación de correo inválido',
+  PASSWORD_RESET_TOKEN_EXPIRED: 'El token para restablecer la contraseña ha expirado',
+  PASSWORD_RESET_TOKEN_INVALID: 'Token para restablecer la contraseña inválido',
+  SAME_PASSWORD: 'La nueva contraseña debe ser diferente a la actual',
+  EMAIL_ALREADY_EXISTS: 'El correo electrónico ya está en uso',
+  USERNAME_ALREADY_EXISTS: 'El nombre de usuario ya está en uso',
 } as const;
 
 // Tipos adicionales para las interfaces
@@ -414,22 +415,22 @@ export const VALIDATION_CONFIG = {
 
 // Estados de cuenta de usuario
 export const USER_STATUS = {
-  ACTIVE: 'active',
-  INACTIVE: 'inactive',
-  SUSPENDED: 'suspended',
-  PENDING_VERIFICATION: 'pending_verification',
+  ACTIVE: 'activo',
+  INACTIVE: 'inactivo',
+  SUSPENDED: 'suspendido',
+  PENDING_VERIFICATION: 'pendiente_verificacion',
 } as const;
 
 // Tipos de actividad de usuario para logging
 export const USER_ACTIVITY_TYPES = {
-  PROFILE_UPDATED: 'profile_updated',
-  AVATAR_UPDATED: 'avatar_updated',
-  PASSWORD_CHANGED: 'password_changed',
-  EMAIL_VERIFIED: 'email_verified',
-  ACCOUNT_DEACTIVATED: 'account_deactivated',
-  ACCOUNT_REACTIVATED: 'account_reactivated',
-  SESSION_TERMINATED: 'session_terminated',
-  ALL_SESSIONS_TERMINATED: 'all_sessions_terminated',
+  PROFILE_UPDATED: 'perfil_actualizado',
+  AVATAR_UPDATED: 'avatar_actualizado',
+  PASSWORD_CHANGED: 'contraseña_cambiada',
+  EMAIL_VERIFIED: 'email_verificado',
+  ACCOUNT_DEACTIVATED: 'cuenta_desactivada',
+  ACCOUNT_REACTIVATED: 'cuenta_reactivada',
+  SESSION_TERMINATED: 'sesion_terminada',
+  ALL_SESSIONS_TERMINATED: 'todas_sesiones_terminadas',
 } as const;
 
 // Configuración de rate limiting específica
@@ -528,13 +529,13 @@ export const MIDDLEWARE_CONFIG = {
 } as const;
 
 export const VALIDATION_MESSAGES = {
-  EMAIL_REQUIRED: 'Email is required',
-  EMAIL_INVALID: 'Invalid email format',
-  PASSWORD_REQUIRED: 'Password is required',
-  PASSWORD_TOO_SHORT: 'Password must be at least 8 characters',
-  USERNAME_REQUIRED: 'Username is required',
-  USERNAME_TOO_SHORT: 'Username must be at least 3 characters',
-  USERNAME_TOO_LONG: 'Username must be less than 30 characters',
+  EMAIL_REQUIRED: 'El correo electrónico es requerido',
+  EMAIL_INVALID: 'Formato de correo electrónico inválido',
+  PASSWORD_REQUIRED: 'La contraseña es requerida',
+  PASSWORD_TOO_SHORT: 'La contraseña debe tener al menos 8 caracteres',
+  USERNAME_REQUIRED: 'El nombre de usuario es requerido',
+  USERNAME_TOO_SHORT: 'El nombre de usuario debe tener al menos 3 caracteres',
+  USERNAME_TOO_LONG: 'El nombre de usuario debe tener menos de 30 caracteres',
 } as const;
 
 // Exportar todo junto con las constantes existentes

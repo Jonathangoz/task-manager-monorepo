@@ -1,8 +1,8 @@
 // src/core/application/UserService.ts
 
-import { User } from '@/core/domain/entities/User';
-import { IUserRepository, CreateUserData, UpdateUserData, UserFilters } from '@/core/domain/interfaces/IUserRepository';
-import { ICacheService } from '@/core/domain/interfaces/ICacheService';
+import { User } from '@/core/entities/User';
+import { IUserRepository, CreateUserData, UpdateUserData, UserFilters } from '@/core/interfaces/IUserRepository';
+import { ICacheService } from '@/core/interfaces/ICacheService';
 import { hashPassword, validatePasswordStrength } from '@/utils/crypto';
 import { logger } from '@/utils/logger';
 import { 

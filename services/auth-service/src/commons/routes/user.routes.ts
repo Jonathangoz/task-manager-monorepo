@@ -1,25 +1,25 @@
 // src/commons/routes/user.routes.ts
 import { Router } from 'express';
-import { UserController } from '@/controllers/UserController';
+import { UserController } from '@/commons/controllers/UserController';
 import { 
   verifyToken, 
   requireOwnership, 
   extractSessionInfo 
-} from '@/middlewares/auth.middleware';
+} from '@/commons/middlewares/auth.middleware';
 import { 
   validate, 
   validatePagination, 
   requireBody, 
   validateCUID, 
   sanitizeInput 
-} from '@/middlewares/validation.middleware';
-import { rateLimitPerUser } from '@/middlewares/rateLimit.middleware';
+} from '@/commons/middlewares/validation.middleware';
+import { rateLimitPerUser } from '@/commons/middlewares/rateLimit.middleware';
 import { 
   updateUserValidation,
   getUsersQueryValidation,
   deactivateUserValidation
-} from '@/validators/user.validator';
-import { asyncHandler } from '@/middlewares/error.middleware';
+} from '@/commons/validators/user.validator';
+import { asyncHandler } from '@/commons/middlewares/error.middleware';
 
 export class UserRoutes {
   static get routes(): Router {

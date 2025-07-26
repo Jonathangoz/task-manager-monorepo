@@ -1,9 +1,9 @@
 // src/commons/routes/health.routes.ts
 import { Router } from 'express';
-import { HealthController } from '@/controllers/HealthController';
-import { rateLimitGeneral } from '@/middlewares/rateLimit.middleware';
-import { extractSessionInfo } from '@/middlewares/auth.middleware';
-import { asyncHandler } from '@/middlewares/error.middleware';
+import { HealthController } from '@/commons/controllers/HealthController';
+import { rateLimitGeneral } from '@/commons/middlewares/rateLimit.middleware';
+import { extractSessionInfo } from '@/commons/middlewares/auth.middleware';
+import { asyncHandler } from '@/commons/middlewares/error.middleware';
 import { environment } from '@/config/environment';
 
 export class HealthRoutes {

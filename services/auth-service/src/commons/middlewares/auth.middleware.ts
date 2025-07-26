@@ -1,9 +1,9 @@
 // src/presentation/middlewares/auth.middleware.ts
-import { ITokenService } from '@/interfaces/ITokenService';
-import { IUserService } from '@/interfaces/IUserService';
-import { ICacheService } from '@/interfaces/ICacheService';
-import { IAuthService } from '@/interfaces/IAuthService';
-import { RedisCache } from '@/core/infrastructure/cache/RedisCache';
+import { ITokenService } from '@/core/interfaces/ITokenService';
+import { IUserService } from '@/core/interfaces/IUserService';
+import { ICacheService } from '@/core/interfaces/ICacheService';
+import { IAuthService } from '@/core/interfaces/IAuthService';
+import { RedisCache } from '@/core/cache/RedisCache';
 import { Request, Response, NextFunction } from 'express';
 import { logger } from '@/utils/logger';
 import { 

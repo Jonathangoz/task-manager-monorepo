@@ -1,144 +1,567 @@
-// src/utils/logger.ts - Task Service Logger - Estructura logging con Pino
+// ==============================================
+// src/utils/logger.ts - Task Service Logger
+// Sistema de logging con Pino, timezone Bogotá y rotación de archivos
+// ==============================================
+// Rotación de Logs (Opcional)
+// Para rotación automática, puedes agregar esta dependencia:
+// pnpm add pino-roll
+// Y modificar la configuración de producción:
+// En lugar de 'pino/file', usar:
+    /*  {
+        target: 'pino-roll',
+        options: {
+          file: path.join(LOG_DIR, 'app.log'),
+          frequency: 'daily',
+          size: '10M',
+          mkdir: true,
+        }
+      } */
+// ==============================================
 
 import pino from 'pino';
 import { v4 as uuidv4 } from 'uuid';
+import path from 'path';
+import { mkdirSync, existsSync } from 'fs';
+import { config } from '@/config/environment';
 
-// Environment-based configuration
-const isDevelopment = process.env.NODE_ENV === 'development';
-const logLevel = process.env.LOG_LEVEL || 'info';
-const logPretty = process.env.LOG_PRETTY === 'true';
+// ==============================================
+// CONFIGURACIÓN DE TIMEZONE BOGOTÁ
+// ==============================================
+const BOGOTA_TIMEZONE = 'America/Bogota';
 
-// Logger configuration
-const loggerConfig: pino.LoggerOptions = {
-  level: logLevel,
+// Función para formatear timestamp con timezone Bogotá
+const formatTimestamp = () => {
+  const now = new Date();
+  const bogotaTime = new Intl.DateTimeFormat('es-CO', {
+    timeZone: BOGOTA_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(now);
+
+  const parts = bogotaTime.reduce((acc, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {} as Record<string, string>);
+
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+};
+
+// ==============================================
+// CONFIGURACIÓN DE DIRECTORIOS DE LOGS
+// ==============================================
+const LOG_DIR = path.join(process.cwd(), 'logs');
+
+// Crear directorio de logs si no existe
+if (!existsSync(LOG_DIR)) {
+  mkdirSync(LOG_DIR, { recursive: true });
+}
+
+// ==============================================
+// CONFIGURACIÓN BASE DEL LOGGER
+// ==============================================
+const baseLoggerConfig: pino.LoggerOptions = {
+  level: config.logging.level,
   base: {
     service: 'task-service',
     version: process.env.npm_package_version || '1.0.0',
-    env: process.env.NODE_ENV || 'development',
+    env: config.app.env,
+    timezone: BOGOTA_TIMEZONE,
   },
-  timestamp: pino.stdTimeFunctions.isoTime,
+  timestamp: () => `,"timestamp":"${formatTimestamp()}"`,
   formatters: {
     level: (label) => ({ level: label }),
     error: (err) => ({
       error: {
         type: err.constructor.name,
         message: err.message,
-        stack: err.stack,
+        stack: config.app.isDevelopment ? err.stack : undefined,
+        code: (err as any).code,
+        statusCode: (err as any).statusCode,
       },
     }),
   },
 };
 
-// Pretty printing for development
-if (isDevelopment && logPretty) {
-  loggerConfig.transport = {
-    target: 'pino-pretty',
-    options: {
-      colorize: true,
-      ignore: 'pid,hostname',
-      translateTime: 'yyyy-mm-dd HH:MM:ss',
+// ==============================================
+// CONFIGURACIÓN PARA DESARROLLO
+// ==============================================
+const createDevelopmentLogger = (): pino.Logger => {
+  const devConfig = { ...baseLoggerConfig };
+  
+  if (config.logging.pretty) {
+    devConfig.transport = {
+      target: 'pino-pretty',
+      options: {
+        colorize: true,
+        ignore: 'pid,hostname,timezone',
+        translateTime: false, // Usamos nuestro timestamp personalizado
+        messageFormat: '[{service}] {msg}',
+        customPrettifiers: {
+          timestamp: (timestamp: string) => `🕐 ${timestamp}`,
+          level: (logLevel: string) => {
+            const levelEmojis: Record<string, string> = {
+              trace: '🔍',
+              debug: '🐛',
+              info: 'ℹ️',
+              warn: '⚠️',
+              error: '❌',
+              fatal: '💀',
+            };
+            return `${levelEmojis[logLevel] || '📝'} ${logLevel}`;
+          },
+        },
+      },
+    };
+  }
+
+  return pino(devConfig);
+};
+
+// ==============================================
+// CONFIGURACIÓN PARA PRODUCCIÓN
+// ==============================================
+const createProductionLogger = (): pino.Logger => {
+  const productionConfig = { ...baseLoggerConfig };
+
+  // En producción, escribimos a múltiples destinos
+  const destinations = [
+    // Archivo general (todos los logs)
+    {
+      level: config.logging.level,
+      dest: path.join(LOG_DIR, 'app.log'),
     },
+    // Archivo de errores (solo errores y fatales)
+    {
+      level: 'error',
+      dest: path.join(LOG_DIR, 'error.log'),
+    },
+    // Stdout para contenedores/PM2
+    {
+      level: config.logging.level,
+      dest: 1, // stdout
+    },
+  ];
+
+  // Configurar transporte múltiple
+  productionConfig.transport = {
+    targets: destinations.map(dest => ({
+      target: 'pino/file',
+      level: dest.level,
+      options: {
+        destination: dest.dest,
+        mkdir: true,
+      },
+    })),
   };
-}
 
-// Create logger instance
-export const logger = pino(loggerConfig);
+  return pino(productionConfig);
+};
 
-// Request ID context for tracing
+// ==============================================
+// CREAR INSTANCIA DEL LOGGER
+// ==============================================
+export const logger = config.app.isDevelopment 
+  ? createDevelopmentLogger() 
+  : createProductionLogger();
+
+// ==============================================
+// LOGGER CON CONTEXTO DE REQUEST
+// ==============================================
 export const createRequestLogger = (requestId?: string) => {
   const reqId = requestId || uuidv4();
-  return logger.child({ requestId: reqId });
+  return logger.child({ 
+    requestId: reqId,
+    context: 'request',
+  });
 };
 
-// Structured logging helpers
+// ==============================================
+// LOGGERS ESTRUCTURADOS POR DOMINIO
+// ==============================================
 export const loggers = {
-  // Task operations
-  taskCreated: (userId: string, taskId: string, title: string) =>
-    logger.info({ userId, taskId, title, event: 'task.created' }, 'Task created'),
+  // ==============================================
+  // OPERACIONES DE TAREAS
+  // ==============================================
+  taskCreated: (userId: string, taskId: string, title: string, categoryId?: string) =>
+    logger.info({ 
+      userId, 
+      taskId, 
+      title, 
+      categoryId,
+      event: 'task.created',
+      domain: 'tasks',
+    }, `📝 Tarea creada: "${title}"`),
 
   taskUpdated: (userId: string, taskId: string, changes: object) =>
-    logger.info({ userId, taskId, changes, event: 'task.updated' }, 'Task updated'),
+    logger.info({ 
+      userId, 
+      taskId, 
+      changes, 
+      event: 'task.updated',
+      domain: 'tasks',
+    }, `✏️ Tarea actualizada: ${taskId}`),
 
-  taskDeleted: (userId: string, taskId: string) =>
-    logger.info({ userId, taskId, event: 'task.deleted' }, 'Task deleted'),
+  taskDeleted: (userId: string, taskId: string, title?: string) =>
+    logger.info({ 
+      userId, 
+      taskId, 
+      title,
+      event: 'task.deleted',
+      domain: 'tasks',
+    }, `🗑️ Tarea eliminada: ${title || taskId}`),
 
   taskStatusChanged: (userId: string, taskId: string, oldStatus: string, newStatus: string) =>
-    logger.info({ userId, taskId, oldStatus, newStatus, event: 'task.status.changed' }, 'Task status changed'),
+    logger.info({ 
+      userId, 
+      taskId, 
+      oldStatus, 
+      newStatus, 
+      event: 'task.status.changed',
+      domain: 'tasks',
+    }, `🔄 Estado de tarea cambiado: ${oldStatus} → ${newStatus}`),
 
-  // Category operations
-  categoryCreated: (userId: string, categoryId: string, name: string) =>
-    logger.info({ userId, categoryId, name, event: 'category.created' }, 'Category created'),
+  taskCompleted: (userId: string, taskId: string, completedAt: Date) =>
+    logger.info({
+      userId,
+      taskId,
+      completedAt,
+      event: 'task.completed',
+      domain: 'tasks',
+    }, `✅ Tarea completada: ${taskId}`),
+
+  // ==============================================
+  // OPERACIONES DE CATEGORÍAS
+  // ==============================================
+  categoryCreated: (userId: string, categoryId: string, name: string, color?: string) =>
+    logger.info({ 
+      userId, 
+      categoryId, 
+      name, 
+      color,
+      event: 'category.created',
+      domain: 'categories',
+    }, `📁 Categoría creada: "${name}"`),
 
   categoryUpdated: (userId: string, categoryId: string, changes: object) =>
-    logger.info({ userId, categoryId, changes, event: 'category.updated' }, 'Category updated'),
+    logger.info({ 
+      userId, 
+      categoryId, 
+      changes, 
+      event: 'category.updated',
+      domain: 'categories',
+    }, `📝 Categoría actualizada: ${categoryId}`),
 
-  categoryDeleted: (userId: string, categoryId: string) =>
-    logger.info({ userId, categoryId, event: 'category.deleted' }, 'Category deleted'),
+  categoryDeleted: (userId: string, categoryId: string, name?: string) =>
+    logger.info({ 
+      userId, 
+      categoryId, 
+      name,
+      event: 'category.deleted',
+      domain: 'categories',
+    }, `🗑️ Categoría eliminada: ${name || categoryId}`),
 
-  // Authentication events
-  tokenValidated: (userId: string, method: string) =>
-    logger.info({ userId, method, event: 'auth.validated' }, 'Token validated'),
+  // ==============================================
+  // EVENTOS DE AUTENTICACIÓN
+  // ==============================================
+  tokenValidated: (userId: string, method: 'jwt' | 'auth-service', ip?: string) =>
+    logger.info({ 
+      userId, 
+      method, 
+      ip,
+      event: 'auth.validated',
+      domain: 'auth',
+    }, `🔐 Token validado para usuario: ${userId}`),
 
-  authServiceError: (error: Error, endpoint: string) =>
-    logger.error({ error, endpoint, event: 'auth.service.error' }, 'Auth service error'),
+  tokenValidationFailed: (reason: string, ip?: string, token?: string) =>
+    logger.warn({
+      reason,
+      ip,
+      tokenPreview: token ? `${token.substring(0, 10)}...` : undefined,
+      event: 'auth.validation.failed',
+      domain: 'auth',
+    }, `🚫 Validación de token falló: ${reason}`),
 
-  // Cache events
+  authServiceError: (error: Error, endpoint: string, statusCode?: number) =>
+    logger.error({ 
+      error, 
+      endpoint, 
+      statusCode,
+      event: 'auth.service.error',
+      domain: 'auth',
+    }, `❌ Error en servicio de autenticación: ${endpoint}`),
+
+  // ==============================================
+  // EVENTOS DE CACHE
+  // ==============================================
   cacheHit: (key: string, ttl?: number) =>
-    logger.debug({ key, ttl, event: 'cache.hit' }, 'Cache hit'),
+    logger.debug({ 
+      key, 
+      ttl, 
+      event: 'cache.hit',
+      domain: 'cache',
+    }, `💾 Cache hit: ${key}`),
 
   cacheMiss: (key: string) =>
-    logger.debug({ key, event: 'cache.miss' }, 'Cache miss'),
+    logger.debug({ 
+      key, 
+      event: 'cache.miss',
+      domain: 'cache',
+    }, `🔍 Cache miss: ${key}`),
 
-  cacheError: (error: Error, key: string, operation: string) =>
-    logger.error({ error, key, operation, event: 'cache.error' }, 'Cache operation failed'),
+  cacheSet: (key: string, ttl: number) =>
+    logger.debug({
+      key,
+      ttl,
+      event: 'cache.set',
+      domain: 'cache',
+    }, `💾 Cache set: ${key} (TTL: ${ttl}s)`),
 
-  // Database events
-  dbQuery: (query: string, duration: number, rowCount?: number) =>
-    logger.debug({ query, duration, rowCount, event: 'db.query' }, 'Database query executed'),
+  cacheError: (error: Error, key: string, operation: 'get' | 'set' | 'del') =>
+    logger.error({ 
+      error, 
+      key, 
+      operation, 
+      event: 'cache.error',
+      domain: 'cache',
+    }, `❌ Error en cache (${operation}): ${key}`),
 
-  dbError: (error: Error, operation: string) =>
-    logger.error({ error, operation, event: 'db.error' }, 'Database operation failed'),
+  // ==============================================
+  // EVENTOS DE BASE DE DATOS
+  // ==============================================
+  dbQuery: (operation: string, table: string, duration: number, rowCount?: number) =>
+    logger.debug({ 
+      operation,
+      table,
+      duration, 
+      rowCount, 
+      event: 'db.query',
+      domain: 'database',
+    }, `🗄️ Query ${operation} en ${table} (${duration}ms)`),
 
-  // Security events
-  rateLimitExceeded: (ip: string, endpoint: string, limit: number) =>
-    logger.warn({ ip, endpoint, limit, event: 'security.rate_limit' }, 'Rate limit exceeded'),
+  dbError: (error: Error, operation: string, table?: string) =>
+    logger.error({ 
+      error, 
+      operation, 
+      table,
+      event: 'db.error',
+      domain: 'database',
+    }, `❌ Error en base de datos (${operation})`),
 
-  unauthorizedAccess: (ip: string, endpoint: string, reason: string) =>
-    logger.warn({ ip, endpoint, reason, event: 'security.unauthorized' }, 'Unauthorized access attempt'),
+  dbConnection: (status: 'connected' | 'disconnected' | 'error', details?: object) =>
+    logger.info({
+      status,
+      details,
+      event: 'db.connection',
+      domain: 'database',
+    }, `🔌 Base de datos: ${status}`),
 
-  // Performance monitoring
-  requestDuration: (method: string, path: string, statusCode: number, duration: number) =>
-    logger.info({ method, path, statusCode, duration, event: 'request.completed' }, 'Request completed'),
+  slowQuery: (operation: string, table: string, duration: number, threshold: number) =>
+    logger.warn({ 
+      operation,
+      table,
+      duration, 
+      threshold, 
+      event: 'performance.slow_query',
+      domain: 'performance',
+    }, `🐌 Query lenta detectada: ${operation} en ${table} (${duration}ms > ${threshold}ms)`),
 
-  slowQuery: (query: string, duration: number, threshold: number) =>
-    logger.warn({ query, duration, threshold, event: 'performance.slow_query' }, 'Slow database query detected'),
+  // ==============================================
+  // EVENTOS DE SEGURIDAD
+  // ==============================================
+  rateLimitExceeded: (ip: string, endpoint: string, limit: number, windowMs: number) =>
+    logger.warn({ 
+      ip, 
+      endpoint, 
+      limit, 
+      windowMs,
+      event: 'security.rate_limit',
+      domain: 'security',
+    }, `🚫 Rate limit excedido: ${ip} en ${endpoint} (${limit} requests/${windowMs}ms)`),
+
+  unauthorizedAccess: (ip: string, endpoint: string, reason: string, userAgent?: string) =>
+    logger.warn({ 
+      ip, 
+      endpoint, 
+      reason, 
+      userAgent,
+      event: 'security.unauthorized',
+      domain: 'security',
+    }, `🚫 Acceso no autorizado: ${ip} en ${endpoint} - ${reason}`),
+
+  suspiciousActivity: (ip: string, activity: string, details?: object) =>
+    logger.warn({
+      ip,
+      activity,
+      details,
+      event: 'security.suspicious',
+      domain: 'security',
+    }, `⚠️ Actividad sospechosa: ${activity} desde ${ip}`),
+
+  // ==============================================
+  // MONITOREO DE RENDIMIENTO
+  // ==============================================
+  requestCompleted: (method: string, path: string, statusCode: number, duration: number, userId?: string) =>
+    logger.info({ 
+      method, 
+      path, 
+      statusCode, 
+      duration, 
+      userId,
+      event: 'request.completed',
+      domain: 'performance',
+    }, `🌐 ${method} ${path} - ${statusCode} (${duration}ms)`),
+
+  highMemoryUsage: (usage: number, threshold: number) =>
+    logger.warn({
+      memoryUsage: usage,
+      threshold,
+      event: 'performance.high_memory',
+      domain: 'performance',
+    }, `🧠 Alto uso de memoria: ${usage}MB > ${threshold}MB`),
+
+  highCpuUsage: (usage: number, threshold: number) =>
+    logger.warn({
+      cpuUsage: usage,
+      threshold,
+      event: 'performance.high_cpu',
+      domain: 'performance',
+    }, `⚡ Alto uso de CPU: ${usage}% > ${threshold}%`),
 };
 
-// Error severity levels
+// ==============================================
+// MANEJO DE ERRORES POR SEVERIDAD
+// ==============================================
 export const logError = {
-  critical: (error: Error, context?: object) =>
-    logger.fatal({ error, ...context }, 'Critical error occurred'),
+  critical: (error: Error, context?: object, userId?: string) => {
+    logger.fatal({ 
+      error, 
+      userId,
+      severity: 'critical',
+      ...context 
+    }, `💀 ERROR CRÍTICO: ${error.message}`);
+    
+    // En producción, podrías enviar alertas aquí
+    if (config.app.isProduction) {
+      // TODO: Integrar con sistema de alertas (Slack, email, etc.)
+    }
+  },
 
-  high: (error: Error, context?: object) =>
-    logger.error({ error, ...context }, 'High severity error'),
+  high: (error: Error, context?: object, userId?: string) =>
+    logger.error({ 
+      error, 
+      userId,
+      severity: 'high',
+      ...context 
+    }, `❌ Error crítico: ${error.message}`),
 
-  medium: (error: Error, context?: object) =>
-    logger.warn({ error, ...context }, 'Medium severity error'),
+  medium: (error: Error, context?: object, userId?: string) =>
+    logger.warn({ 
+      error, 
+      userId,
+      severity: 'medium',
+      ...context 
+    }, `⚠️ Error medio: ${error.message}`),
 
-  low: (error: Error, context?: object) =>
-    logger.info({ error, ...context }, 'Low severity error'),
+  low: (error: Error, context?: object, userId?: string) =>
+    logger.info({ 
+      error, 
+      userId,
+      severity: 'low',
+      ...context 
+    }, `ℹ️ Error menor: ${error.message}`),
 };
 
-// Health check logging
+// ==============================================
+// HEALTH CHECKS Y MONITOREO
+// ==============================================
 export const healthCheck = {
-  passed: (service: string, duration: number) =>
-    logger.info({ service, duration, status: 'healthy' }, 'Health check passed'),
+  passed: (service: string, duration: number, details?: object) =>
+    logger.info({ 
+      service, 
+      duration, 
+      status: 'healthy',
+      details,
+      event: 'health.check.passed',
+      domain: 'health',
+    }, `✅ Health check OK: ${service} (${duration}ms)`),
 
   failed: (service: string, error: Error, duration: number) =>
-    logger.error({ service, error, duration, status: 'unhealthy' }, 'Health check failed'),
+    logger.error({ 
+      service, 
+      error, 
+      duration, 
+      status: 'unhealthy',
+      event: 'health.check.failed',
+      domain: 'health',
+    }, `❌ Health check FAILED: ${service} (${duration}ms)`),
 
   degraded: (service: string, warning: string, duration: number) =>
-    logger.warn({ service, warning, duration, status: 'degraded' }, 'Health check degraded'),
+    logger.warn({ 
+      service, 
+      warning, 
+      duration, 
+      status: 'degraded',
+      event: 'health.check.degraded',
+      domain: 'health',
+    }, `⚠️ Health check DEGRADED: ${service} - ${warning} (${duration}ms)`),
 };
+
+// ==============================================
+// UTILIDADES ADICIONALES
+// ==============================================
+
+// Logger para startup de la aplicación
+export const startup = {
+  serviceStarted: (port: number, env: string) =>
+    logger.info({
+      port,
+      env,
+      event: 'service.started',
+      domain: 'startup',
+    }, `🚀 Task Service iniciado en puerto ${port} (${env})`),
+
+  configLoaded: (config: object) =>
+    logger.info({
+      config,
+      event: 'config.loaded',
+      domain: 'startup',
+    }, '⚙️ Configuración cargada'),
+
+  dependencyConnected: (dependency: string, version?: string) =>
+    logger.info({
+      dependency,
+      version,
+      event: 'dependency.connected',
+      domain: 'startup',
+    }, `🔌 Conectado a ${dependency}${version ? ` v${version}` : ''}`),
+
+  gracefulShutdown: (signal: string) =>
+    logger.info({
+      signal,
+      event: 'service.shutdown',
+      domain: 'startup',
+    }, `🛑 Apagado graceful recibido: ${signal}`),
+};
+
+// Log de información del sistema al inicializar
+if (config.app.isDevelopment) {
+  logger.info({
+    logLevel: config.logging.level,
+    timezone: BOGOTA_TIMEZONE,
+    logDir: LOG_DIR,
+    prettyPrint: config.logging.pretty,
+  }, '🔧 Logger inicializado con configuración de desarrollo');
+} else {
+  logger.info({
+    logLevel: config.logging.level,
+    timezone: BOGOTA_TIMEZONE,
+    logDir: LOG_DIR,
+  }, '🔧 Logger inicializado para producción');
+}
 
 export default logger;

@@ -8,10 +8,10 @@ import {
   TokenPayload,
   SessionInfo 
 } from '@/core/domain/interfaces/IAuthService';
-import { IUserRepository } from '@/core/domain/interfaces/IUserRepository';
-import { ITokenService } from '@/core/domain/interfaces/ITokenService';
-import { ICacheService } from '@/core/domain/interfaces/ICacheService';
-import { User } from '@/core/domain/entities/User';
+import { IUserRepository } from '@/core/interfaces/IUserRepository';
+import { ITokenService } from '@/core/interfaces/ITokenService';
+import { ICacheService } from '@/core/interfaces/ICacheService';
+import { User } from '@/core/entities/User';
 import { verifyPassword, hashPassword, validatePasswordStrength } from '@/utils/crypto';
 import { logger, authLogger } from '@/utils/logger';
 import { 

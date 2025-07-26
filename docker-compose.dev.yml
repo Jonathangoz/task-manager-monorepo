@@ -95,6 +95,7 @@ services:
       - ./services/auth-service:/app
       - /app/node_modules
       - /app/dist
+      - ./logs:/app/logs
     depends_on:
       auth-db:
         condition: service_healthy
@@ -127,6 +128,7 @@ services:
       - ./services/task-service:/app
       - /app/node_modules
       - /app/dist
+      - ./logs:/app/logs
     depends_on:
       task-db:
         condition: service_healthy

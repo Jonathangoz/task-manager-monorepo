@@ -1,9 +1,9 @@
 // src/commons/controllers/AuthController.ts
 
 import { Request, Response, NextFunction } from 'express';
-import { IAuthService } from '@/interfaces/IAuthService';
-import { IUserService } from '@/interfaces/IUserService';
-import { ITokenService } from '@/interfaces/ITokenService';
+import { IAuthService } from '@/core/interfaces/IAuthService';
+import { IUserService } from '@/core/interfaces/IUserService';
+import { ITokenService } from '@/core/interfaces/ITokenService';
 import { logger } from '@/utils/logger';
 import { 
   HTTP_STATUS, 

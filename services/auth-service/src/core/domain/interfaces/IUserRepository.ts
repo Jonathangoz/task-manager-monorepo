@@ -1,5 +1,5 @@
 // src/core/domain/interfaces/IUserRepository.ts
-import { User } from '@/entities/User';
+import { User } from '@/core/entities/User';
 import { UserSession, UserFilters, PaginationOptions, PaginatedUsers } from './IUserService';
 
 export interface CreateUserData {

@@ -1,4 +1,5 @@
 // src/core/domain/interfaces/ITokenService.ts
+import { TokenPayload, RefreshTokenPayload } from '@/core/interfaces/IAuthService';
 
 export interface TokenOptions {
   expiresIn?: string;

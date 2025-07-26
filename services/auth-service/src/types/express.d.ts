@@ -1,8 +1,8 @@
 // src/types/express.d.ts
 // Extensiones de tipos para Express.js
 
-import { TokenPayload } from '@/interfaces/IAuthService';
-import { User } from '@/entities/User';
+import { TokenPayload } from '@/core/interfaces/IAuthService';
+import { User } from '@/core/entities/User';
 
 declare global {
   namespace Express {

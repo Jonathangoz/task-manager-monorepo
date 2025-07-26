@@ -8,9 +8,9 @@ import {
   RefreshTokenPayload, 
   SessionInfo, 
   TokenOptions 
-} from '@/core/domain/interfaces/ITokenService';
-import { IUserRepository } from '@/core/domain/interfaces/IUserRepository';
-import { ICacheService } from '@/core/domain/interfaces/ICacheService';
+} from '@/core/interfaces/ITokenService';
+import { IUserRepository } from '@/core/interfaces/IUserRepository';
+import { ICacheService } from '@/core/interfaces/ICacheService';
 import { config } from '@/config/environment';
 import { logger } from '@/utils/logger';
 import { 

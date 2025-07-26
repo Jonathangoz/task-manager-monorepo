@@ -1,5 +1,5 @@
 // src/core/domain/interfaces/IAuthService.ts
-import { User } from '@/entities/User';
+import { User } from '@/core/entities/User';
 
 export interface LoginCredentials {
   email: string;
@@ -88,3 +88,5 @@ export interface IAuthService {
   forgotPassword(email: string): Promise<void>;
   resetPassword(token: string, password: string, email: string): Promise<void>;
 }
+
+export default IAuthService;

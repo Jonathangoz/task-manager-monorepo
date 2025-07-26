@@ -1,5 +1,5 @@
 // src/core/domain/interfaces/IUserService.ts
-import { User } from '@/entities/User';
+import { User } from '@/core/entities/User';
 
 export interface CreateUserData {
   email: string;
