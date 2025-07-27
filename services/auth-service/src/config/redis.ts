@@ -1,4 +1,4 @@
-// src/config/redis.ts
+// src/config/redis.ts - auth-service
 import Redis from 'ioredis';
 import { logger } from '@/utils/logger';
 import { environment } from './environment';

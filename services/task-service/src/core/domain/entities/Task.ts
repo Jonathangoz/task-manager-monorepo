@@ -1,4 +1,4 @@
-// src/core/domain/entities/Task.ts - Entidad de dominio para Task - Lógica de negocio pura
+// src/core/domain/entities/Task.ts - Entidad de dominio para Task 
 // Esta entidad representa una tarea en el sistema, incluyendo sus propiedades, estados y comportamientos.
 
 import { 

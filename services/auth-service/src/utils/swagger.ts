@@ -1,68 +1,59 @@
-// src/utils/swagger.ts
-import swaggerJsdoc from 'swagger-jsdoc';
-import { SwaggerDefinition } from 'swagger-jsdoc';
+// src/utils/swagger.ts - Auth Service
+import swaggerJsdoc, { Options } from 'swagger-jsdoc';
+import { SwaggerUiOptions } from 'swagger-ui-express';
 import { environment } from '@/config/environment';
 
 // ==============================================
-// CONFIGURACIÓN SWAGGER MEJORADA
+// CONFIGURACIÓN PRINCIPAL DE SWAGGER
 // ==============================================
-
-const swaggerDefinition: SwaggerDefinition = {
-  openapi: '3.0.3', // Versión más reciente
+const swaggerDefinition: swaggerJsdoc.SwaggerDefinition = {
+  openapi: '3.0.3',
   info: {
     title: 'Task Manager - Auth Service API',
     version: '1.0.0',
     description: `
-    ## 🔐 Microservicio de Autenticación para Task Manager
-    
-    Este servicio maneja toda la lógica de autenticación y autorización del sistema Task Manager, incluyendo:
-    
-    - ✅ Registro y login de usuarios
-    - 🔑 Gestión de tokens JWT/JWE  
-    - 👤 Perfiles de usuario
-    - 🛡️ Sesiones y seguridad
-    - 📊 Health checks y monitoreo
-    
-    ### 🚀 Tecnologías
-    - **Runtime**: Node.js 22+
-    - **Framework**: Express.js
-    - **Database**: PostgreSQL con Prisma ORM
-    - **Cache**: Redis
-    - **Auth**: JWT con JWE encryption
-    - **Validation**: Zod + express-validator
-    
-    ### 🔒 Autenticación
-    Para usar los endpoints protegidos, incluye el header de autorización:
-    \`Authorization: Bearer <access_token>\`
+# 🔐 Authentication Service API
+
+Microservicio de autenticación y gestión de usuarios para Task Manager.
+
+## Características principales
+- 🔑 Registro y login de usuarios
+- 🔐 Gestión de tokens JWT/JWE  
+- 👤 Perfiles de usuario
+- 🎫 Control de sesiones
+- 🛡️ Seguridad avanzada
+
+## Tecnologías
+- **Runtime**: Node.js 22+
+- **Database**: PostgreSQL + Prisma
+- **Cache**: Redis
+- **Auth**: JWT con JWE encryption
+- **Validation**: Zod
+
+## Autenticación
+Para endpoints protegidos, incluye el header:
+\`Authorization: Bearer <access_token>\`
     `,
     contact: {
-      name: 'Task Manager Development Team',
+      name: 'Task Manager Team',
       email: 'dev@taskmanager.com',
-      url: 'https://github.com/your-org/task-manager'
     },
     license: {
       name: 'MIT',
       url: 'https://opensource.org/licenses/MIT',
     },
-    termsOfService: 'https://taskmanager.com/terms'
   },
   servers: [
     {
-      url: `http://localhost:${environment.app.port}/api/${environment.app.apiVersion}`,
-      description: '🔧 Desarrollo Local',
+      url: environment.app.isDevelopment 
+        ? `http://localhost:${environment.app.port}/api/v1`
+        : `https://task-manager-auth-service.onrender.com/api/v1`,
+      description: environment.app.isDevelopment ? '🔧 Desarrollo' : '🚀 Producción',
     },
-    {
-      url: `https://task-manager-auth-service.onrender.com/api/${environment.app.apiVersion}`,
-      description: '🚀 Producción (Render)',
-    },
-    ...(environment.app.isDevelopment ? [{
-      url: `http://host.docker.internal:${environment.app.port}/api/${environment.app.apiVersion}`,
-      description: '🐳 Docker Local',
-    }] : [])
   ],
   
   // ==============================================
-  // ESQUEMAS DE SEGURIDAD MEJORADOS
+  // COMPONENTES
   // ==============================================
   components: {
     securitySchemes: {
@@ -70,44 +61,29 @@ const swaggerDefinition: SwaggerDefinition = {
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
-        description: '🔑 Access Token JWT para autenticación. Válido por 15 minutos.',
+        description: 'Access Token JWT (válido 15 minutos)',
       },
-      RefreshAuth: {
-        type: 'http',
-        scheme: 'bearer', 
-        bearerFormat: 'JWT',
-        description: '🔄 Refresh Token para renovar access tokens. Válido por 7 días.',
-      },
-      SessionAuth: {
-        type: 'apiKey',
-        in: 'header',
-        name: 'x-session-id',
-        description: '🎫 Session ID para tracking de sesiones activas',
-      }
     },
     
-    // ==============================================
-    // ESQUEMAS DE DATOS MEJORADOS
-    // ==============================================
     schemas: {
       // ==============================================
-      // USER SCHEMAS
+      // ESQUEMAS PRINCIPALES
       // ==============================================
       User: {
         type: 'object',
-        description: 'Entidad de usuario del sistema',
+        required: ['id', 'email', 'username', 'isActive', 'isVerified', 'createdAt', 'updatedAt'],
         properties: {
           id: {
             type: 'string',
             pattern: '^c[a-z0-9]{24}$',
             description: 'ID único del usuario (CUID)',
-            example: 'clxxxxx123456789',
+            example: 'cluser123456789abc',
           },
           email: {
             type: 'string',
             format: 'email',
             maxLength: 255,
-            description: 'Email único del usuario',
+            description: 'Email único',
             example: 'john.doe@example.com',
           },
           username: {
@@ -115,67 +91,65 @@ const swaggerDefinition: SwaggerDefinition = {
             minLength: 3,
             maxLength: 30,
             pattern: '^[a-zA-Z0-9_]+$',
-            description: 'Nombre de usuario único (solo letras, números y guiones bajos)',
+            description: 'Nombre de usuario único',
             example: 'john_doe_2024',
           },
           firstName: {
             type: 'string',
             nullable: true,
             maxLength: 50,
-            description: 'Nombre del usuario',
+            description: 'Nombre',
             example: 'John',
           },
           lastName: {
             type: 'string',
             nullable: true,
             maxLength: 50,
-            description: 'Apellido del usuario',
+            description: 'Apellido',
             example: 'Doe',
           },
           avatar: {
             type: 'string',
             nullable: true,
             format: 'uri',
-            description: 'URL del avatar del usuario',
+            description: 'URL del avatar',
             example: 'https://cdn.example.com/avatars/user123.jpg',
           },
           isActive: {
             type: 'boolean',
-            description: 'Estado activo del usuario',
+            description: 'Usuario activo',
             example: true,
           },
           isVerified: {
             type: 'boolean',
-            description: 'Estado de verificación del email',
+            description: 'Email verificado',
             example: true,
           },
           lastLoginAt: {
             type: 'string',
             format: 'date-time',
             nullable: true,
-            description: 'Fecha y hora del último login (ISO 8601)',
+            description: 'Último login',
             example: '2024-01-20T10:30:00.000Z',
           },
           createdAt: {
             type: 'string',
             format: 'date-time',
-            description: 'Fecha de creación del usuario (ISO 8601)',
+            description: 'Fecha de creación',
             example: '2024-01-15T08:00:00.000Z',
           },
           updatedAt: {
             type: 'string',
             format: 'date-time',
-            description: 'Fecha de última actualización (ISO 8601)',
+            description: 'Última actualización',
             example: '2024-01-20T10:30:00.000Z',
           },
         },
-        required: ['id', 'email', 'username', 'isActive', 'isVerified', 'createdAt', 'updatedAt'],
-        additionalProperties: false,
       },
 
       UserProfile: {
         type: 'object',
-        description: 'Perfil público del usuario (sin datos sensibles)',
+        description: 'Perfil público del usuario',
         properties: {
           id: { $ref: '#/components/schemas/User/properties/id' },
           username: { $ref: '#/components/schemas/User/properties/username' },
@@ -185,15 +159,14 @@ const swaggerDefinition: SwaggerDefinition = {
           isVerified: { $ref: '#/components/schemas/User/properties/isVerified' },
           createdAt: { $ref: '#/components/schemas/User/properties/createdAt' },
         },
-        additionalProperties: false,
       },
       
       // ==============================================
-      // AUTH REQUEST SCHEMAS
+      // DTOs DE ENTRADA
       // ==============================================
       RegisterRequest: {
         type: 'object',
-        description: 'Datos necesarios para registrar un nuevo usuario',
+        required: ['email', 'username', 'password'],
         properties: {
           email: {
             type: 'string',
@@ -207,41 +180,39 @@ const swaggerDefinition: SwaggerDefinition = {
             minLength: 3,
             maxLength: 30,
             pattern: '^[a-zA-Z0-9_]+$',
-            description: 'Nombre de usuario único (3-30 caracteres, solo letras, números y _)',
+            description: 'Username único (3-30 caracteres)',
             example: 'john_doe_2024',
           },
           password: {
             type: 'string',
             minLength: 8,
             maxLength: 128,
-            description: 'Contraseña segura (mínimo 8 caracteres, debe incluir mayúsculas, minúsculas, números y símbolos)',
+            description: 'Contraseña segura (min 8 caracteres)',
             example: 'SecurePass123!',
           },
           firstName: {
             type: 'string',
             maxLength: 50,
-            description: 'Nombre del usuario (opcional)',
+            description: 'Nombre (opcional)',
             example: 'John',
           },
           lastName: {
             type: 'string',
             maxLength: 50,
-            description: 'Apellido del usuario (opcional)',
+            description: 'Apellido (opcional)',
             example: 'Doe',
           },
         },
-        required: ['email', 'username', 'password'],
-        additionalProperties: false,
       },
       
       LoginRequest: {
         type: 'object',
-        description: 'Credenciales para iniciar sesión',
+        required: ['email', 'password'],
         properties: {
           email: {
             type: 'string',
             format: 'email',
-            description: 'Email del usuario registrado',
+            description: 'Email registrado',
             example: 'john.doe@example.com',
           },
           password: {
@@ -252,31 +223,28 @@ const swaggerDefinition: SwaggerDefinition = {
           },
           rememberMe: {
             type: 'boolean',
-            description: 'Mantener sesión activa por más tiempo',
+            description: 'Mantener sesión activa',
             example: false,
             default: false,
           },
         },
-        required: ['email', 'password'],
-        additionalProperties: false,
       },
 
       UpdateProfileRequest: {
         type: 'object',
-        description: 'Datos para actualizar el perfil del usuario',
         properties: {
           firstName: {
             type: 'string',
             nullable: true,
             maxLength: 50,
-            description: 'Nuevo nombre del usuario',
+            description: 'Nuevo nombre',
             example: 'John Updated',
           },
           lastName: {
             type: 'string',
             nullable: true,
             maxLength: 50,
-            description: 'Nuevo apellido del usuario',
+            description: 'Nuevo apellido',
             example: 'Doe Updated',
           },
           avatar: {
@@ -287,16 +255,15 @@ const swaggerDefinition: SwaggerDefinition = {
             example: 'https://cdn.example.com/avatars/user123-new.jpg',
           },
         },
-        additionalProperties: false,
       },
 
       ChangePasswordRequest: {
         type: 'object',
-        description: 'Datos para cambiar la contraseña',
+        required: ['currentPassword', 'newPassword'],
         properties: {
           currentPassword: {
             type: 'string',
-            description: 'Contraseña actual del usuario',
+            description: 'Contraseña actual',
             example: 'OldPassword123!',
           },
           newPassword: {
@@ -307,55 +274,44 @@ const swaggerDefinition: SwaggerDefinition = {
             example: 'NewSecurePass456@',
           },
         },
-        required: ['currentPassword', 'newPassword'],
-        additionalProperties: false,
       },
       
       RefreshTokenRequest: {
         type: 'object',
-        description: 'Token de refresh para obtener nuevos access tokens',
+        required: ['refreshToken'],
         properties: {
           refreshToken: {
             type: 'string',
-            description: 'Token de refresh válido',
+            description: 'Refresh token válido',
             example: 'eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0...',
           },
         },
-        required: ['refreshToken'],
-        additionalProperties: false,
       },
 
       VerifyTokenRequest: {
         type: 'object',
-        description: 'Token a verificar (endpoint interno para otros microservicios)',
+        required: ['token'],
         properties: {
           token: {
             type: 'string',
-            description: 'Access token JWT a verificar',
+            description: 'Access token a verificar',
             example: 'eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0...',
           },
         },
-        required: ['token'],
-        additionalProperties: false,
       },
       
       // ==============================================
-      // RESPONSE SCHEMAS
+      // RESPUESTAS
       // ==============================================
       AuthResponse: {
         type: 'object',
-        description: 'Respuesta exitosa de autenticación',
+        required: ['success', 'message', 'data'],
         properties: {
-          success: {
-            type: 'boolean',
-            example: true,
-          },
-          message: {
-            type: 'string',
-            example: 'Authentication successful',
-          },
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'Authentication successful' },
           data: {
             type: 'object',
+            required: ['user', 'accessToken', 'refreshToken', 'expiresIn', 'tokenType'],
             properties: {
               user: { $ref: '#/components/schemas/User' },
               accessToken: {
@@ -370,7 +326,7 @@ const swaggerDefinition: SwaggerDefinition = {
               },
               expiresIn: {
                 type: 'number',
-                description: 'Tiempo de expiración del access token en segundos',
+                description: 'Tiempo de expiración en segundos',
                 example: 900,
               },
               tokenType: {
@@ -378,48 +334,41 @@ const swaggerDefinition: SwaggerDefinition = {
                 example: 'Bearer',
               },
             },
-            required: ['user', 'accessToken', 'refreshToken', 'expiresIn', 'tokenType'],
           },
           meta: { $ref: '#/components/schemas/ResponseMeta' },
         },
-        required: ['success', 'message', 'data'],
-        additionalProperties: false,
       },
 
       UserResponse: {
         type: 'object',
-        description: 'Respuesta con datos del usuario',
+        required: ['success', 'message', 'data'],
         properties: {
           success: { type: 'boolean', example: true },
           message: { type: 'string', example: 'User data retrieved successfully' },
           data: { $ref: '#/components/schemas/User' },
           meta: { $ref: '#/components/schemas/ResponseMeta' },
         },
-        required: ['success', 'message', 'data'],
-        additionalProperties: false,
       },
 
       TokenVerificationResponse: {
         type: 'object',
-        description: 'Respuesta de verificación de token (para otros microservicios)',
+        required: ['success', 'message', 'data'],
         properties: {
           success: { type: 'boolean', example: true },
           message: { type: 'string', example: 'Token is valid' },
           data: {
             type: 'object',
+            required: ['userId', 'email', 'username', 'isActive', 'isVerified'],
             properties: {
-              userId: { type: 'string', example: 'clxxxxx123456789' },
+              userId: { type: 'string', example: 'cluser123456789abc' },
               email: { type: 'string', example: 'user@example.com' },
               username: { type: 'string', example: 'johndoe' },
               sessionId: { type: 'string', example: 'sess_abc123' },
               isActive: { type: 'boolean', example: true },
               isVerified: { type: 'boolean', example: true },
             },
-            required: ['userId', 'email', 'username', 'isActive', 'isVerified'],
           },
         },
-        required: ['success', 'message', 'data'],
-        additionalProperties: false,
       },
       
       // ==============================================
@@ -427,15 +376,12 @@ const swaggerDefinition: SwaggerDefinition = {
       // ==============================================
       UserSession: {
         type: 'object',
-        description: 'Información de sesión activa del usuario',
+        required: ['id', 'sessionId', 'isActive', 'lastSeen', 'createdAt', 'expiresAt'],
         properties: {
-          id: {
-            type: 'string',
-            example: 'clsession123456',
-          },
+          id: { type: 'string', example: 'clsession123456' },
           sessionId: {
             type: 'string',
-            description: 'Identificador único de la sesión',
+            description: 'ID único de la sesión',
             example: 'sess_abc123456789',
           },
           device: {
@@ -481,13 +427,11 @@ const swaggerDefinition: SwaggerDefinition = {
             example: '2024-01-27T08:00:00.000Z',
           },
         },
-        required: ['id', 'sessionId', 'isActive', 'lastSeen', 'createdAt', 'expiresAt'],
-        additionalProperties: false,
       },
 
       SessionsResponse: {
         type: 'object',
-        description: 'Lista de sesiones activas del usuario',
+        required: ['success', 'message', 'data'],
         properties: {
           success: { type: 'boolean', example: true },
           message: { type: 'string', example: 'User sessions retrieved successfully' },
@@ -497,16 +441,13 @@ const swaggerDefinition: SwaggerDefinition = {
           },
           meta: { $ref: '#/components/schemas/ResponseMeta' },
         },
-        required: ['success', 'message', 'data'],
-        additionalProperties: false,
       },
 
       // ==============================================
-      // METADATA SCHEMAS
+      // METADATA Y ERRORES
       // ==============================================
       ResponseMeta: {
         type: 'object',
-        description: 'Metadata de la respuesta',
         properties: {
           timestamp: {
             type: 'string',
@@ -535,26 +476,14 @@ const swaggerDefinition: SwaggerDefinition = {
             description: 'Método HTTP usado',
             example: 'POST',
           },
-          version: {
-            type: 'string',
-            description: 'Versión del API',
-            example: 'v1',
-          },
         },
-        additionalProperties: false,
       },
       
-      // ==============================================
-      // ERROR SCHEMAS
-      // ==============================================
       ErrorResponse: {
         type: 'object',
-        description: 'Respuesta de error estándar',
+        required: ['success', 'message', 'error'],
         properties: {
-          success: {
-            type: 'boolean',
-            example: false,
-          },
+          success: { type: 'boolean', example: false },
           message: {
             type: 'string',
             description: 'Mensaje de error legible',
@@ -562,6 +491,7 @@ const swaggerDefinition: SwaggerDefinition = {
           },
           error: {
             type: 'object',
+            required: ['code'],
             properties: {
               code: {
                 type: 'string',
@@ -575,17 +505,14 @@ const swaggerDefinition: SwaggerDefinition = {
                 example: 'The provided email or password is incorrect',
               },
             },
-            required: ['code'],
           },
           meta: { $ref: '#/components/schemas/ResponseMeta' },
         },
-        required: ['success', 'message', 'error'],
-        additionalProperties: false,
       },
       
       ValidationErrorResponse: {
         type: 'object',
-        description: 'Respuesta de error de validación con detalles específicos',
+        required: ['success', 'message', 'error'],
         properties: {
           success: { type: 'boolean', example: false },
           message: { type: 'string', example: 'Validation failed' },
@@ -597,6 +524,7 @@ const swaggerDefinition: SwaggerDefinition = {
                 type: 'array',
                 items: {
                   type: 'object',
+                  required: ['field', 'message'],
                   properties: {
                     field: { 
                       type: 'string', 
@@ -615,23 +543,20 @@ const swaggerDefinition: SwaggerDefinition = {
                       description: 'Valor que causó el error'
                     }
                   },
-                  required: ['field', 'message'],
                 },
               },
             },
           },
           meta: { $ref: '#/components/schemas/ResponseMeta' },
         },
-        required: ['success', 'message', 'error'],
-        additionalProperties: false,
       },
       
       // ==============================================
-      // HEALTH CHECK SCHEMA
+      // HEALTH CHECK
       // ==============================================
       HealthResponse: {
         type: 'object',
-        description: 'Estado de salud del servicio',
+        required: ['status', 'timestamp', 'uptime', 'version', 'environment', 'services'],
         properties: {
           status: {
             type: 'string',
@@ -663,10 +588,11 @@ const swaggerDefinition: SwaggerDefinition = {
           },
           services: {
             type: 'object',
-            description: 'Estado de servicios dependientes',
+            required: ['database', 'redis'],
             properties: {
               database: {
                 type: 'object',
+                required: ['status', 'responseTime', 'lastChecked'],
                 properties: {
                   status: { 
                     type: 'string', 
@@ -684,10 +610,10 @@ const swaggerDefinition: SwaggerDefinition = {
                     example: '2024-01-20T10:29:45.000Z'
                   }
                 },
-                required: ['status', 'responseTime', 'lastChecked'],
               },
               redis: {
                 type: 'object',
+                required: ['status', 'responseTime', 'lastChecked'],
                 properties: {
                   status: { 
                     type: 'string', 
@@ -705,76 +631,11 @@ const swaggerDefinition: SwaggerDefinition = {
                     example: '2024-01-20T10:29:50.000Z'
                   }
                 },
-                required: ['status', 'responseTime', 'lastChecked'],
               },
             },
-            required: ['database', 'redis'],
           },
         },
-        required: ['status', 'timestamp', 'uptime', 'version', 'environment', 'services'],
-        additionalProperties: false,
       },
-    },
-
-    // ==============================================
-    // EJEMPLOS REUTILIZABLES
-    // ==============================================
-    examples: {
-      ValidUser: {
-        summary: 'Usuario válido completo',
-        value: {
-          id: 'cluser123456789abc',
-          email: 'john.doe@example.com',
-          username: 'john_doe_2024',
-          firstName: 'John',
-          lastName: 'Doe',
-          avatar: 'https://cdn.example.com/avatars/john.jpg',
-          isActive: true,
-          isVerified: true,
-          lastLoginAt: '2024-01-20T10:30:00.000Z',
-          createdAt: '2024-01-15T08:00:00.000Z',
-          updatedAt: '2024-01-20T10:30:00.000Z'
-        }
-      },
-      InvalidCredentials: {
-        summary: 'Error de credenciales inválidas',
-        value: {
-          success: false,
-          message: 'Authentication failed',
-          error: {
-            code: 'INVALID_CREDENTIALS',
-            details: 'The provided email or password is incorrect'
-          },
-          meta: {
-            timestamp: '2024-01-20T10:30:00.000Z',
-            correlationId: 'req_abc123',
-            path: '/api/v1/auth/login',
-            method: 'POST'
-          }
-        }
-      },
-      ValidationError: {
-        summary: 'Error de validación de campos',
-        value: {
-          success: false,
-          message: 'Validation failed',
-          error: {
-            code: 'VALIDATION_ERROR',
-            details: [
-              {
-                field: 'email',
-                message: 'Invalid email format',
-                value: 'invalid-email'
-              },
-              {
-                field: 'password',
-                message: 'Password must be at least 8 characters',
-                value: '123'
-              }
-            ]
-          }
-        }
-      }
     },
 
     // ==============================================
@@ -788,9 +649,9 @@ const swaggerDefinition: SwaggerDefinition = {
         description: 'ID único del usuario (CUID)',
         schema: {
           type: 'string',
-          pattern: '^c[a-z0-9]{24}$',
-          example: 'cluser123456789abc'
-        }
+          pattern: '^c[a-z0-9]{24}',
+          example: 'cluser123456789abc',
+        },
       },
       SessionIdParam: {
         name: 'sessionId',
@@ -800,16 +661,6 @@ const swaggerDefinition: SwaggerDefinition = {
         schema: {
           type: 'string',
           example: 'sess_abc123456789'
-        }
-      },
-      AuthorizationHeader: {
-        name: 'Authorization',
-        in: 'header',
-        required: true,
-        description: 'Bearer token para autenticación',
-        schema: {
-          type: 'string',
-          example: 'Bearer eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0...'
         }
       }
     },
@@ -882,10 +733,7 @@ const swaggerDefinition: SwaggerDefinition = {
         description: '⚠️ Error de validación de datos',
         content: {
           'application/json': {
-            schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
-            examples: {
-              InvalidEmail: { $ref: '#/components/examples/ValidationError' }
-            }
+            schema: { $ref: '#/components/schemas/ValidationErrorResponse' }
           }
         }
       },
@@ -921,13 +769,15 @@ const swaggerDefinition: SwaggerDefinition = {
     }
   },
 
+  security: [{ BearerAuth: [] }],
+
   // ==============================================
-  // TAGS ORGANIZADOS POR FUNCIONALIDAD
+  // TAGS
   // ==============================================
   tags: [
     {
       name: '🔐 Authentication',
-      description: 'Endpoints para registro, login y gestión de tokens',
+      description: 'Registro, login y gestión de tokens',
     },
     {
       name: '👤 User Management',
@@ -939,183 +789,120 @@ const swaggerDefinition: SwaggerDefinition = {
     },
     {
       name: '🔍 Token Verification',
-      description: 'Endpoints internos para verificación de tokens (microservicios)',
+      description: 'Endpoints internos para verificación de tokens',
     },
     {
       name: '❤️ Health & Monitoring',
-      description: 'Endpoints de salud y monitoreo del servicio',
+      description: 'Estado y monitoreo del servicio',
     },
   ],
 
   // ==============================================
-  // CONFIGURACIÓN ADICIONAL
+  // DOCUMENTACIÓN EXTERNA
   // ==============================================
   externalDocs: {
     description: '📚 Documentación completa en GitHub',
-    url: 'https://github.com/your-org/task-manager-auth-service/blob/main/README.md'
+    url: 'https://github.com/your-org/task-manager-auth-service'
   }
 };
 
 // ==============================================
-// OPCIONES PARA SWAGGER-JSDOC
+// CONFIGURACIÓN SWAGGER-JSDOC
 // ==============================================
 const swaggerOptions: swaggerJsdoc.Options = {
   definition: swaggerDefinition,
   apis: [
-    './src/commons/routes/*.ts',        // Rutas con JSDoc
-    './src/commons/controllers/*.ts',   // Controladores documentados
-    './src/commons/validators/*.ts',    // Validators con ejemplos
+    './src/routes/*.ts',
+    './src/controllers/*.ts',
   ],
 };
 
-// ==============================================
-// CONFIGURACIONES ESPECÍFICAS POR ENTORNO
-// ==============================================
-const getEnvironmentSpecificConfig = () => {
-  const baseConfig = { ...swaggerDefinition };
-
-  if (environment.app.isProduction) {
-    // En producción, remover servidor de desarrollo
-    baseConfig.servers = baseConfig.servers?.filter(
-      server => !server.description?.includes('Desarrollo') && !server.description?.includes('Docker')
-    );
-    
-    // Deshabilitar ejemplos detallados en producción
-    if (baseConfig.components?.examples) {
-      baseConfig.components.examples = {};
-    }
-  }
-
-  if (environment.app.isDevelopment) {
-    // En desarrollo, agregar más detalles y ejemplos
-    baseConfig.info.description += `
-    
-    ### 🛠️ Modo Desarrollo
-    - ✅ Swagger UI habilitado
-    - 🔍 Logs detallados activados
-    - 🚀 Hot reload activado
-    - 📝 Ejemplos completos disponibles
-    `;
-  }
-
-  return baseConfig;
-};
+export const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
 // ==============================================
-// GENERAR ESPECIFICACIÓN SWAGGER
+// OPCIONES DE SWAGGER UI
 // ==============================================
-export const swaggerSpec = swaggerJsdoc({
-  ...swaggerOptions,
-  definition: getEnvironmentSpecificConfig(),
-});
-
-// ==============================================
-// CONFIGURACIÓN DE SWAGGER UI
-// ==============================================
-export const swaggerUiOptions = {
-  explorer: true,
+export const swaggerUiOptions: SwaggerUiOptions = {
+  customCss: `
+    .swagger-ui .topbar { display: none; }
+    .swagger-ui .info .title { color: #2563eb; font-size: 2rem; }
+    .swagger-ui .info .description { font-size: 1rem; line-height: 1.6; }
+    .swagger-ui .scheme-container { background: #f8fafc; padding: 15px; border-radius: 8px; }
+    .swagger-ui .opblock.opblock-post { border-color: #16a34a; }
+    .swagger-ui .opblock.opblock-get { border-color: #2563eb; }
+    .swagger-ui .opblock.opblock-put { border-color: #ea580c; }
+    .swagger-ui .opblock.opblock-delete { border-color: #dc2626; }
+  `,
+  customSiteTitle: 'Auth Service API - Docs',
   swaggerOptions: {
-    docExpansion: 'none',           // No expandir por defecto
-    filter: true,                   // Habilitar filtro de búsqueda
-    showRequestDuration: true,      // Mostrar duración de requests
-    tryItOutEnabled: true,          // Habilitar "Try it out"
+    docExpansion: 'none',
+    filter: true,
+    showExtensions: true,
+    tryItOutEnabled: true,
+    persistAuthorization: true,
     requestInterceptor: (req: any) => {
       if (environment.app.isDevelopment) {
         console.log('🔍 Swagger Request:', req.url);
       }
       return req;
     },
-    responseInterceptor: (res: any) => {
-      if (environment.app.isDevelopment) {
-        console.log('📨 Swagger Response:', res.status);
-      }
-      return res;
-    },
   },
-  customCss: `
-    .swagger-ui .topbar { display: none; }
-    .swagger-ui .info .title { color: #2563eb; }
-    .swagger-ui .scheme-container { background: #f8fafc; padding: 15px; border-radius: 8px; }
-    .swagger-ui .info .description p { margin-bottom: 1rem; }
-    .swagger-ui .info .description h3 { color: #1e40af; margin-top: 2rem; }
-    .swagger-ui .opblock.opblock-post { border-color: #16a34a; }
-    .swagger-ui .opblock.opblock-get { border-color: #2563eb; }
-    .swagger-ui .opblock.opblock-put { border-color: #ea580c; }
-    .swagger-ui .opblock.opblock-delete { border-color: #dc2626; }
-  `,
-  customSiteTitle: 'Task Manager Auth API',
-  customfavIcon: '/favicon.ico',
-  customJs: environment.app.isDevelopment ? '/swagger-custom.js' : undefined,
 };
 
 // ==============================================
-// UTILIDADES ADICIONALES
+// UTILIDADES
 // ==============================================
-
-/**
- * Valida que la especificación Swagger esté correcta
- */
-export const validateSwaggerSpec = (): boolean => {
-  try {
-    if (!swaggerSpec || typeof swaggerSpec !== 'object') {
-      console.error('❌ Swagger spec is invalid');
-      return false;
-    }
-
-    if (!swaggerSpec.openapi || !swaggerSpec.info || !swaggerSpec.paths) {
-      console.error('❌ Swagger spec is missing required fields');
-      return false;
-    }
-
-    console.log('✅ Swagger specification is valid');
-    return true;
-  } catch (error) {
-    console.error('❌ Error validating Swagger spec:', error);
-    return false;
+export const validateSwaggerSpec = (): { isValid: boolean; errors: string[] } => {
+  const errors: string[] = [];
+  
+  if (!swaggerSpec?.openapi) errors.push('OpenAPI version missing');
+  if (!swaggerSpec?.info?.title) errors.push('API title missing');
+  if (!swaggerSpec?.info?.version) errors.push('API version missing');
+  if (!swaggerSpec?.servers || swaggerSpec.servers.length === 0) {
+    errors.push('Server configuration missing');
   }
+  
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
 };
 
-/**
- * Obtiene información resumida de la especificación
- */
 export const getSwaggerInfo = () => ({
   title: swaggerSpec.info?.title,
   version: swaggerSpec.info?.version,
-  description: swaggerSpec.info?.description?.substring(0, 100) + '...',
   servers: swaggerSpec.servers?.length || 0,
   paths: Object.keys(swaggerSpec.paths || {}).length,
   schemas: Object.keys(swaggerSpec.components?.schemas || {}).length,
   tags: swaggerSpec.tags?.length || 0,
 });
 
-/**
- * Genera la URL completa de Swagger UI para el entorno actual
- */
 export const getSwaggerUrl = (): string => {
   const baseUrl = environment.app.isDevelopment 
     ? `http://localhost:${environment.app.port}`
     : 'https://task-manager-auth-service.onrender.com';
   
-  return `${baseUrl}/api/${environment.app.apiVersion}/docs`;
+  return `${baseUrl}/api/v1/docs`;
 };
 
 // ==============================================
-// LOG DE INICIALIZACIÓN
+// VALIDACIÓN AL CARGAR
 // ==============================================
-if (environment.app.isDevelopment && environment.features.swaggerEnabled) {
-  console.log('📚 Swagger Configuration Loaded:');
-  console.log(`   📖 Title: ${swaggerSpec.info?.title}`);
-  console.log(`   🔢 Version: ${swaggerSpec.info?.version}`);
-  console.log(`   🌐 Servers: ${swaggerSpec.servers?.length}`);
-  console.log(`   🛣️  Paths: ${Object.keys(swaggerSpec.paths || {}).length}`);
-  console.log(`   📋 Schemas: ${Object.keys(swaggerSpec.components?.schemas || {}).length}`);
-  console.log(`   🏷️  Tags: ${swaggerSpec.tags?.length}`);
-  console.log(`   🔗 URL: ${getSwaggerUrl()}`);
+if (environment.app.isDevelopment) {
+  const validation = validateSwaggerSpec();
+  if (!validation.isValid) {
+    console.warn('⚠️ Swagger Documentation Issues:');
+    validation.errors.forEach(error => console.warn(`  - ${error}`));
+  } else {
+    console.log('✅ Swagger documentation is valid');
+    console.log(`📚 Swagger URL: ${getSwaggerUrl()}`);
+  }
 }
 
-// Validar especificación al cargar
-if (environment.features.swaggerEnabled) {
-  validateSwaggerSpec();
-}
-
-export default swaggerSpec;
+export default {
+  swaggerSpec,
+  swaggerUiOptions,
+  validateSwaggerSpec,
+  getSwaggerInfo,
+  getSwaggerUrl
+};

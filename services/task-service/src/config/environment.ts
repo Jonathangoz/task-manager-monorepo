@@ -15,7 +15,7 @@ const envSchema = z.object({
   // APP CONFIGURATION
   // ==============================================
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  PORT: z.string().transform(Number).default(3002),
+  PORT: z.number().default(3002),
   API_VERSION: z.string().default('v1'),
 
   // ==============================================
@@ -34,25 +34,14 @@ const envSchema = z.object({
   // ==============================================
   AUTH_SERVICE_URL: z.string().url('Invalid Auth Service URL'),
   AUTH_SERVICE_VERIFY_ENDPOINT: z.string().default('/api/v1/auth/verify-token'),
+  AUTH_SERVICE_API_KEY: z.string().min(1, 'Auth Service API Key is required'),
+  AUTH_SERVICE_TIMEOUT: z.number().default(10000),
 
   // ==============================================
   // JWT CONFIGURATION (para validación local)
   // ==============================================
   JWT_SECRET: z.string().min(32, 'JWT Secret must be at least 32 characters'),
   JWT_ISSUER: z.string().default('task-manager-auth'),
-
-  // ==============================================
-  // REFRESH TOKEN CONFIGURATION
-  // ==============================================
-  REFRESH_TOKEN_SECRET: z.string().min(32, 'Refresh Token Secret must be at least 32 characters'),
-  REFRESH_TOKEN_EXPIRES_IN: z.string().default('7d'),
-
-  // ==============================================
-  // JWE CONFIGURATION
-  // ==============================================
-  JWE_SECRET: z.string().min(32, 'JWE Secret must be at least 32 characters'),
-  JWE_ALGORITHM: z.string().default('dir'),
-  JWE_ENCRYPTION: z.string().default('A256GCM'),
 
   // ==============================================
   // CORS CONFIGURATION
@@ -62,37 +51,62 @@ const envSchema = z.object({
   // ==============================================
   // SECURITY CONFIGURATION
   // ==============================================
-  HELMET_ENABLED: z.string().transform((val) => val === 'true').default(true),
+  HELMET_ENABLED: z.boolean().default(true),
 
   // ==============================================
   // RATE LIMITING CONFIGURATION
   // ==============================================
-  RATE_LIMIT_WINDOW_MS: z.string().transform(Number).default(900000), // 15 minutos
-  RATE_LIMIT_MAX_REQUESTS: z.string().transform(Number).default(200),
+  RATE_LIMIT_ENABLED: z.boolean().default(true),
+  RATE_LIMIT_WINDOW_MS: z.number().default(900000), // 15 minutos
+  RATE_LIMIT_MAX_REQUESTS: z.number().default(200),
+
+  // Rate limits específicos por endpoint
+  RATE_LIMIT_AUTH_MAX: z.number().default(20),
+  RATE_LIMIT_CREATE_TASK_MAX: z.number().default(10),
+  RATE_LIMIT_SEARCH_MAX: z.number().default(30),
+  RATE_LIMIT_BULK_MAX: z.number().default(5),
+  RATE_LIMIT_ADMIN_MAX: z.number().default(50),
+
+  // Ventanas de tiempo específicas (en millisegundos)
+  RATE_LIMIT_CREATE_TASK_WINDOW_MS: z.number().default(60000), // 1 minuto
+  RATE_LIMIT_SEARCH_WINDOW_MS: z.number().default(60000), // 1 minuto
+  RATE_LIMIT_BULK_WINDOW_MS: z.number().default(300000), // 5 minutos
+  RATE_LIMIT_ADMIN_WINDOW_MS: z.number().default(60000), // 1 minuto
+
+  // Configuración de store Redis para rate limiting
+  RATE_LIMIT_REDIS_KEY_PREFIX: z.string().default('rate_limit:'),
+  RATE_LIMIT_SKIP_SUCCESSFUL: z.boolean().default(false),
+  RATE_LIMIT_SKIP_FAILED: z.boolean().transform((val) => val === true).default(false),
 
   // ==============================================
   // LOGGING CONFIGURATION
   // ==============================================
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
-  LOG_PRETTY: z.string().transform((val) => val === 'true').default(true),
+  LOG_PRETTY: z.boolean().transform((val) => val === true).default(true),
 
   // ==============================================
   // PAGINATION CONFIGURATION
   // ==============================================
-  DEFAULT_PAGE_SIZE: z.string().transform(Number).default(20),
-  MAX_PAGE_SIZE: z.string().transform(Number).default(100),
+  DEFAULT_PAGE_SIZE: z.number().default(20),
+  MAX_PAGE_SIZE: z.number().default(100),
 
   // ==============================================
   // CACHE TTL CONFIGURATION (segundos)
   // ==============================================
-  CACHE_TTL_TASKS: z.string().transform(Number).default(300),      // 5 minutos
-  CACHE_TTL_CATEGORIES: z.string().transform(Number).default(600), // 10 minutos
+  CACHE_TTL_TASKS: z.number().default(300),           // 5 minutos
+  CACHE_TTL_CATEGORIES: z.number().default(600),      // 10 minutos
+  CACHE_TTL_USER_TASKS: z.number().default(180),      // 3 minutos
+  CACHE_TTL_USER_CATEGORIES: z.number().default(600), // 10 minutos
+  CACHE_TTL_USER_STATS: z.number().default(300),      // 5 minutos
+  CACHE_TTL_TASK_DETAIL: z.number().default(300),     // 5 minutos
+  CACHE_TTL_CATEGORY_DETAIL: z.number().default(600), // 10 minutos
+  CACHE_TTL_SEARCH_RESULTS: z.number().default(120),  // 2 minutos
 
   // ==============================================
   // HEALTH CHECK & SWAGGER
   // ==============================================
-  HEALTH_CHECK_ENABLED: z.string().transform((val) => val === 'true').default(true),
-  SWAGGER_ENABLED: z.string().transform((val) => val === 'true').default(true),
+  HEALTH_CHECK_ENABLED: z.boolean().transform((val) => val === true).default(true),
+  SWAGGER_ENABLED: z.boolean().transform((val) => val === true).default(true),
 });
 
 // Función de validación con manejo de errores
@@ -143,6 +157,8 @@ export const config = {
   authService: {
     url: env.AUTH_SERVICE_URL,
     verifyEndpoint: env.AUTH_SERVICE_VERIFY_ENDPOINT,
+    apiKey: env.AUTH_SERVICE_API_KEY,
+    timeout: env.AUTH_SERVICE_TIMEOUT,
     fullVerifyUrl: `${env.AUTH_SERVICE_URL}${env.AUTH_SERVICE_VERIFY_ENDPOINT}`,
   },
 
@@ -150,19 +166,6 @@ export const config = {
   jwt: {
     secret: env.JWT_SECRET,
     issuer: env.JWT_ISSUER,
-  },
-
-  // Configuración Refresh Token
-  refreshToken: {
-    secret: env.REFRESH_TOKEN_SECRET,
-    expiresIn: env.REFRESH_TOKEN_EXPIRES_IN,
-  },
-
-  // Configuración JWE
-  jwe: {
-    secret: env.JWE_SECRET,
-    algorithm: env.JWE_ALGORITHM,
-    encryption: env.JWE_ENCRYPTION,
   },
 
   // Configuración CORS
@@ -177,8 +180,42 @@ export const config = {
 
   // Configuración de rate limiting
   rateLimit: {
+    enabled: env.RATE_LIMIT_ENABLED,
     windowMs: env.RATE_LIMIT_WINDOW_MS,
     maxRequests: env.RATE_LIMIT_MAX_REQUESTS,
+    
+    // Configuraciones específicas por endpoint
+    auth: {
+      max: env.RATE_LIMIT_AUTH_MAX,
+      windowMs: env.RATE_LIMIT_WINDOW_MS,
+    },
+    
+    createTask: {
+      max: env.RATE_LIMIT_CREATE_TASK_MAX,
+      windowMs: env.RATE_LIMIT_CREATE_TASK_WINDOW_MS,
+    },
+    
+    search: {
+      max: env.RATE_LIMIT_SEARCH_MAX,
+      windowMs: env.RATE_LIMIT_SEARCH_WINDOW_MS,
+    },
+    
+    bulk: {
+      max: env.RATE_LIMIT_BULK_MAX,
+      windowMs: env.RATE_LIMIT_BULK_WINDOW_MS,
+    },
+    
+    admin: {
+      max: env.RATE_LIMIT_ADMIN_MAX,
+      windowMs: env.RATE_LIMIT_ADMIN_WINDOW_MS,
+    },
+    
+    // Configuración del store Redis
+    redis: {
+      keyPrefix: env.RATE_LIMIT_REDIS_KEY_PREFIX,
+      skipSuccessful: env.RATE_LIMIT_SKIP_SUCCESSFUL,
+      skipFailed: env.RATE_LIMIT_SKIP_FAILED,
+    },
   },
 
   // Configuración de logging
@@ -198,6 +235,12 @@ export const config = {
     ttl: {
       tasks: env.CACHE_TTL_TASKS,
       categories: env.CACHE_TTL_CATEGORIES,
+      userTasks: env.CACHE_TTL_USER_TASKS,
+      userCategories: env.CACHE_TTL_USER_CATEGORIES,
+      userStats: env.CACHE_TTL_USER_STATS,
+      taskDetail: env.CACHE_TTL_TASK_DETAIL,
+      categoryDetail: env.CACHE_TTL_CATEGORY_DETAIL,
+      searchResults: env.CACHE_TTL_SEARCH_RESULTS,
     },
   },
 

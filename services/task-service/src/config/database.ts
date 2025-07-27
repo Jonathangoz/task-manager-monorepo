@@ -4,6 +4,7 @@
 // ==============================================
 
 import { PrismaClient } from '@prisma/client';
+import type { TaskStatus, Priority } from '@prisma/client';
 import { logger, loggers, logError, healthCheck } from '@/utils/logger';
 import { config } from './environment';
 
@@ -22,10 +23,18 @@ interface DatabaseStats {
   lowTasks: number;
 }
 
-interface TaskStatusCount {
-  status: string;
-  priority: string;
-  _count: number;
+interface StatusGroupBy {
+  status: TaskStatus;
+  _count: {
+    status: number;
+  };
+}
+
+interface PriorityGroupBy {
+  priority: Priority;
+  _count: {
+    priority: number;
+  };
 }
 
 // ==============================================
@@ -148,7 +157,7 @@ class TaskDatabase {
       });
 
       healthCheck.passed('database', duration, {
-        prismaVersion: '6.12.0', // TODO: Obtener dinámicamente
+        prismaVersion: '6.12.0',
         connectionPool: 'active',
       });
 
@@ -315,18 +324,18 @@ class TaskDatabase {
     const startTime = Date.now();
     
     try {
-      // Obtener estadísticas agrupadas
+      // Obtener estadísticas agrupadas con tipos correctos
       const statusStats = await this.client.task.groupBy({
         by: ['status'],
         where: { userId },
         _count: { status: true },
-      });
+      }) as StatusGroupBy[];
 
       const priorityStats = await this.client.task.groupBy({
         by: ['priority'],
         where: { userId },
         _count: { priority: true },
-      });
+      }) as PriorityGroupBy[];
 
       // Contar tareas vencidas
       const overdueTasks = await this.client.task.count({
@@ -337,16 +346,30 @@ class TaskDatabase {
         },
       });
 
-      // Calcular totales
-      const totalTasks = statusStats.reduce((sum, stat) => sum + stat._count.status, 0);
-      const completedTasks = statusStats.find(s => s.status === 'COMPLETED')?._count.status || 0;
-      const pendingTasks = statusStats.find(s => s.status === 'PENDING')?._count.status || 0;
-      const inProgressTasks = statusStats.find(s => s.status === 'IN_PROGRESS')?._count.status || 0;
+      // Calcular totales con tipos seguros
+      const totalTasks = statusStats.reduce((sum: number, stat: StatusGroupBy) => 
+        sum + stat._count.status, 0);
+      
+      const completedTasks = statusStats.find((s: StatusGroupBy) => 
+        s.status === 'COMPLETED')?._count.status || 0;
+      
+      const pendingTasks = statusStats.find((s: StatusGroupBy) => 
+        s.status === 'PENDING')?._count.status || 0;
+      
+      const inProgressTasks = statusStats.find((s: StatusGroupBy) => 
+        s.status === 'IN_PROGRESS')?._count.status || 0;
 
-      const urgentTasks = priorityStats.find(p => p.priority === 'URGENT')?._count.priority || 0;
-      const highTasks = priorityStats.find(p => p.priority === 'HIGH')?._count.priority || 0;
-      const mediumTasks = priorityStats.find(p => p.priority === 'MEDIUM')?._count.priority || 0;
-      const lowTasks = priorityStats.find(p => p.priority === 'LOW')?._count.priority || 0;
+      const urgentTasks = priorityStats.find((p: PriorityGroupBy) => 
+        p.priority === 'URGENT')?._count.priority || 0;
+      
+      const highTasks = priorityStats.find((p: PriorityGroupBy) => 
+        p.priority === 'HIGH')?._count.priority || 0;
+      
+      const mediumTasks = priorityStats.find((p: PriorityGroupBy) => 
+        p.priority === 'MEDIUM')?._count.priority || 0;
+      
+      const lowTasks = priorityStats.find((p: PriorityGroupBy) => 
+        p.priority === 'LOW')?._count.priority || 0;
 
       const statsData: DatabaseStats = {
         totalTasks,

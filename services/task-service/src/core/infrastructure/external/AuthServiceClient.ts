@@ -1,4 +1,4 @@
-// src/core/infrastructure/external/AuthServiceClient.ts
+// src/core/infrastructure/external/AuthServiceClient.ts - Task-service
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { config } from '@/config/environment';
 import { logger } from '@/utils/logger';

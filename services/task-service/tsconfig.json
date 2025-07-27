@@ -17,15 +17,16 @@
       "@/core/application/*": ["./src/core/application/*"],
       "@/core/entities/*": ["./src/core/domain/entities/*"],
       "@/core/interfaces/*": ["./src/core/domain/interfaces/*"],
+      "@/core/types/*": ["./src/core/domain/types/*"],
       "@/core/cache/*": ["./src/core/infrastructure/cache/*"],
       "@/core/repositories/*": ["./src/core/infrastructure/repositories/*"],
-      "@/typesExpress/*": ["src/types/*"],
       "@/utils/*": ["src/utils/*"]
-    }
+    },
   },
   "include": [
-    "src/**/*.ts",
-    "prisma/**/*.ts"
+    "src/**/*",
+    "prisma/**/*",
+    "types/**/*"
   ],
   "exclude": [
     "node_modules",
@@ -33,5 +34,9 @@
     "**/*.test.ts",
     "**/*.spec.ts",
     "coverage"
-  ]
+  ],
+    "ts-node": {
+    "require": ["tsconfig-paths/register"],
+    "compiler": "typescript"
+  }
 }

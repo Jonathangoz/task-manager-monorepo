@@ -1,15 +1,15 @@
 // src/presentation/routes/task.routes.ts
 import { Router } from 'express';
-import { TaskController } from '@/presentation/controllers/TaskController';
-import { authMiddleware } from '@/presentation/middlewares/auth.middleware';
-import { validationMiddleware } from '@/presentation/middlewares/validation.middleware';
+import { TaskController } from '@/commons/controllers/TaskController';
+import { authMiddleware } from '@/commons/middlewares/auth.middleware';
+import { validationMiddleware } from '@/commons/middlewares/validation.middleware';
 import { 
   createTaskValidator, 
   updateTaskValidator, 
   updateTaskStatusValidator,
   updateTaskPriorityValidator,
   getTasksValidator 
-} from '@/presentation/validators/task.validator';
+} from '@/commons/validators/task.validator';
 
 const router = Router();
 const taskController = new TaskController();

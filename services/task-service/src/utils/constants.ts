@@ -1,4 +1,5 @@
-// src/utils/constants.ts
+// src/utils/constants.ts - Task-Service Constants (Updated)
+import { config } from '../config/environment';
 
 // HTTP Status Codes
 export const HTTP_STATUS = {
@@ -48,6 +49,11 @@ export const ERROR_CODES = {
   INVALID_PAGINATION: 'INVALID_PAGINATION',
   INVALID_SORT_FIELD: 'INVALID_SORT_FIELD',
   INVALID_FILTER: 'INVALID_FILTER',
+  INVALID_HEX_COLOR: 'INVALID_HEX_COLOR',
+  INVALID_ICON: 'INVALID_ICON',
+  INVALID_CUID: 'INVALID_CUID',
+  INVALID_SEARCH_QUERY: 'INVALID_SEARCH_QUERY',
+  RESERVED_NAME_ERROR: 'RESERVED_NAME_ERROR',
   
   // System errors
   DATABASE_ERROR: 'DATABASE_ERROR',
@@ -72,10 +78,12 @@ export const SUCCESS_MESSAGES = {
   CATEGORY_CREATED: 'Categoria creada exitosamente',
   CATEGORY_UPDATED: 'Categoria actualizada exitosamente',
   CATEGORY_DELETED: 'Categoria eliminada exitosamente',
+  CATEGORIES_BULK_DELETED: 'Categorias eliminadas en lote exitosamente',
   
   TASKS_RETRIEVED: 'Tareas obtenidas exitosamente',
   CATEGORIES_RETRIEVED: 'Categorias obtenidas exitosamente',
   STATS_RETRIEVED: 'Estatísticas obtenidas exitosamente',
+  CATEGORIES_EXPORTED: 'Categorias exportadas exitosamente',
 } as const;
 
 // Error Messages
@@ -85,6 +93,7 @@ export const ERROR_MESSAGES = {
   CATEGORY_NOT_FOUND: 'Categoria no encontrada o acceso denegado',
   CATEGORY_ALREADY_EXISTS: 'Una categoria con este nombre ya existe',
   CATEGORY_HAS_TASKS: 'No se puede eliminar la categoria porque tiene tareas asociadas',
+  CATEGORY_LIMIT_EXCEEDED: 'Se ha alcanzado el límite máximo de categorías por usuario',
   
   INVALID_TOKEN: 'Token de autenticación inválido',
   TOKEN_EXPIRED: 'Token expirado',
@@ -94,6 +103,11 @@ export const ERROR_MESSAGES = {
   VALIDATION_ERROR: 'Validación fallida',
   INVALID_DATE_FORMAT: 'Formato de fecha inválido',
   INVALID_DUE_DATE: 'No se puede establecer una fecha de vencimiento en el pasado',
+  INVALID_HEX_COLOR: 'Color hexadecimal inválido',
+  INVALID_ICON: 'Icono inválido o no permitido',
+  INVALID_CUID: 'Identificador CUID inválido',
+  INVALID_SEARCH_QUERY: 'Consulta de búsqueda inválida',
+  RESERVED_NAME_ERROR: 'Este nombre está reservado y no puede ser utilizado',
   
   AUTH_SERVICE_ERROR: 'Servicio de autenticación no disponible',
   DATABASE_ERROR: 'Base de datos no disponible',
@@ -115,13 +129,115 @@ export const TASK_CONFIG = {
   MIN_DUE_DATE_OFFSET_MINUTES: 5,
 } as const;
 
-// Category Configuration
+// Category Configuration (Enhanced)
 export const CATEGORY_CONFIG = {
   MAX_NAME_LENGTH: 100,
   MAX_DESCRIPTION_LENGTH: 500,
   MAX_CATEGORIES_PER_USER: 50,
+  MAX_BULK_DELETE: 20,
   DEFAULT_COLOR: '#6366f1',
   DEFAULT_ICON: 'folder',
+  
+  // Allowed colors palette for enhanced validation
+  ALLOWED_COLORS: [
+    '#6366f1', // Indigo (default)
+    '#ef4444', // Red
+    '#10b981', // Emerald
+    '#f59e0b', // Amber
+    '#3b82f6', // Blue
+    '#8b5cf6', // Violet
+    '#06b6d4', // Cyan
+    '#84cc16', // Lime
+    '#f97316', // Orange
+    '#ec4899', // Pink
+    '#64748b', // Slate
+    '#dc2626', // Red (dark)
+    '#059669', // Emerald (dark)
+    '#7c3aed', // Violet (dark)
+    '#0284c7', // Sky
+    '#0f172a', // Slate (darkest)
+    '#1e293b', // Slate (darker)
+    '#374151', // Gray
+    '#6b7280', // Gray (light)
+    '#9ca3af'  // Gray (lighter)
+  ] as const,
+  
+  // Allowed icons for enhanced validation
+  ALLOWED_ICONS: [
+    // Basic icons
+    'folder', 'home', 'briefcase', 'school', 'heart', 'dollar-sign',
+    'shopping-cart', 'plane', 'utensils', 'gamepad-2', 'dumbbell',
+    'laptop', 'palette', 'music', 'book', 'users', 'user',
+    'building', 'target', 'calendar', 'clock', 'star', 'flag',
+    'tag', 'bookmark', 'file-text', 'image', 'video',
+    'settings', 'wrench', 'inbox', 'archive', 'trash-2',
+    
+    // Additional professional icons
+    'briefcase-business', 'chart-bar', 'chart-pie', 'chart-line',
+    'clipboard', 'clipboard-check', 'clipboard-list', 'code',
+    'database', 'file-code', 'folder-open', 'git-branch',
+    'globe', 'hard-drive', 'layers', 'layout-dashboard',
+    'lightbulb', 'mail', 'map-pin', 'monitor', 'network',
+    'package', 'phone', 'printer', 'search', 'server',
+    'shield', 'smartphone', 'tablet', 'trending-up',
+    'truck', 'wifi', 'zap'
+  ] as const,
+  
+  // Reserved names that cannot be used for categories
+  RESERVED_NAMES: [
+    'all', 'none', 'default', 'uncategorized', 'sin categoria',
+    'admin', 'administrator', 'system', 'root', 'null', 'undefined',
+    'void', 'empty', 'blank', 'general', 'misc', 'miscellaneous',
+    'other', 'others', 'todo', 'todos', 'task', 'tasks',
+    'category', 'categories', 'grupo', 'grupos', 'group', 'groups',
+    'api', 'app', 'application', 'config', 'configuration',
+    'settings', 'preferences', 'profile', 'user', 'users'
+  ] as const
+} as const;
+
+// Validation Configuration (New)
+export const VALIDATION_CONFIG = {
+  // CUID validation
+  CUID: {
+    MIN_LENGTH: 20,
+    MAX_LENGTH: 30,
+    PATTERN: /^[a-zA-Z0-9_-]+$/
+  },
+  
+  // Hex color validation
+  HEX_COLOR: {
+    MIN_LENGTH: 4, // #RGB format
+    MAX_LENGTH: 7, // #RRGGBB format
+    PATTERN: /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/
+  },
+  
+  // Icon validation
+  ICON: {
+    MIN_LENGTH: 1,
+    MAX_LENGTH: 50,
+    PATTERN: /^[a-zA-Z0-9\-_]+$/
+  },
+  
+  // Name validation (categories, tasks, etc.)
+  NAME: {
+    MIN_LENGTH: 1,
+    MAX_LENGTH: 200,
+    PATTERN: /^[a-zA-Z0-9\s\-_áéíóúÁÉÍÓÚñÑ]+$/
+  },
+  
+  // Search query validation
+  SEARCH: {
+    MIN_LENGTH: 1,
+    MAX_LENGTH: 100,
+    PATTERN: /^[a-zA-Z0-9\s\-_áéíóúÁÉÍÓÚñÑ]+$/
+  },
+  
+  // Bulk operations
+  BULK: {
+    MIN_ITEMS: 1,
+    MAX_ITEMS: 50,
+    MAX_CATEGORY_DELETE: 20
+  }
 } as const;
 
 // Task Status Options
@@ -157,6 +273,8 @@ export const SORT_FIELDS = {
   PRIORITY: 'priority',
   STATUS: 'status',
   TITLE: 'title',
+  NAME: 'name', // For categories
+  TASK_COUNT: 'taskCount' // For categories
 } as const;
 
 export const SORT_ORDERS = {
@@ -174,6 +292,9 @@ export const FILTER_FIELDS = {
   HAS_DUE_DATE: 'hasDueDate',
   IS_OVERDUE: 'isOverdue',
   TAGS: 'tags',
+  IS_ACTIVE: 'isActive', // For categories
+  HAS_ICON: 'hasIcon', // For categories
+  COLOR: 'color' // For categories
 } as const;
 
 // Cache Keys Patterns
@@ -185,19 +306,23 @@ export const CACHE_KEYS = {
   CATEGORY_DETAIL: (categoryId: string) => `category:${categoryId}`,
   CATEGORY_TASKS: (categoryId: string) => `category:${categoryId}:tasks`,
   SEARCH_RESULTS: (userId: string, query: string) => `search:${userId}:${Buffer.from(query).toString('base64')}`,
-  RATE_LIMIT: (ip: string) => `ratelimit:${ip}`,
+  RATE_LIMIT: (key: string) => `ratelimit:${key}`,
+  USER_CATEGORY_COUNT: (userId: string) => `user:${userId}:category_count`,
+  CATEGORY_NAME_UNIQUE: (userId: string, name: string) => `unique:${userId}:${name.toLowerCase()}`
 } as const;
 
-// Cache TTL (Time To Live) in seconds
+// Cache TTL (Time To Live) in seconds - From Environment Configuration
 export const CACHE_TTL = {
-  USER_TASKS: 180,
-  USER_CATEGORIES: 600,
-  USER_STATS: 300,
-  TASK_DETAIL: 300,
-  CATEGORY_DETAIL: 600,
-  CATEGORY_TASKS: 180,
-  SEARCH_RESULTS: 120,
+  USER_TASKS: config.cache.ttl.userTasks,
+  USER_CATEGORIES: config.cache.ttl.userCategories,
+  USER_STATS: config.cache.ttl.userStats,
+  TASK_DETAIL: config.cache.ttl.taskDetail,
+  CATEGORY_DETAIL: config.cache.ttl.categoryDetail,
+  CATEGORY_TASKS: config.cache.ttl.userTasks,
+  SEARCH_RESULTS: config.cache.ttl.searchResults,
   RATE_LIMIT: 900,
+  USER_CATEGORY_COUNT: 300, // 5 minutes
+  CATEGORY_NAME_UNIQUE: 600 // 10 minutes
 } as const;
 
 // Pagination Configuration
@@ -227,6 +352,9 @@ export const EVENT_TYPES = {
   CATEGORY_CREATED: 'category.created',
   CATEGORY_UPDATED: 'category.updated',
   CATEGORY_DELETED: 'category.deleted',
+  CATEGORY_BULK_DELETED: 'category.bulk.deleted',
+  CATEGORY_LIMIT_REACHED: 'category.limit.reached',
+  CATEGORY_NAME_CONFLICT: 'category.name.conflict',
   
   USER_STATS_UPDATED: 'stats.updated',
   
@@ -237,6 +365,9 @@ export const EVENT_TYPES = {
   CACHE_MISS: 'cache.miss',
   CACHE_ERROR: 'cache.error',
   
+  VALIDATION_ERROR: 'validation.error',
+  VALIDATION_SUCCESS: 'validation.success',
+  
   RATE_LIMIT_EXCEEDED: 'security.rate_limit_exceeded',
 } as const;
 
@@ -246,6 +377,7 @@ export const DEFAULT_VALUES = {
   TASK_PRIORITY: TASK_PRIORITIES.MEDIUM,
   CATEGORY_COLOR: CATEGORY_CONFIG.DEFAULT_COLOR,
   CATEGORY_ICON: CATEGORY_CONFIG.DEFAULT_ICON,
+  CATEGORY_IS_ACTIVE: true,
   PAGE_SIZE: PAGINATION_CONFIG.DEFAULT_LIMIT,
   SORT_FIELD: SORT_FIELDS.CREATED_AT,
   SORT_ORDER: SORT_ORDERS.DESC,
@@ -253,8 +385,18 @@ export const DEFAULT_VALUES = {
 
 // Auth Service Endpoints
 export const AUTH_ENDPOINTS = {
-  VERIFY_TOKEN: '/api/v1/auth/verify-token',
+  VERIFY_TOKEN: config.authService.verifyEndpoint,
   GET_USER: '/api/v1/users/profile',
+  BASE_URL: config.authService.url,
+  FULL_VERIFY_URL: config.authService.fullVerifyUrl,
+} as const;
+
+// Configuración del Auth Service
+export const AUTH_SERVICE_CONFIG = {
+  URL: config.authService.url,
+  API_KEY: config.authService.apiKey,
+  TIMEOUT: config.authService.timeout,
+  VERIFY_ENDPOINT: config.authService.verifyEndpoint,
 } as const;
 
 // API Response Types
@@ -296,6 +438,16 @@ export type TaskFilters = {
   search?: string;
 };
 
+// Category Filter Options Type
+export type CategoryFilters = {
+  isActive?: boolean;
+  hasIcon?: boolean;
+  color?: string;
+  minTasks?: number;
+  maxTasks?: number;
+  search?: string;
+};
+
 // Sort Options Type
 export type SortOptions = {
   field: string;
@@ -307,6 +459,12 @@ export type TaskPriority = keyof typeof TASK_PRIORITIES;
 
 // Task Status Values Type
 export type TaskStatus = keyof typeof TASK_STATUSES;
+
+// Category Color Type
+export type CategoryColor = typeof CATEGORY_CONFIG.ALLOWED_COLORS[number];
+
+// Category Icon Type
+export type CategoryIcon = typeof CATEGORY_CONFIG.ALLOWED_ICONS[number];
 
 // HTTP Methods
 export const HTTP_METHODS = {
@@ -345,4 +503,613 @@ export const CONTENT_TYPES = {
   TEXT: 'text/plain',
   HTML: 'text/html',
   XML: 'application/xml',
+  CSV: 'text/csv',
+  XLSX: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+} as const;
+
+// Export Formats
+export const EXPORT_FORMATS = {
+  JSON: 'json',
+  CSV: 'csv',
+  XLSX: 'xlsx'
+} as const;
+
+// Validation Rules Collections (for complex validations)
+export const VALIDATION_RULES = {
+  // Category specific validation rules
+  CATEGORY: {
+    NAME_MIN_LENGTH: 1,
+    NAME_MAX_LENGTH: CATEGORY_CONFIG.MAX_NAME_LENGTH,
+    DESCRIPTION_MAX_LENGTH: CATEGORY_CONFIG.MAX_DESCRIPTION_LENGTH,
+    REQUIRED_FIELDS: ['name'] as const,
+    OPTIONAL_FIELDS: ['description', 'color', 'icon'] as const,
+    UPDATABLE_FIELDS: ['name', 'description', 'color', 'icon', 'isActive'] as const
+  },
+  
+  // Task specific validation rules
+  TASK: {
+    TITLE_MIN_LENGTH: 1,
+    TITLE_MAX_LENGTH: TASK_CONFIG.MAX_TITLE_LENGTH,
+    DESCRIPTION_MAX_LENGTH: TASK_CONFIG.MAX_DESCRIPTION_LENGTH,
+    REQUIRED_FIELDS: ['title'] as const,
+    OPTIONAL_FIELDS: ['description', 'dueDate', 'priority', 'categoryId'] as const
+  },
+  
+  // Common validation rules
+  COMMON: {
+    SEARCH_MIN_LENGTH: VALIDATION_CONFIG.SEARCH.MIN_LENGTH,
+    SEARCH_MAX_LENGTH: VALIDATION_CONFIG.SEARCH.MAX_LENGTH,
+    CUID_MIN_LENGTH: VALIDATION_CONFIG.CUID.MIN_LENGTH,
+    CUID_MAX_LENGTH: VALIDATION_CONFIG.CUID.MAX_LENGTH
+  }
+} as const;
+
+// Business Rules Configuration
+export const BUSINESS_RULES = {
+  CATEGORY: {
+    MAX_PER_USER: CATEGORY_CONFIG.MAX_CATEGORIES_PER_USER,
+    NAME_MUST_BE_UNIQUE_PER_USER: true,
+    CAN_DELETE_WITH_TASKS: false, // Requires force flag
+    DEFAULT_COLOR_ON_CREATE: true,
+    DEFAULT_ICON_ON_CREATE: true,
+    AUTO_ACTIVATE_ON_CREATE: true
+  },
+  
+  TASK: {
+    REQUIRE_CATEGORY: false, // Tasks can exist without category
+    AUTO_SET_CREATION_DATE: true,
+    ALLOW_PAST_DUE_DATES: false,
+    DEFAULT_PRIORITY_ON_CREATE: true
+  }
+} as const;
+
+// Feature Flags Configuration
+export const FEATURE_FLAGS = {
+  ENHANCED_CATEGORY_VALIDATION: process.env.FEATURE_ENHANCED_VALIDATION === 'true',
+  CATEGORY_COLOR_PALETTE_STRICT: process.env.FEATURE_STRICT_COLOR_PALETTE === 'true',
+  CATEGORY_ICON_VALIDATION_STRICT: process.env.FEATURE_STRICT_ICON_VALIDATION === 'true',
+  BULK_OPERATIONS_ENABLED: process.env.FEATURE_BULK_OPERATIONS !== 'false',
+  CATEGORY_EXPORT_ENABLED: process.env.FEATURE_CATEGORY_EXPORT !== 'false',
+  ADVANCED_SEARCH_ENABLED: process.env.FEATURE_ADVANCED_SEARCH !== 'false'
+} as const;
+
+// Configuración de rate limiting basada en el entorno
+export const RATE_LIMIT_CONFIG = {
+  // Ventanas de tiempo por defecto (milliseconds) - From Environment
+  DEFAULT_WINDOW_MS: config.rateLimit.windowMs,
+  SHORT_WINDOW_MS: config.rateLimit.createTask.windowMs,
+  MEDIUM_WINDOW_MS: config.rateLimit.bulk.windowMs,
+  
+  // Límites por defecto - From Environment
+  DEFAULT_MAX_REQUESTS: config.rateLimit.maxRequests,
+  AUTH_MAX_REQUESTS: config.rateLimit.auth.max,
+  CREATE_TASK_MAX: config.rateLimit.createTask.max,
+  SEARCH_MAX: config.rateLimit.search.max,
+  BULK_MAX: config.rateLimit.bulk.max,
+  ADMIN_MAX: config.rateLimit.admin.max,
+  
+  // Prefijos de claves Redis - From Environment
+  REDIS_KEY_PREFIX: config.rateLimit.redis.keyPrefix,
+  
+  // Configuración Redis
+  SKIP_SUCCESSFUL: config.rateLimit.redis.skipSuccessful,
+  SKIP_FAILED: config.rateLimit.redis.skipFailed,
+  
+  // Tipos de identificadores
+  IDENTIFIER_TYPES: {
+    IP: 'ip',
+    USER: 'user',
+    CREATE_TASK: 'create_task',
+    SEARCH: 'search',
+    BULK: 'bulk',
+    ADMIN: 'admin',
+    AUTH_USER: 'auth_user',
+  },
+} as const;
+
+// RATE LIMIT ERROR CODES ADICIONALES
+export const RATE_LIMIT_ERROR_CODES = {
+  GENERAL_RATE_LIMIT: 'GENERAL_RATE_LIMIT_EXCEEDED',
+  AUTH_RATE_LIMIT: 'AUTH_RATE_LIMIT_EXCEEDED',
+  CREATE_TASK_RATE_LIMIT: 'CREATE_TASK_RATE_LIMIT_EXCEEDED',
+  SEARCH_RATE_LIMIT: 'SEARCH_RATE_LIMIT_EXCEEDED',
+  BULK_RATE_LIMIT: 'BULK_OPERATIONS_RATE_LIMIT_EXCEEDED',
+  ADMIN_RATE_LIMIT: 'ADMIN_RATE_LIMIT_EXCEEDED',
+  RATE_LIMIT_STORE_ERROR: 'RATE_LIMIT_STORE_ERROR',
+} as const;
+
+// RATE LIMIT ERROR MESSAGES ADICIONALES
+export const RATE_LIMIT_ERROR_MESSAGES = {
+  GENERAL_RATE_LIMIT: 'Límite de solicitudes generales excedido. Intente más tarde.',
+  AUTH_RATE_LIMIT: 'Demasiados intentos de autenticación. Intente más tarde.',
+  CREATE_TASK_RATE_LIMIT: 'Límite de creación de tareas excedido. Espere un momento.',
+  SEARCH_RATE_LIMIT: 'Demasiadas búsquedas realizadas. Espere un momento.',
+  BULK_RATE_LIMIT: 'Límite de operaciones en lote excedido. Intente más tarde.',
+  ADMIN_RATE_LIMIT: 'Límite de operaciones administrativas excedido.',
+  RATE_LIMIT_STORE_ERROR: 'Error en el sistema de límite de solicitudes.',
+} as const;
+
+// EVENT TYPES ADICIONALES PARA RATE LIMITING
+export const RATE_LIMIT_EVENT_TYPES = {
+  RATE_LIMIT_HIT: 'rate_limit.hit',
+  RATE_LIMIT_EXCEEDED: 'rate_limit.exceeded',
+  RATE_LIMIT_RESET: 'rate_limit.reset',
+  RATE_LIMIT_STORE_ERROR: 'rate_limit.store.error',
+  RATE_LIMIT_STORE_FALLBACK: 'rate_limit.store.fallback',
+} as const;
+
+// CACHE KEYS ADICIONALES PARA RATE LIMITING
+export const RATE_LIMIT_CACHE_KEYS = {
+  GENERAL: (identifier: string) => `rate_limit:general:${identifier}`,
+  AUTH: (identifier: string) => `rate_limit:auth:${identifier}`,
+  CREATE_TASK: (identifier: string) => `rate_limit:create_task:${identifier}`,
+  SEARCH: (identifier: string) => `rate_limit:search:${identifier}`,
+  BULK: (identifier: string) => `rate_limit:bulk:${identifier}`,
+  ADMIN: (identifier: string) => `rate_limit:admin:${identifier}`,
+  USER_SPECIFIC: (userId: string, action: string) => `rate_limit:user:${userId}:${action}`,
+} as const;
+
+// RATE LIMIT HEADERS
+export const RATE_LIMIT_HEADERS = {
+  LIMIT: 'X-RateLimit-Limit',
+  REMAINING: 'X-RateLimit-Remaining',
+  RESET: 'X-RateLimit-Reset',
+  RETRY_AFTER: 'Retry-After',
+  POLICY: 'X-RateLimit-Policy',
+} as const;
+
+// TIPOS TYPESCRIPT PARA RATE LIMITING
+export type RateLimitIdentifierType = keyof typeof RATE_LIMIT_CONFIG.IDENTIFIER_TYPES;
+export type RateLimitErrorCode = keyof typeof RATE_LIMIT_ERROR_CODES;
+export type RateLimitEventType = keyof typeof RATE_LIMIT_EVENT_TYPES;
+
+export interface RateLimitMetrics {
+  identifier: string;
+  type: RateLimitIdentifierType;
+  current: number;
+  limit: number;
+  remaining: number;
+  resetTime: Date;
+  windowMs: number;
+}
+
+export interface RateLimitViolation {
+  identifier: string;
+  type: RateLimitIdentifierType;
+  limit: number;
+  attempts: number;
+  windowMs: number;
+  timestamp: Date;
+  ip?: string;
+  userId?: string;
+  path: string;
+  method: string;
+  userAgent?: string;
+}
+
+// CONFIGURACIÓN DE MONITOREO
+export const RATE_LIMIT_MONITORING = {
+  // Umbrales para alertas
+  WARNING_THRESHOLD: 0.8, // 80% del límite
+  CRITICAL_THRESHOLD: 0.95, // 95% del límite
+  
+  // Métricas a trackear
+  METRICS: {
+    REQUESTS_PER_MINUTE: 'rate_limit.requests_per_minute',
+    VIOLATIONS_PER_HOUR: 'rate_limit.violations_per_hour',
+    TOP_VIOLATORS: 'rate_limit.top_violators',
+    STORE_ERRORS: 'rate_limit.store_errors',
+    FALLBACK_ACTIVATIONS: 'rate_limit.fallback_activations',
+  },
+  
+  // Intervalos de limpieza
+  CLEANUP_INTERVAL_MS: 300000, // 5 minutos
+  METRICS_RETENTION_MS: 86400000, // 24 horas
+} as const;
+
+// CONFIGURACIÓN DE ENDPOINTS ESPECÍFICOS
+// Configuración de límites por tipo de endpoint
+export const ENDPOINT_RATE_LIMITS = {
+  // Endpoints públicos (sin autenticación)
+  PUBLIC: {
+    windowMs: config.rateLimit.windowMs,
+    max: 100,
+    skipSuccessfulRequests: false,
+    skipFailedRequests: false,
+  },
+  
+  // Endpoints de autenticación - From Environment
+  AUTH: {
+    windowMs: config.rateLimit.auth.windowMs,
+    max: config.rateLimit.auth.max,
+    skipSuccessfulRequests: config.rateLimit.redis.skipSuccessful,
+    skipFailedRequests: config.rateLimit.redis.skipFailed,
+  },
+  
+  // Creación de recursos (tareas, categorías) - From Environment
+  CREATE_RESOURCE: {
+    windowMs: config.rateLimit.createTask.windowMs,
+    max: config.rateLimit.createTask.max,
+    skipSuccessfulRequests: config.rateLimit.redis.skipSuccessful,
+    skipFailedRequests: config.rateLimit.redis.skipFailed,
+  },
+  
+  // Búsquedas y filtros - From Environment
+  SEARCH: {
+    windowMs: config.rateLimit.search.windowMs,
+    max: config.rateLimit.search.max,
+    skipSuccessfulRequests: config.rateLimit.redis.skipSuccessful,
+    skipFailedRequests: config.rateLimit.redis.skipFailed,
+  },
+  
+  // Operaciones en lote - From Environment
+  BULK_OPERATIONS: {
+    windowMs: config.rateLimit.bulk.windowMs,
+    max: config.rateLimit.bulk.max,
+    skipSuccessfulRequests: config.rateLimit.redis.skipSuccessful,
+    skipFailedRequests: config.rateLimit.redis.skipFailed,
+  },
+  
+  // Endpoints administrativos - From Environment
+  ADMIN: {
+    windowMs: config.rateLimit.admin.windowMs,
+    max: config.rateLimit.admin.max,
+    skipSuccessfulRequests: config.rateLimit.redis.skipSuccessful,
+    skipFailedRequests: config.rateLimit.redis.skipFailed,
+  },
+  
+  // Usuarios autenticados (límite general) - From Environment
+  AUTHENTICATED_USER: {
+    windowMs: config.rateLimit.windowMs,
+    max: config.rateLimit.maxRequests,
+    skipSuccessfulRequests: config.rateLimit.redis.skipSuccessful,
+    skipFailedRequests: config.rateLimit.redis.skipFailed,
+  },
+} as const;
+
+// PATRONES DE RUTAS PARA RATE LIMITING
+export const RATE_LIMIT_ROUTE_PATTERNS = {
+  AUTH_ROUTES: [
+    '/api/v1/auth/login',
+    '/api/v1/auth/register',
+    '/api/v1/auth/refresh',
+    '/api/v1/auth/verify-token',
+  ],
+  
+  CREATE_ROUTES: [
+    'POST:/api/v1/tasks',
+    'POST:/api/v1/categories',
+  ],
+  
+  SEARCH_ROUTES: [
+    'GET:/api/v1/tasks/search',
+    'GET:/api/v1/categories/search',
+    'POST:/api/v1/tasks/filter',
+  ],
+  
+  BULK_ROUTES: [
+    'POST:/api/v1/tasks/bulk',
+    'PUT:/api/v1/tasks/bulk',
+    'DELETE:/api/v1/tasks/bulk',
+    'POST:/api/v1/categories/bulk',
+    'DELETE:/api/v1/categories/bulk',
+  ],
+  
+  ADMIN_ROUTES: [
+    '/api/v1/admin/*',
+    '/api/v1/stats/system',
+    '/api/v1/health/detailed',
+  ],
+  
+  PUBLIC_ROUTES: [
+    'GET:/api/v1/health',
+    'GET:/api/v1/docs',
+    'GET:/api/v1/swagger',
+  ],
+} as const;
+
+// CONFIGURACIÓN DE WHITELIST/BLACKLIST
+export const RATE_LIMIT_EXEMPTIONS = {
+  // IPs que no tienen rate limiting (desarrollo, health checks)
+  WHITELISTED_IPS: [
+    '127.0.0.1',
+    '::1',
+    'localhost',
+  ],
+  
+  // User agents que pueden tener límites diferentes
+  TRUSTED_USER_AGENTS: [
+    'HealthCheck/1.0',
+    'LoadBalancer/1.0',
+    'Monitoring/1.0',
+  ],
+  
+  // Rutas que no tienen rate limiting
+  EXEMPTED_ROUTES: [
+    '/api/v1/health',
+    '/favicon.ico',
+    '/robots.txt',
+  ],
+} as const;
+
+// MENSAJES DE ERROR CONTEXTUALES
+export const CONTEXTUAL_RATE_LIMIT_MESSAGES = {
+  TASK_CREATION: 'Has alcanzado el límite de creación de tareas por minuto. Espera {seconds} segundos.',
+  CATEGORY_CREATION: 'Has alcanzado el límite de creación de categorías por minuto. Espera {seconds} segundos.',
+  SEARCH_QUERIES: 'Demasiadas búsquedas realizadas. Espera {seconds} segundos antes de buscar nuevamente.',
+  BULK_OPERATIONS: 'Límite de operaciones en lote alcanzado. Espera {minutes} minutos.',
+  AUTH_ATTEMPTS: 'Demasiados intentos de autenticación. Espera {minutes} minutos.',
+  GENERAL_API: 'Límite de solicitudes a la API alcanzado. Espera {minutes} minutos.',
+} as const;
+
+// CONFIGURACIÓN DE DEGRADACIÓN GRADUAL
+export const RATE_LIMIT_DEGRADATION = {
+  // Umbrales para activar degradación
+  THRESHOLDS: {
+    LIGHT_LOAD: 0.5,  // 50% del límite
+    MEDIUM_LOAD: 0.7, // 70% del límite
+    HEAVY_LOAD: 0.9,  // 90% del límite
+  },
+  
+  // Acciones por nivel de carga
+  ACTIONS: {
+    LIGHT_LOAD: {
+      enabled: false,
+      delay: 0,
+    },
+    MEDIUM_LOAD: {
+      enabled: true,
+      delay: 100, // 100ms delay
+      warnings: true,
+    },
+    HEAVY_LOAD: {
+      enabled: true,
+      delay: 500, // 500ms delay
+      warnings: true,
+      reducedFeatures: true,
+    },
+  },
+} as const;
+
+// TIPOS EXPORTADOS ADICIONALES
+export type EndpointRateLimitType = keyof typeof ENDPOINT_RATE_LIMITS;
+export type RateLimitRoutePattern = keyof typeof RATE_LIMIT_ROUTE_PATTERNS;
+export type RateLimitDegradationLevel = keyof typeof RATE_LIMIT_DEGRADATION.THRESHOLDS;
+
+// CONSTANTES DE INTEGRACIÓN CON OTROS SISTEMAS
+export const RATE_LIMIT_INTEGRATION = {
+  // Headers para comunicación con load balancer
+  LOAD_BALANCER_HEADERS: {
+    RATE_LIMIT_STATUS: 'X-Internal-RateLimit-Status',
+    CLIENT_IP: 'X-Forwarded-For',
+    REAL_IP: 'X-Real-IP',
+  },
+  
+  // Métricas para sistemas de monitoreo
+  METRICS_KEYS: {
+    REQUESTS_COUNT: 'rate_limit_requests_total',
+    VIOLATIONS_COUNT: 'rate_limit_violations_total',
+    RESPONSE_TIME: 'rate_limit_response_time',
+    STORE_ERRORS: 'rate_limit_store_errors_total',
+  },
+  
+  // Configuración para alertas
+  ALERT_THRESHOLDS: {
+    HIGH_VIOLATION_RATE: 100, // violaciones por hora
+    HIGH_ERROR_RATE: 10,      // errores por minuto
+    STORE_UNAVAILABLE_TIME: 60, // segundos
+  },
+} as const;
+
+// FUNCIONES HELPER PARA CONSTANTS
+
+/**
+ * Genera un mensaje de error contextual con tiempo de espera
+ */
+export const generateRateLimitMessage = (
+  type: keyof typeof CONTEXTUAL_RATE_LIMIT_MESSAGES,
+  resetTimeMs: number
+): string => {
+  const template = CONTEXTUAL_RATE_LIMIT_MESSAGES[type];
+  const seconds = Math.ceil(resetTimeMs / 1000);
+  const minutes = Math.ceil(seconds / 60);
+  
+  return template
+    .replace('{seconds}', seconds.toString())
+    .replace('{minutes}', minutes.toString());
+};
+
+/**
+ * Verifica si una IP está en la whitelist
+ */
+export const isWhitelistedIP = (ip: string): boolean => {
+  return RATE_LIMIT_EXEMPTIONS.WHITELISTED_IPS.includes(ip);
+};
+
+/**
+ * Verifica si una ruta está exenta de rate limiting
+ */
+export const isExemptedRoute = (path: string): boolean => {
+  return RATE_LIMIT_EXEMPTIONS.EXEMPTED_ROUTES.some(route => 
+    path.startsWith(route) || path === route
+  );
+};
+
+/**
+ * Obtiene la configuración de rate limit para un tipo de endpoint
+ */
+export const getRateLimitConfig = (type: EndpointRateLimitType) => {
+  return ENDPOINT_RATE_LIMITS[type];
+};
+
+/**
+ * Verifica si un color está en la paleta permitida
+ */
+export const isValidCategoryColor = (color: string): color is CategoryColor => {
+  return CATEGORY_CONFIG.ALLOWED_COLORS.includes(color as CategoryColor);
+};
+
+/**
+ * Verifica si un icono está en la lista permitida
+ */
+export const isValidCategoryIcon = (icon: string): icon is CategoryIcon => {
+  return CATEGORY_CONFIG.ALLOWED_ICONS.includes(icon as CategoryIcon);
+};
+
+/**
+ * Verifica si un nombre de categoría está reservado
+ */
+export const isReservedCategoryName = (name: string): boolean => {
+  return CATEGORY_CONFIG.RESERVED_NAMES.includes(name.toLowerCase().trim());
+};
+
+/**
+ * Normaliza un color hex de 3 dígitos a 6 dígitos
+ */
+export const normalizeHexColor = (color: string): string => {
+  if (color.length === 4) {
+    return '#' + color.slice(1).split('').map((c: string) => c + c).join('');
+  }
+  return color.toLowerCase();
+};
+
+/**
+ * Obtiene el color por defecto para categorías
+ */
+export const getDefaultCategoryColor = (): CategoryColor => {
+  return CATEGORY_CONFIG.DEFAULT_COLOR as CategoryColor;
+};
+
+/**
+ * Obtiene el icono por defecto para categorías
+ */
+export const getDefaultCategoryIcon = (): CategoryIcon => {
+  return CATEGORY_CONFIG.DEFAULT_ICON as CategoryIcon;
+};
+
+/**
+ * Verifica si las operaciones en lote están habilitadas
+ */
+export const isBulkOperationsEnabled = (): boolean => {
+  return FEATURE_FLAGS.BULK_OPERATIONS_ENABLED;
+};
+
+/**
+ * Verifica si la validación mejorada está habilitada
+ */
+export const isEnhancedValidationEnabled = (): boolean => {
+  return FEATURE_FLAGS.ENHANCED_CATEGORY_VALIDATION;
+};
+
+/**
+ * Obtiene la configuración de validación para un campo específico
+ */
+export const getValidationConfig = (entity: keyof typeof VALIDATION_RULES, field?: string) => {
+  const entityConfig = VALIDATION_RULES[entity];
+  if (field && field in entityConfig) {
+    return entityConfig[field as keyof typeof entityConfig];
+  }
+  return entityConfig;
+};
+
+/**
+ * Obtiene las reglas de negocio para una entidad específica
+ */
+export const getBusinessRules = (entity: keyof typeof BUSINESS_RULES) => {
+  return BUSINESS_RULES[entity];
+};
+
+/**
+ * Verifica si una característica está habilitada
+ */
+export const isFeatureEnabled = (feature: keyof typeof FEATURE_FLAGS): boolean => {
+  return FEATURE_FLAGS[feature];
+};
+
+// CONSTANTES DE LOGGING Y DEBUGGING
+export const LOGGING_CONFIG = {
+  // Niveles de log
+  LEVELS: {
+    ERROR: 'error',
+    WARN: 'warn',
+    INFO: 'info',
+    DEBUG: 'debug',
+    TRACE: 'trace'
+  },
+  
+  // Categorías de log
+  CATEGORIES: {
+    VALIDATION: 'validation',
+    RATE_LIMIT: 'rate_limit',
+    AUTH: 'auth',
+    DATABASE: 'database',
+    CACHE: 'cache',
+    BUSINESS_LOGIC: 'business_logic',
+    EXTERNAL_SERVICE: 'external_service'
+  },
+  
+  // Contextos para structured logging
+  CONTEXTS: {
+    REQUEST_ID: 'requestId',
+    USER_ID: 'userId',
+    CATEGORY_ID: 'categoryId',
+    TASK_ID: 'taskId',
+    OPERATION: 'operation',
+    DURATION: 'duration',
+    ERROR_CODE: 'errorCode'
+  }
+} as const;
+
+// CONSTANTES DE TESTING
+export const TESTING_CONFIG = {
+  // Datos de prueba para categorías
+  MOCK_CATEGORIES: {
+    VALID_CATEGORY: {
+      name: 'Test Category',
+      description: 'A test category for unit tests',
+      color: '#6366f1',
+      icon: 'folder'
+    },
+    INVALID_CATEGORY: {
+      name: '', // Invalid: empty name
+      description: 'A' + 'a'.repeat(CATEGORY_CONFIG.MAX_DESCRIPTION_LENGTH), // Invalid: too long
+      color: 'invalid-color', // Invalid: not hex format
+      icon: 'invalid-icon' // Invalid: not in allowed list
+    }
+  },
+  
+  // IDs de prueba en formato CUID
+  MOCK_IDS: {
+    VALID_CUID: 'cl9e2q1kj0001js08abcdefgh',
+    INVALID_CUID: 'invalid-id',
+    USER_ID: 'cl9e2q1kj0002js08user001',
+    CATEGORY_ID: 'cl9e2q1kj0003js08cat001',
+    TASK_ID: 'cl9e2q1kj0004js08task001'
+  },
+  
+  // Configuración para tests de rate limiting
+  RATE_LIMIT_TEST: {
+    FAST_WINDOW_MS: 1000, // 1 segundo para tests rápidos
+    LOW_LIMIT: 5, // Límite bajo para disparar rate limiting
+    TEST_USER_AGENT: 'Test-Agent/1.0'
+  }
+} as const;
+
+// CONSTANTES DE DESARROLLO
+export const DEVELOPMENT_CONFIG = {
+  // Configuración para desarrollo local
+  LOCAL: {
+    DISABLE_RATE_LIMITING: process.env.NODE_ENV === 'development' && process.env.DISABLE_RATE_LIMIT === 'true',
+    VERBOSE_VALIDATION_ERRORS: process.env.NODE_ENV === 'development',
+    MOCK_AUTH_SERVICE: process.env.NODE_ENV === 'development' && process.env.MOCK_AUTH === 'true',
+    DETAILED_ERROR_RESPONSES: process.env.NODE_ENV === 'development'
+  },
+  
+  // Configuración para debugging
+  DEBUG: {
+    LOG_VALIDATION_DETAILS: process.env.DEBUG_VALIDATION === 'true',
+    LOG_RATE_LIMIT_DETAILS: process.env.DEBUG_RATE_LIMIT === 'true',
+    LOG_CACHE_OPERATIONS: process.env.DEBUG_CACHE === 'true',
+    TRACE_DATABASE_QUERIES: process.env.DEBUG_DATABASE === 'true'
+  }
 } as const;

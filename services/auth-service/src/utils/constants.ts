@@ -1,5 +1,5 @@
 // src/utils/constants.ts
-
+//Auth-Service Constants
 
 // HTTP Status Codes
 export const HTTP_STATUS = {
@@ -129,14 +129,14 @@ export const CACHE_KEYS = {
 
 // Cache TTL (Time To Live) in seconds
 export const CACHE_TTL = {
-  ACCESS_TOKEN: 15 * 60, // 15 minutos
-  REFRESH_TOKEN: 7 * 24 * 60 * 60, // 7 días
-  USER_SESSION: 24 * 60 * 60, // 24 horas
-  LOGIN_ATTEMPTS: 15 * 60, // 15 minutos
-  RATE_LIMIT: 15 * 60, // 15 minutos
-  USER_PROFILE: 30 * 60, // 30 minutos
-  PASSWORD_RESET: 15 * 60, // 15 minutos
-  EMAIL_VERIFICATION: 24 * 60 * 60, // 24 horas
+  USER_TASKS: 180,
+  USER_CATEGORIES: 600,
+  USER_STATS: 300,
+  TASK_DETAIL: 300,
+  CATEGORY_DETAIL: 600,
+  CATEGORY_TASKS: 180,
+  SEARCH_RESULTS: 120,
+  RATE_LIMIT: 900,
 } as const;
 
 // Validation Patterns
@@ -149,16 +149,26 @@ export const VALIDATION_PATTERNS = {
 
 // Event Types para logging y auditoria
 export const EVENT_TYPES = {
-  USER_REGISTERED: 'user.registered',
-  USER_LOGIN: 'user.login',
-  USER_LOGOUT: 'user.logout',
-  USER_LOGIN_FAILED: 'user.login.failed',
-  TOKEN_REFRESHED: 'token.refreshed',
-  PASSWORD_CHANGED: 'password.changed',
-  SESSION_CREATED: 'session.created',
-  SESSION_TERMINATED: 'session.terminated',
+  TASK_CREATED: 'task.created',
+  TASK_UPDATED: 'task.updated',
+  TASK_DELETED: 'task.deleted',
+  TASK_STATUS_CHANGED: 'task.status.changed',
+  TASK_COMPLETED: 'task.completed',
+  
+  CATEGORY_CREATED: 'category.created',
+  CATEGORY_UPDATED: 'category.updated',
+  CATEGORY_DELETED: 'category.deleted',
+  
+  USER_STATS_UPDATED: 'stats.updated',
+  
+  AUTH_TOKEN_VALIDATED: 'auth.token.validated',
+  AUTH_SERVICE_ERROR: 'auth.service.error',
+  
+  CACHE_HIT: 'cache.hit',
+  CACHE_MISS: 'cache.miss',
+  CACHE_ERROR: 'cache.error',
+  
   RATE_LIMIT_EXCEEDED: 'security.rate_limit_exceeded',
-  SUSPICIOUS_ACTIVITY: 'security.suspicious_activity',
 } as const;
 
 // Default Values
