@@ -805,7 +805,7 @@ Para endpoints protegidos, incluye el header:
   // ==============================================
   externalDocs: {
     description: '📚 Documentación completa en GitHub',
-    url: 'https://github.com/your-org/task-manager-auth-service'
+    url: 'https://github.com/Jonathangoz/task-manager-monorepo'
   }
 };
 

@@ -1,272 +1,340 @@
 // src/presentation/middlewares/validation.middleware.ts
 import { Request, Response, NextFunction } from 'express';
-import { validationResult, ValidationError } from 'express-validator';
+import { z, ZodError, ZodSchema } from 'zod';
 import { 
   HTTP_STATUS, 
   ERROR_CODES, 
   ERROR_MESSAGES,
-  ApiResponse 
+  ApiResponse,
+  TASK_STATUSES,
+  TASK_PRIORITIES,
+  CATEGORY_CONFIG,
+  VALIDATION_CONFIG,
+  TASK_CONFIG
 } from '@/utils/constants';
-import { createLogger } from '@/utils/logger';
+import { logger } from '@/utils/logger';
 
-const logger = createLogger('ValidationMiddleware');
+// Logger específico para el middleware de validación
+const validationLogger = logger.child({ 
+  component: 'validation-middleware',
+  domain: 'validation'
+});
 
 /**
  * ValidationMiddleware
  * 
- * Middleware centralizado para el manejo de validaciones usando express-validator.
+ * Middleware centralizado para el manejo de validaciones usando Zod.
  * Implementa principios SOLID y buenas prácticas de manejo de errores.
  * 
  * Responsabilidades:
- * - Procesar resultados de validación de express-validator
+ * - Procesar esquemas de validación de Zod
  * - Formatear errores de validación de manera consistente
  * - Proporcionar logging detallado para debugging
  * - Integración con el sistema de constantes y tipos
  */
 export class ValidationMiddleware {
   
+  // ==============================================
+  // ESQUEMAS DE VALIDACIÓN CON ZOD
+  // ==============================================
+
   /**
-   * Middleware principal para validar requests
-   * Procesa los resultados de express-validator y formatea errores
+   * Esquema base para IDs CUID
    */
-  static validate() {
+  static readonly cuidSchema = z.string()
+    .min(VALIDATION_CONFIG.CUID.MIN_LENGTH, 'CUID debe tener al menos 20 caracteres')
+    .max(VALIDATION_CONFIG.CUID.MAX_LENGTH, 'CUID debe tener máximo 30 caracteres')
+    .regex(VALIDATION_CONFIG.CUID.PATTERN, 'CUID tiene formato inválido')
+    .refine(ValidationMiddleware.isValidCuid, 'CUID no tiene formato válido');
+
+  /**
+   * Esquema para colores hexadecimales
+   */
+  static readonly hexColorSchema = z.string()
+    .regex(VALIDATION_CONFIG.HEX_COLOR.PATTERN, 'Color debe estar en formato hexadecimal (#RGB o #RRGGBB)')
+    .refine(
+      (color) => CATEGORY_CONFIG.ALLOWED_COLORS.includes(color as any), 
+      `Color debe ser uno de los colores permitidos: ${CATEGORY_CONFIG.ALLOWED_COLORS.join(', ')}`
+    );
+
+  /**
+   * Esquema para iconos de categorías
+   */
+  static readonly iconSchema = z.string()
+    .min(1, 'Icono no puede estar vacío')
+    .max(50, 'Icono debe tener máximo 50 caracteres')
+    .regex(/^[a-zA-Z0-9\-_]+$/, 'Icono solo puede contener letras, números, guiones y guiones bajos')
+    .refine(
+      (icon) => CATEGORY_CONFIG.ALLOWED_ICONS.includes(icon as any),
+      `Icono debe ser uno de los iconos permitidos. Ver documentación para lista completa.`
+    );
+
+  /**
+   * Esquema para arrays de tags
+   */
+  static readonly tagsSchema = z.array(
+    z.string()
+      .min(1, 'Tag no puede estar vacío')
+      .max(TASK_CONFIG.MAX_TAG_LENGTH, `Tag debe tener máximo ${TASK_CONFIG.MAX_TAG_LENGTH} caracteres`)
+      .regex(/^[\w\s\-áéíóúÁÉÍÓÚñÑ]+$/, 'Tag contiene caracteres no válidos')
+  ).max(TASK_CONFIG.MAX_TAGS_COUNT, `Máximo ${TASK_CONFIG.MAX_TAGS_COUNT} tags permitidos`);
+
+  /**
+   * Esquema para URLs de attachments
+   */
+  static readonly attachmentsSchema = z.array(
+    z.string().url('URL de attachment inválida')
+  ).max(TASK_CONFIG.MAX_ATTACHMENTS_COUNT, `Máximo ${TASK_CONFIG.MAX_ATTACHMENTS_COUNT} attachments permitidos`);
+
+  /**
+   * Esquema para fechas futuras
+   */
+  static readonly futureDateSchema = z.string()
+    .datetime('Fecha debe estar en formato ISO válido')
+    .refine(
+      (dateString) => ValidationMiddleware.isFutureDate(dateString),
+      `Fecha debe ser al menos ${TASK_CONFIG.MIN_DUE_DATE_OFFSET_MINUTES} minutos en el futuro`
+    );
+
+  /**
+   * Esquema para paginación
+   */
+  static readonly paginationSchema = z.object({
+    page: z.coerce.number()
+      .int('Página debe ser un número entero')
+      .min(1, 'Página debe ser mayor a 0')
+      .default(1),
+    limit: z.coerce.number()
+      .int('Límite debe ser un número entero')
+      .min(1, 'Límite debe ser mayor a 0')
+      .max(100, 'Límite no puede ser mayor a 100')
+      .default(20)
+  });
+
+  /**
+   * Esquema para ordenamiento
+   */
+  static readonly sortSchema = z.object({
+    sortBy: z.enum(['createdAt', 'updatedAt', 'dueDate', 'priority', 'status', 'title', 'name'])
+      .default('createdAt'),
+    sortOrder: z.enum(['asc', 'desc']).default('desc')
+  });
+
+  // ==============================================
+  // ESQUEMAS ESPECÍFICOS PARA ENTIDADES
+  // ==============================================
+
+  /**
+   * Esquema para crear categoría
+   */
+  static readonly createCategorySchema = z.object({
+    name: z.string()
+      .min(1, 'Nombre de categoría es requerido')
+      .max(CATEGORY_CONFIG.MAX_NAME_LENGTH, `Nombre debe tener máximo ${CATEGORY_CONFIG.MAX_NAME_LENGTH} caracteres`)
+      .regex(VALIDATION_CONFIG.NAME.PATTERN, 'Nombre contiene caracteres no válidos')
+      .refine(
+        (name) => !ValidationMiddleware.isReservedName(name),
+        'Este nombre está reservado y no puede ser utilizado'
+      ),
+    description: z.string()
+      .max(CATEGORY_CONFIG.MAX_DESCRIPTION_LENGTH, `Descripción debe tener máximo ${CATEGORY_CONFIG.MAX_DESCRIPTION_LENGTH} caracteres`)
+      .optional(),
+    color: ValidationMiddleware.hexColorSchema.default(CATEGORY_CONFIG.DEFAULT_COLOR),
+    icon: ValidationMiddleware.iconSchema.default(CATEGORY_CONFIG.DEFAULT_ICON)
+  });
+
+  /**
+   * Esquema para actualizar categoría
+   */
+  static readonly updateCategorySchema = ValidationMiddleware.createCategorySchema.partial();
+
+  /**
+   * Esquema para crear tarea
+   */
+  static readonly createTaskSchema = z.object({
+    title: z.string()
+      .min(1, 'Título de la tarea es requerido')
+      .max(TASK_CONFIG.MAX_TITLE_LENGTH, `Título debe tener máximo ${TASK_CONFIG.MAX_TITLE_LENGTH} caracteres`),
+    description: z.string()
+      .max(TASK_CONFIG.MAX_DESCRIPTION_LENGTH, `Descripción debe tener máximo ${TASK_CONFIG.MAX_DESCRIPTION_LENGTH} caracteres`)
+      .optional(),
+    dueDate: ValidationMiddleware.futureDateSchema.optional(),
+    priority: z.nativeEnum(TASK_PRIORITIES, {
+      errorMap: () => ({ message: `Prioridad debe ser: ${Object.values(TASK_PRIORITIES).join(', ')}` })
+    }).default(TASK_PRIORITIES.MEDIUM),
+    status: z.nativeEnum(TASK_STATUSES, {
+      errorMap: () => ({ message: `Estado debe ser: ${Object.values(TASK_STATUSES).join(', ')}` })
+    }).default(TASK_STATUSES.PENDING),
+    categoryId: ValidationMiddleware.cuidSchema.optional(),
+    tags: ValidationMiddleware.tagsSchema.optional(),
+    attachments: ValidationMiddleware.attachmentsSchema.optional(),
+    estimatedHours: z.number()
+      .min(0.1, 'Horas estimadas debe ser mayor a 0')
+      .max(TASK_CONFIG.MAX_ESTIMATED_HOURS, `Horas estimadas no puede ser mayor a ${TASK_CONFIG.MAX_ESTIMATED_HOURS}`)
+      .optional()
+  });
+
+  /**
+   * Esquema para actualizar tarea
+   */
+  static readonly updateTaskSchema = ValidationMiddleware.createTaskSchema.partial();
+
+  /**
+   * Esquema para filtros de tareas
+   */
+  static readonly taskFiltersSchema = z.object({
+    status: z.union([
+      z.nativeEnum(TASK_STATUSES),
+      z.array(z.nativeEnum(TASK_STATUSES))
+    ]).optional(),
+    priority: z.union([
+      z.nativeEnum(TASK_PRIORITIES),
+      z.array(z.nativeEnum(TASK_PRIORITIES))
+    ]).optional(),
+    categoryId: ValidationMiddleware.cuidSchema.optional(),
+    dueDateFrom: z.string().datetime().optional(),
+    dueDateTo: z.string().datetime().optional(),
+    isOverdue: z.coerce.boolean().optional(),
+    hasDueDate: z.coerce.boolean().optional(),
+    tags: z.union([z.string(), z.array(z.string())]).optional(),
+    search: z.string()
+      .min(VALIDATION_CONFIG.SEARCH.MIN_LENGTH)
+      .max(VALIDATION_CONFIG.SEARCH.MAX_LENGTH)
+      .regex(VALIDATION_CONFIG.SEARCH.PATTERN, 'Búsqueda contiene caracteres no válidos')
+      .optional()
+  });
+
+  /**
+   * Esquema para parámetros de ruta con ID
+   */
+  static readonly idParamSchema = z.object({
+    id: ValidationMiddleware.cuidSchema
+  });
+
+  /**
+   * Esquema para operaciones en lote
+   */
+  static readonly bulkOperationSchema = z.object({
+    ids: z.array(ValidationMiddleware.cuidSchema)
+      .min(VALIDATION_CONFIG.BULK.MIN_ITEMS, `Mínimo ${VALIDATION_CONFIG.BULK.MIN_ITEMS} elementos requeridos`)
+      .max(VALIDATION_CONFIG.BULK.MAX_ITEMS, `Máximo ${VALIDATION_CONFIG.BULK.MAX_ITEMS} elementos permitidos`)
+  });
+
+  // ==============================================
+  // MIDDLEWARE FACTORIES
+  // ==============================================
+
+  /**
+   * Factory para crear middleware de validación genérico
+   */
+  static validate<T>(schema: ZodSchema<T>, target: 'body' | 'query' | 'params' = 'body') {
     return (req: Request, res: Response, next: NextFunction): void => {
       try {
-        const errors = validationResult(req);
-        
-        if (errors.isEmpty()) {
-          // Si no hay errores, continuar con el siguiente middleware
-          return next();
+        const dataToValidate = req[target];
+        const result = schema.safeParse(dataToValidate);
+
+        if (!result.success) {
+          const formattedErrors = ValidationMiddleware.formatZodErrors(result.error);
+          
+          ValidationMiddleware.logValidationErrors(req, formattedErrors, target);
+          
+          const statusCode = ValidationMiddleware.getStatusCodeForTarget(target);
+          const message = ValidationMiddleware.getMessageForTarget(target);
+          
+          const errorResponse: ApiResponse = {
+            success: false,
+            message,
+            error: {
+              code: ERROR_CODES.VALIDATION_ERROR,
+              details: formattedErrors
+            },
+            meta: {
+              timestamp: new Date().toISOString(),
+              requestId: req.headers['x-request-id'] as string || undefined
+            }
+          };
+
+          res.status(statusCode).json(errorResponse);
         }
 
-        // Formatear errores de validación
-        const formattedErrors = ValidationMiddleware.formatValidationErrors(errors.array());
-        
-        // Log para debugging
-        ValidationMiddleware.logValidationErrors(req, formattedErrors);
-        
-        // Respuesta de error consistente
-        const errorResponse: ApiResponse = {
-          success: false,
-          message: ERROR_MESSAGES.VALIDATION_ERROR,
-          error: {
-            code: ERROR_CODES.VALIDATION_ERROR,
-            details: formattedErrors
-          },
-          meta: {
-            timestamp: new Date().toISOString(),
-            requestId: req.headers['x-request-id'] as string || undefined
-          }
-        };
-
-        res.status(HTTP_STATUS.UNPROCESSABLE_ENTITY).json(errorResponse);
+        // Asignar los datos validados y transformados de vuelta al request
+        (req as any)[target] = result.data;
+        next();
       } catch (error) {
-        // Si ocurre un error interno en el middleware de validación
-        logger.error('Error interno en middleware de validación:', error);
-        
-        const internalErrorResponse: ApiResponse = {
-          success: false,
-          message: ERROR_MESSAGES.INTERNAL_ERROR,
-          error: {
-            code: ERROR_CODES.INTERNAL_ERROR
-          },
-          meta: {
-            timestamp: new Date().toISOString(),
-            requestId: req.headers['x-request-id'] as string || undefined
-          }
-        };
-
-        res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json(internalErrorResponse);
+        ValidationMiddleware.handleInternalError(req, res, error);
       }
     };
   }
 
   /**
-   * Middleware específico para validaciones de parámetros de ruta
-   * Útil para endpoints que requieren IDs específicos
+   * Middleware específico para validar body de creación de categorías
    */
-  static validateParams() {
-    return (req: Request, res: Response, next: NextFunction): void => {
-      const errors = validationResult(req);
-      
-      if (errors.isEmpty()) {
-        return next();
-      }
-
-      // Filtrar solo errores de parámetros
-      const paramErrors = errors.array().filter(error => error.location === 'params');
-      
-      if (paramErrors.length === 0) {
-        return next();
-      }
-
-      const formattedErrors = ValidationMiddleware.formatValidationErrors(paramErrors);
-      
-      logger.warn('Errores de validación en parámetros:', {
-        path: req.path,
-        method: req.method,
-        params: req.params,
-        errors: formattedErrors
-      });
-
-      const errorResponse: ApiResponse = {
-        success: false,
-        message: 'Parámetros de ruta inválidos',
-        error: {
-          code: ERROR_CODES.VALIDATION_ERROR,
-          details: formattedErrors
-        },
-        meta: {
-          timestamp: new Date().toISOString(),
-          requestId: req.headers['x-request-id'] as string || undefined
-        }
-      };
-
-      res.status(HTTP_STATUS.BAD_REQUEST).json(errorResponse);
-    };
+  static validateCreateCategory() {
+    return ValidationMiddleware.validate(ValidationMiddleware.createCategorySchema, 'body');
   }
 
   /**
-   * Middleware específico para validaciones de query parameters
-   * Útil para endpoints de listado con filtros y paginación
+   * Middleware específico para validar body de actualización de categorías
    */
-  static validateQuery() {
-    return (req: Request, res: Response, next: NextFunction): void => {
-      const errors = validationResult(req);
-      
-      if (errors.isEmpty()) {
-        return next();
-      }
-
-      // Filtrar solo errores de query parameters
-      const queryErrors = errors.array().filter(error => error.location === 'query');
-      
-      if (queryErrors.length === 0) {
-        return next();
-      }
-
-      const formattedErrors = ValidationMiddleware.formatValidationErrors(queryErrors);
-      
-      logger.warn('Errores de validación en query parameters:', {
-        path: req.path,
-        method: req.method,
-        query: req.query,
-        errors: formattedErrors
-      });
-
-      const errorResponse: ApiResponse = {
-        success: false,
-        message: 'Parámetros de consulta inválidos',
-        error: {
-          code: ERROR_CODES.VALIDATION_ERROR,
-          details: formattedErrors
-        },
-        meta: {
-          timestamp: new Date().toISOString(),
-          requestId: req.headers['x-request-id'] as string || undefined
-        }
-      };
-
-      res.status(HTTP_STATUS.BAD_REQUEST).json(errorResponse);
-    };
+  static validateUpdateCategory() {
+    return ValidationMiddleware.validate(ValidationMiddleware.updateCategorySchema, 'body');
   }
 
   /**
-   * Middleware específico para validaciones de body
-   * Útil para endpoints de creación y actualización
+   * Middleware específico para validar body de creación de tareas
    */
-  static validateBody() {
-    return (req: Request, res: Response, next: NextFunction): void => {
-      const errors = validationResult(req);
-      
-      if (errors.isEmpty()) {
-        return next();
-      }
-
-      // Filtrar solo errores de body
-      const bodyErrors = errors.array().filter(error => error.location === 'body');
-      
-      if (bodyErrors.length === 0) {
-        return next();
-      }
-
-      const formattedErrors = ValidationMiddleware.formatValidationErrors(bodyErrors);
-      
-      logger.warn('Errores de validación en body:', {
-        path: req.path,
-        method: req.method,
-        body: ValidationMiddleware.sanitizeBodyForLogging(req.body),
-        errors: formattedErrors
-      });
-
-      const errorResponse: ApiResponse = {
-        success: false,
-        message: 'Datos del cuerpo de la solicitud inválidos',
-        error: {
-          code: ERROR_CODES.VALIDATION_ERROR,
-          details: formattedErrors
-        },
-        meta: {
-          timestamp: new Date().toISOString(),
-          requestId: req.headers['x-request-id'] as string || undefined
-        }
-      };
-
-      res.status(HTTP_STATUS.UNPROCESSABLE_ENTITY).json(errorResponse);
-    };
+  static validateCreateTask() {
+    return ValidationMiddleware.validate(ValidationMiddleware.createTaskSchema, 'body');
   }
 
   /**
-   * Middleware combinado que valida y maneja diferentes tipos de errores
-   * con diferentes códigos de estado HTTP según el tipo de error
+   * Middleware específico para validar body de actualización de tareas
    */
-  static validateWithContext() {
-    return (req: Request, res: Response, next: NextFunction): void => {
-      const errors = validationResult(req);
-      
-      if (errors.isEmpty()) {
-        return next();
-      }
+  static validateUpdateTask() {
+    return ValidationMiddleware.validate(ValidationMiddleware.updateTaskSchema, 'body');
+  }
 
-      const allErrors = errors.array();
-      const formattedErrors = ValidationMiddleware.formatValidationErrors(allErrors);
-      
-      // Determinar el tipo de error predominante para el código de estado
-      const hasParamErrors = allErrors.some(error => error.location === 'params');
-      const hasBodyErrors = allErrors.some(error => error.location === 'body');
-      const hasQueryErrors = allErrors.some(error => error.location === 'query');
-      
-      let statusCode = HTTP_STATUS.BAD_REQUEST;
-      let message = ERROR_MESSAGES.VALIDATION_ERROR;
-      
-      if (hasParamErrors) {
-        statusCode = HTTP_STATUS.BAD_REQUEST;
-        message = 'Parámetros de ruta inválidos';
-      } else if (hasBodyErrors) {
-        statusCode = HTTP_STATUS.UNPROCESSABLE_ENTITY;
-        message = 'Datos del cuerpo de la solicitud inválidos';
-      } else if (hasQueryErrors) {
-        statusCode = HTTP_STATUS.BAD_REQUEST;
-        message = 'Parámetros de consulta inválidos';
-      }
+  /**
+   * Middleware específico para validar parámetros de ID
+   */
+  static validateIdParam() {
+    return ValidationMiddleware.validate(ValidationMiddleware.idParamSchema, 'params');
+  }
 
-      ValidationMiddleware.logValidationErrors(req, formattedErrors);
+  /**
+   * Middleware específico para validar query parameters de paginación
+   */
+  static validatePagination() {
+    return ValidationMiddleware.validate(ValidationMiddleware.paginationSchema, 'query');
+  }
 
-      const errorResponse: ApiResponse = {
-        success: false,
-        message,
-        error: {
-          code: ERROR_CODES.VALIDATION_ERROR,
-          details: formattedErrors
-        },
-        meta: {
-          timestamp: new Date().toISOString(),
-          requestId: req.headers['x-request-id'] as string || undefined
-        }
-      };
+  /**
+   * Middleware específico para validar query parameters de ordenamiento
+   */
+  static validateSort() {
+    return ValidationMiddleware.validate(ValidationMiddleware.sortSchema, 'query');
+  }
 
-      res.status(statusCode).json(errorResponse);
-    };
+  /**
+   * Middleware específico para validar filtros de tareas
+   */
+  static validateTaskFilters() {
+    return ValidationMiddleware.validate(ValidationMiddleware.taskFiltersSchema, 'query');
+  }
+
+  /**
+   * Middleware específico para validar operaciones en lote
+   */
+  static validateBulkOperation() {
+    return ValidationMiddleware.validate(ValidationMiddleware.bulkOperationSchema, 'body');
+  }
+
+  /**
+   * Middleware combinado para paginación y ordenamiento
+   */
+  static validatePaginationAndSort() {
+    const combinedSchema = ValidationMiddleware.paginationSchema.merge(ValidationMiddleware.sortSchema);
+    return ValidationMiddleware.validate(combinedSchema, 'query');
   }
 
   // ==============================================
@@ -274,58 +342,58 @@ export class ValidationMiddleware {
   // ==============================================
 
   /**
-   * Formatea los errores de express-validator para una respuesta consistente
+   * Formatea errores de Zod para una respuesta consistente
    */
-  private static formatValidationErrors(errors: ValidationError[]): ValidationErrorDetail[] {
-    return errors.map(error => {
-      const baseError: ValidationErrorDetail = {
-        field: error.type === 'field' ? error.path : 'unknown',
-        message: error.msg,
-        location: error.location,
-        receivedValue: error.type === 'field' ? error.value : undefined
-      };
+  private static formatZodErrors(zodError: ZodError): ValidationErrorDetail[] {
+    return zodError.errors.map(error => ({
+      field: error.path.join('.') || 'unknown',
+      message: error.message,
+      location: 'body' as const, // Se ajustará según el contexto
+      receivedValue: error.code === 'invalid_type' ? undefined : (error as any).received,
+      code: error.code
+    }));
+  }
 
-      // Agregar información adicional según el tipo de error
-      if (error.type === 'field') {
-        return {
-          ...baseError,
-          field: error.path,
-          receivedValue: error.value
-        };
-      }
+  /**
+   * Obtiene el código de estado HTTP apropiado según el target
+   */
+  private static getStatusCodeForTarget(target: 'body' | 'query' | 'params'): number {
+    switch (target) {
+      case 'params':
+        return HTTP_STATUS.BAD_REQUEST;
+      case 'body':
+        return HTTP_STATUS.UNPROCESSABLE_ENTITY;
+      case 'query':
+        return HTTP_STATUS.BAD_REQUEST;
+      default:
+        return HTTP_STATUS.BAD_REQUEST;
+    }
+  }
 
-      if (error.type === 'alternative') {
-        return {
-          ...baseError,
-          field: 'alternative_validation',
-          message: 'No se cumplió ninguna de las validaciones alternativas'
-        };
-      }
-
-      if (error.type === 'alternative_grouped') {
-        return {
-          ...baseError,
-          field: 'grouped_validation',
-          message: 'Error en validación de grupo'
-        };
-      }
-
-      if (error.type === 'unknown_fields') {
-        return {
-          ...baseError,
-          field: 'unknown_fields',
-          message: 'Campos desconocidos detectados'
-        };
-      }
-
-      return baseError;
-    });
+  /**
+   * Obtiene el mensaje apropiado según el target
+   */
+  private static getMessageForTarget(target: 'body' | 'query' | 'params'): string {
+    switch (target) {
+      case 'params':
+        return 'Parámetros de ruta inválidos';
+      case 'body':
+        return 'Datos del cuerpo de la solicitud inválidos';
+      case 'query':
+        return 'Parámetros de consulta inválidos';
+      default:
+        return ERROR_MESSAGES.VALIDATION_ERROR;
+    }
   }
 
   /**
    * Registra errores de validación con contexto útil para debugging
    */
-  private static logValidationErrors(req: Request, errors: ValidationErrorDetail[]): void {
+  private static logValidationErrors(
+    req: Request, 
+    errors: ValidationErrorDetail[], 
+    target: string
+  ): void {
     const logContext = {
       method: req.method,
       path: req.path,
@@ -333,13 +401,35 @@ export class ValidationMiddleware {
       ip: req.ip,
       userId: (req as any).user?.id,
       requestId: req.headers['x-request-id'],
+      target,
       errors: errors,
-      requestBody: ValidationMiddleware.sanitizeBodyForLogging(req.body),
-      queryParams: req.query,
-      params: req.params
+      requestBody: target === 'body' ? ValidationMiddleware.sanitizeBodyForLogging(req.body) : undefined,
+      queryParams: target === 'query' ? req.query : undefined,
+      params: target === 'params' ? req.params : undefined
     };
 
-    logger.warn('Errores de validación detectados:', logContext);
+    validationLogger.warn('Errores de validación detectados:', logContext);
+  }
+
+  /**
+   * Maneja errores internos del middleware
+   */
+  private static handleInternalError(req: Request, res: Response, error: any): void {
+    validationLogger.error('Error interno en middleware de validación:', error);
+    
+    const internalErrorResponse: ApiResponse = {
+      success: false,
+      message: ERROR_MESSAGES.INTERNAL_ERROR,
+      error: {
+        code: ERROR_CODES.INTERNAL_ERROR
+      },
+      meta: {
+        timestamp: new Date().toISOString(),
+        requestId: req.headers['x-request-id'] as string || undefined
+      }
+    };
+
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json(internalErrorResponse);
   }
 
   /**
@@ -419,7 +509,7 @@ export class ValidationMiddleware {
    * Validador personalizado para fechas futuras
    * Útil para fechas de vencimiento de tareas
    */
-  static isFutureDate(dateString: string, minOffsetMinutes: number = 5): boolean {
+  static isFutureDate(dateString: string, minOffsetMinutes: number = TASK_CONFIG.MIN_DUE_DATE_OFFSET_MINUTES): boolean {
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) {
@@ -436,73 +526,19 @@ export class ValidationMiddleware {
   }
 
   /**
-   * Validador personalizado para colores hexadecimales
-   * Coherente con el campo color del modelo Category
-   */
-  static isValidHexColor(value: string): boolean {
-    if (!value || typeof value !== 'string') {
-      return false;
-    }
-
-    // Soporta tanto #RGB como #RRGGBB
-    const hexColorRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
-    return hexColorRegex.test(value);
-  }
-
-  /**
-   * Validador personalizado para arrays de tags
-   * Coherente con el campo tags del modelo Task
-   */
-  static isValidTagsArray(tags: any, maxCount: number = 10, maxLength: number = 50): boolean {
-    if (!Array.isArray(tags)) {
-      return false;
-    }
-
-    if (tags.length > maxCount) {
-      return false;
-    }
-
-    return tags.every(tag => 
-      typeof tag === 'string' && 
-      tag.length > 0 && 
-      tag.length <= maxLength &&
-      /^[\w\s\-]+$/.test(tag)
-    );
-  }
-
-  /**
-   * Validador personalizado para URLs de attachments
-   * Coherente con el campo attachments del modelo Task
-   */
-  static isValidAttachmentsArray(attachments: any, maxCount: number = 5): boolean {
-    if (!Array.isArray(attachments)) {
-      return false;
-    }
-
-    if (attachments.length > maxCount) {
-      return false;
-    }
-
-    return attachments.every(attachment => {
-      if (typeof attachment !== 'string') {
-        return false;
-      }
-
-      try {
-        new URL(attachment);
-        return true;
-      } catch {
-        return false;
-      }
-    });
-  }
-
-  /**
    * Validador personalizado para verificar que los enum values coincidan con Prisma
    * Útil para mantener consistencia con los enums de TaskStatus y Priority
    */
   static isValidEnumValue(value: string, enumObject: Record<string, string>): boolean {
     return Object.values(enumObject).includes(value);
+  }
+
+  /**
+   * Validador personalizado para nombres reservados
+   */
+  static isReservedName(name: string): boolean {
+    const normalizedName = name.toLowerCase().trim();
+    return CATEGORY_CONFIG.RESERVED_NAMES.includes(normalizedName as any);
   }
 
   // ==============================================
@@ -513,28 +549,49 @@ export class ValidationMiddleware {
    * Factory method para crear middleware de validación específico para tareas
    */
   static forTasks() {
-    return ValidationMiddleware.validateWithContext();
+    return {
+      create: ValidationMiddleware.validateCreateTask(),
+      update: ValidationMiddleware.validateUpdateTask(),
+      filters: ValidationMiddleware.validateTaskFilters(),
+      id: ValidationMiddleware.validateIdParam()
+    };
   }
 
   /**
    * Factory method para crear middleware de validación específico para categorías
    */
   static forCategories() {
-    return ValidationMiddleware.validateWithContext();
+    return {
+      create: ValidationMiddleware.validateCreateCategory(),
+      update: ValidationMiddleware.validateUpdateCategory(),
+      id: ValidationMiddleware.validateIdParam(),
+      bulk: ValidationMiddleware.validateBulkOperation()
+    };
   }
 
   /**
    * Factory method para crear middleware de validación específico para operaciones de solo lectura
    */
   static forReadOperations() {
-    return ValidationMiddleware.validateQuery();
+    return {
+      pagination: ValidationMiddleware.validatePagination(),
+      sort: ValidationMiddleware.validateSort(),
+      paginationAndSort: ValidationMiddleware.validatePaginationAndSort(),
+      id: ValidationMiddleware.validateIdParam()
+    };
   }
 
   /**
    * Factory method para crear middleware de validación específico para operaciones de escritura
    */
   static forWriteOperations() {
-    return ValidationMiddleware.validateBody();
+    return {
+      createTask: ValidationMiddleware.validateCreateTask(),
+      updateTask: ValidationMiddleware.validateUpdateTask(),
+      createCategory: ValidationMiddleware.validateCreateCategory(),
+      updateCategory: ValidationMiddleware.validateUpdateCategory(),
+      bulk: ValidationMiddleware.validateBulkOperation()
+    };
   }
 }
 
@@ -551,6 +608,7 @@ interface ValidationErrorDetail {
   message: string;
   location: 'body' | 'query' | 'params' | 'headers' | 'cookies';
   receivedValue?: any;
+  code?: string;
 }
 
 /**
@@ -561,6 +619,31 @@ interface ValidationOptions {
   sanitizeLogging?: boolean;
   logLevel?: 'error' | 'warn' | 'info' | 'debug';
 }
+
+// ==============================================
+// TIPOS EXPORTADOS PARA USO EXTERNO
+// ==============================================
+
+export type { ValidationErrorDetail, ValidationOptions };
+
+// Esquemas exportados para uso en otros módulos
+export const ValidationSchemas = {
+  createCategory: ValidationMiddleware.createCategorySchema,
+  updateCategory: ValidationMiddleware.updateCategorySchema,
+  createTask: ValidationMiddleware.createTaskSchema,
+  updateTask: ValidationMiddleware.updateTaskSchema,
+  taskFilters: ValidationMiddleware.taskFiltersSchema,
+  pagination: ValidationMiddleware.paginationSchema,
+  sort: ValidationMiddleware.sortSchema,
+  idParam: ValidationMiddleware.idParamSchema,
+  bulkOperation: ValidationMiddleware.bulkOperationSchema,
+  cuid: ValidationMiddleware.cuidSchema,
+  hexColor: ValidationMiddleware.hexColorSchema,
+  icon: ValidationMiddleware.iconSchema,
+  tags: ValidationMiddleware.tagsSchema,
+  attachments: ValidationMiddleware.attachmentsSchema,
+  futureDate: ValidationMiddleware.futureDateSchema
+} as const;
 
 // ==============================================
 // EXPORT DEFAULT

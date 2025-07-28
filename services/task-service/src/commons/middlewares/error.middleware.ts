@@ -1,8 +1,6 @@
-// ==============================================
-// src/presentation/middlewares/error.middleware.ts
+// src/commons/middlewares/error.middleware.ts
 // Middleware de manejo de errores centralizado con soporte completo
 // para Prisma, validaciones Zod, rate limiting y logging estructurado
-// ==============================================
 
 import { Request, Response, NextFunction } from 'express';
 import { Prisma } from '@prisma/client';
@@ -18,12 +16,11 @@ import {
   EVENT_TYPES,
   ApiResponse,
   REQUEST_HEADERS,
-  generateRateLimitMessage
+  generateRateLimitMessage,
+  PRISMA_ERROR_MAPPINGS
 } from '@/utils/constants';
 
-// ==============================================
 // INTERFACES Y TIPOS
-// ==============================================
 
 interface AppError extends Error {
   statusCode?: number;
@@ -38,6 +35,7 @@ interface ValidationError {
   message: string;
   code: string;
   received?: any;
+  expected?: any;
 }
 
 interface ErrorContext {
@@ -52,121 +50,15 @@ interface ErrorContext {
   timestamp: string;
 }
 
+// Interfaz para el mapeo de errores de Prisma
 interface PrismaErrorMapping {
-  code: string;
-  httpStatus: number;
+  statusCode: number;
+  message: string;
   errorCode: string;
-  getMessage: (error: Prisma.PrismaClientKnownRequestError) => string;
+  getMessage?: (error: Prisma.PrismaClientKnownRequestError) => string;
 }
 
-// ==============================================
-// MAPEO DE ERRORES PRISMA
-// ==============================================
-
-const PRISMA_ERROR_MAPPINGS: Record<string, PrismaErrorMapping> = {
-  // Unique constraint violation
-  P2002: {
-    code: 'P2002',
-    httpStatus: HTTP_STATUS.CONFLICT,
-    errorCode: ERROR_CODES.VALIDATION_ERROR,
-    getMessage: (error) => {
-      const target = error.meta?.target as string[] | undefined;
-      if (target?.includes('name')) {
-        return target.includes('userId') 
-          ? ERROR_MESSAGES.CATEGORY_ALREADY_EXISTS 
-          : 'Recurso ya existe con este nombre';
-      }
-      if (target?.includes('title')) {
-        return ERROR_MESSAGES.TASK_ALREADY_EXISTS;
-      }
-      return 'Este recurso ya existe en el sistema';
-    }
-  },
-
-  // Record not found
-  P2025: {
-    code: 'P2025',
-    httpStatus: HTTP_STATUS.NOT_FOUND,
-    errorCode: ERROR_CODES.TASK_NOT_FOUND,
-    getMessage: (error) => {
-      const cause = error.meta?.cause as string | undefined;
-      if (cause?.includes('Category') || cause?.includes('category')) {
-        return ERROR_MESSAGES.CATEGORY_NOT_FOUND;
-      }
-      if (cause?.includes('Task') || cause?.includes('task')) {
-        return ERROR_MESSAGES.TASK_NOT_FOUND;
-      }
-      return 'Recurso no encontrado';
-    }
-  },
-
-  // Foreign key constraint violation
-  P2003: {
-    code: 'P2003',
-    httpStatus: HTTP_STATUS.BAD_REQUEST,
-    errorCode: ERROR_CODES.VALIDATION_ERROR,
-    getMessage: (error) => {
-      const fieldName = error.meta?.field_name as string | undefined;
-      if (fieldName === 'categoryId' || fieldName === 'category_id') {
-        return ERROR_MESSAGES.CATEGORY_NOT_FOUND;
-      }
-      return 'Referencia inválida a recurso relacionado';
-    }
-  },
-
-  // Record to delete does not exist
-  P2016: {
-    code: 'P2016',
-    httpStatus: HTTP_STATUS.NOT_FOUND,
-    errorCode: ERROR_CODES.TASK_NOT_FOUND,
-    getMessage: () => 'El recurso que intenta eliminar no existe'
-  },
-
-  // Related record not found
-  P2018: {
-    code: 'P2018',
-    httpStatus: HTTP_STATUS.BAD_REQUEST,
-    errorCode: ERROR_CODES.VALIDATION_ERROR,
-    getMessage: () => 'Recurso relacionado requerido no encontrado'
-  },
-
-  // Value out of range
-  P2020: {
-    code: 'P2020',
-    httpStatus: HTTP_STATUS.BAD_REQUEST,
-    errorCode: ERROR_CODES.VALIDATION_ERROR,
-    getMessage: () => 'Valor fuera del rango permitido'
-  },
-
-  // Table does not exist
-  P2021: {
-    code: 'P2021',
-    httpStatus: HTTP_STATUS.INTERNAL_SERVER_ERROR,
-    errorCode: ERROR_CODES.DATABASE_ERROR,
-    getMessage: () => ERROR_MESSAGES.DATABASE_ERROR
-  },
-
-  // Column does not exist
-  P2022: {
-    code: 'P2022',
-    httpStatus: HTTP_STATUS.INTERNAL_SERVER_ERROR,
-    errorCode: ERROR_CODES.DATABASE_ERROR,
-    getMessage: () => ERROR_MESSAGES.DATABASE_ERROR
-  },
-
-  // Inconsistent column data
-  P2023: {
-    code: 'P2023',
-    httpStatus: HTTP_STATUS.BAD_REQUEST,
-    errorCode: ERROR_CODES.VALIDATION_ERROR,
-    getMessage: () => 'Datos inconsistentes en la columna'
-  }
-};
-
-// ==============================================
 // UTILIDADES DE CONTEXTO
-// ==============================================
-
 const extractErrorContext = (req: Request): ErrorContext => {
   return {
     requestId: req.headers[REQUEST_HEADERS.X_REQUEST_ID] as string || generateRequestId(),
@@ -197,14 +89,12 @@ const sanitizeRequestBody = (body: any): any => {
 };
 
 const generateRequestId = (): string => {
-  return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  return `req_${Date.now()}_${Math.random()}`;
 };
 
-// ==============================================
 // DETECTORES DE TIPO DE ERROR
-// ==============================================
 
-const isPrismaError = (error: any): error is Prisma.PrismaClientKnownRequestError => {
+const isPrismaError = (error: any): error is Prisma.PrismaClientKnownRequestError | Prisma.PrismaClientUnknownRequestError | Prisma.PrismaClientValidationError | Prisma.PrismaClientRustPanicError | Prisma.PrismaClientInitializationError => {
   return (
     error instanceof Prisma.PrismaClientKnownRequestError ||
     error instanceof Prisma.PrismaClientUnknownRequestError ||
@@ -232,41 +122,41 @@ const isAuthError = (error: AppError): boolean => {
   ].includes(error.code as any);
 };
 
-// ==============================================
 // MANEJADORES ESPECÍFICOS DE ERROR
-// ==============================================
-
 const handlePrismaError = (
-  error: Prisma.PrismaClientKnownRequestError | Prisma.PrismaClientUnknownRequestError,
+  error: Prisma.PrismaClientKnownRequestError | Prisma.PrismaClientUnknownRequestError | Prisma.PrismaClientValidationError | Prisma.PrismaClientRustPanicError | Prisma.PrismaClientInitializationError,
   context: ErrorContext
 ): ApiResponse => {
   // Log específico para errores de Prisma
-  logger.error({
-    type: 'prisma_error',
-    error: {
-      code: error.code || 'UNKNOWN',
-      message: error.message,
-      meta: error.meta,
-      stack: config.app.isDevelopment ? error.stack : undefined
-    },
-    context
-  }, `Prisma database error: ${error.code || 'UNKNOWN'}`);
+  const errorDetails: any = {
+    message: error.message,
+    stack: config.app.isDevelopment ? error.stack : undefined
+  };
+
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    errorDetails.code = error.code;
+    errorDetails.meta = error.meta;
+  }
+
+  logger.error({ 
+    type: 'prisma_error', 
+    error: errorDetails, 
+    context 
+  }, `Prisma database error: ${errorDetails.code || 'UNKNOWN'}`);
 
   // Error conocido con mapeo específico
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code) {
-    const mapping = PRISMA_ERROR_MAPPINGS[error.code];
+    // Corregir aquí: usar error.code como índice, no el objeto error completo
+    const mapping = PRISMA_ERROR_MAPPINGS[error.code as keyof typeof PRISMA_ERROR_MAPPINGS] as PrismaErrorMapping;
     if (mapping) {
       return {
         success: false,
-        message: mapping.getMessage(error),
-        error: {
-          code: mapping.errorCode,
-          details: config.app.isDevelopment ? { prismaCode: error.code, meta: error.meta } : undefined
+        message: mapping.getMessage ? mapping.getMessage(error) : mapping.message,
+        error: { 
+          code: mapping.errorCode, 
+          details: config.app.isDevelopment ? { prismaCode: error.code, meta: error.meta } : undefined 
         },
-        meta: {
-          timestamp: context.timestamp,
-          requestId: context.requestId
-        }
+        meta: { timestamp: context.timestamp, requestId: context.requestId }
       };
     }
   }
@@ -276,30 +166,24 @@ const handlePrismaError = (
     return {
       success: false,
       message: ERROR_MESSAGES.VALIDATION_ERROR,
-      error: {
-        code: ERROR_CODES.VALIDATION_ERROR,
-        details: config.app.isDevelopment ? { message: error.message } : undefined
+      error: { 
+        code: ERROR_CODES.VALIDATION_ERROR, 
+        details: config.app.isDevelopment ? { message: error.message } : undefined 
       },
-      meta: {
-        timestamp: context.timestamp,
-        requestId: context.requestId
-      }
+      meta: { timestamp: context.timestamp, requestId: context.requestId }
     };
   }
 
   // Error de inicialización de Prisma
-  if (error instanceof Prisma.PrismaClientInitializationError) {
+  if (error instanceof Prisma.PrismaClientInitializationError || error instanceof Prisma.PrismaClientUnknownRequestError || error instanceof Prisma.PrismaClientRustPanicError) {
     return {
       success: false,
       message: ERROR_MESSAGES.DATABASE_ERROR,
-      error: {
-        code: ERROR_CODES.DATABASE_ERROR,
-        details: config.app.isDevelopment ? { message: error.message } : undefined
+      error: { 
+        code: ERROR_CODES.DATABASE_ERROR, 
+        details: config.app.isDevelopment ? { message: error.message } : undefined 
       },
-      meta: {
-        timestamp: context.timestamp,
-        requestId: context.requestId
-      }
+      meta: { timestamp: context.timestamp, requestId: context.requestId }
     };
   }
 
@@ -307,65 +191,45 @@ const handlePrismaError = (
   return {
     success: false,
     message: ERROR_MESSAGES.DATABASE_ERROR,
-    error: {
-      code: ERROR_CODES.DATABASE_ERROR,
-      details: config.app.isDevelopment ? { message: error.message } : undefined
+    error: { 
+      code: ERROR_CODES.DATABASE_ERROR, 
+      details: config.app.isDevelopment ? { message: error.message } : undefined 
     },
-    meta: {
-      timestamp: context.timestamp,
-      requestId: context.requestId
-    }
+    meta: { timestamp: context.timestamp, requestId: context.requestId }
   };
 };
 
 const handleZodError = (error: ZodError, context: ErrorContext): ApiResponse => {
   // Log de error de validación
-  logger.warn({
-    type: 'validation_error',
-    error: {
-      issues: error.issues,
-      path: context.path
-    },
-    context
-  }, 'Validation error occurred');
+  logger.warn({ type: 'validation_error', error: { issues: error.issues, path: context.path }, context }, 'Validation error occurred');
 
   // Formatear errores de validación Zod
   const validationErrors: ValidationError[] = error.issues.map((issue: ZodIssue) => ({
     field: issue.path.join('.') || 'unknown',
     message: issue.message,
     code: issue.code,
-    received: issue.received
+    // Conditionally include 'received' if it exists on the issue
+    ...(Object.prototype.hasOwnProperty.call(issue, 'received') && { received: (issue as any).received }) 
   }));
 
   return {
     success: false,
     message: ERROR_MESSAGES.VALIDATION_ERROR,
-    error: {
-      code: ERROR_CODES.VALIDATION_ERROR,
-      details: {
-        validationErrors,
-        count: validationErrors.length
-      }
+    error: { 
+      code: ERROR_CODES.VALIDATION_ERROR, 
+      details: { validationErrors, count: validationErrors.length } 
     },
-    meta: {
-      timestamp: context.timestamp,
-      requestId: context.requestId
-    }
+    meta: { timestamp: context.timestamp, requestId: context.requestId }
   };
 };
 
-const handleRateLimitError = (error: AppError, context: ErrorContext): ApiResponse => {
-  // Log de rate limiting
-  logger.warn({
-    type: 'rate_limit_exceeded',
-    error: {
-      code: error.code,
-      message: error.message,
-      details: error.details
-    },
-    context,
-    event: EVENT_TYPES.RATE_LIMIT_EXCEEDED
-  }, 'Rate limit exceeded');
+const handleRateLimitError = (error: AppError, context: ErrorContext, res: Response): ApiResponse => {
+  // Log de error de Rate Limit
+  logger.warn({ type: EVENT_TYPES.RATE_LIMIT_EXCEEDED, 
+    error: { code: error.code, message: error.message }, 
+    context }, 
+    'Rate limit exceeded'
+  );
 
   // Mensaje contextual si hay información de reset time
   let message = error.message;
@@ -475,54 +339,104 @@ const handleUnknownError = (error: Error, context: ErrorContext): ApiResponse =>
   };
 };
 
-// ==============================================
-// MIDDLEWARE PRINCIPAL DE MANEJO DE ERRORES
-// ==============================================
+// Función auxiliar para determinar el status code basado en el error code
+const getStatusCodeFromErrorCode = (errorCode: string): number => {
+  switch (errorCode) {
+    case ERROR_CODES.TASK_NOT_FOUND:
+    case ERROR_CODES.CATEGORY_NOT_FOUND:
+    case ERROR_CODES.USER_NOT_FOUND:
+      return HTTP_STATUS.NOT_FOUND;
+    
+    case ERROR_CODES.VALIDATION_ERROR:
+    case ERROR_CODES.INVALID_DATE_FORMAT:
+    case ERROR_CODES.INVALID_DUE_DATE:
+    case ERROR_CODES.INVALID_PAGINATION:
+    case ERROR_CODES.INVALID_SORT_FIELD:
+    case ERROR_CODES.INVALID_FILTER:
+    case ERROR_CODES.INVALID_HEX_COLOR:
+    case ERROR_CODES.INVALID_ICON:
+    case ERROR_CODES.INVALID_CUID:
+    case ERROR_CODES.INVALID_SEARCH_QUERY:
+    case ERROR_CODES.RESERVED_NAME_ERROR:
+      return HTTP_STATUS.BAD_REQUEST;
+    
+    case ERROR_CODES.TASK_ALREADY_EXISTS:
+    case ERROR_CODES.CATEGORY_ALREADY_EXISTS:
+    case ERROR_CODES.CATEGORY_HAS_TASKS:
+      return HTTP_STATUS.CONFLICT;
+    
+    case ERROR_CODES.INVALID_TOKEN:
+    case ERROR_CODES.TOKEN_EXPIRED:
+    case ERROR_CODES.TOKEN_REQUIRED:
+    case ERROR_CODES.UNAUTHORIZED_ACCESS:
+      return HTTP_STATUS.UNAUTHORIZED;
+    
+    case ERROR_CODES.TASK_ACCESS_DENIED:
+    case ERROR_CODES.CATEGORY_ACCESS_DENIED:
+      return HTTP_STATUS.FORBIDDEN;
+    
+    case ERROR_CODES.CATEGORY_LIMIT_EXCEEDED:
+      return HTTP_STATUS.UNPROCESSABLE_ENTITY;
+    
+    case ERROR_CODES.RATE_LIMIT_EXCEEDED:
+      return HTTP_STATUS.TOO_MANY_REQUESTS;
+    
+    case ERROR_CODES.SERVICE_UNAVAILABLE:
+      return HTTP_STATUS.SERVICE_UNAVAILABLE;
+    
+    default:
+      return HTTP_STATUS.INTERNAL_SERVER_ERROR;
+  }
+};
 
+// MIDDLEWARE PRINCIPAL DE MANEJO DE ERRORES
 export const errorHandler = (
-  error: AppError | Error,
+  err: Error | AppError | Prisma.PrismaClientKnownRequestError | Prisma.PrismaClientUnknownRequestError | ZodError,
   req: Request,
   res: Response,
   next: NextFunction
 ): void => {
   const context = extractErrorContext(req);
-  let response: ApiResponse;
-  let statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR;
+  let statusCode: number = HTTP_STATUS.INTERNAL_SERVER_ERROR;
+  let responseBody: ApiResponse;
 
-  // Procesar según el tipo de error
-  if (isPrismaError(error)) {
-    response = handlePrismaError(error, context);
-    statusCode = (PRISMA_ERROR_MAPPINGS[error.code]?.httpStatus) || HTTP_STATUS.INTERNAL_SERVER_ERROR;
-  } else if (isZodError(error)) {
-    response = handleZodError(error, context);
+  if (isPrismaError(err)) {
+    responseBody = handlePrismaError(err, context);
+    // Corregir aquí: usar la función auxiliar para determinar el status code
+    statusCode = responseBody.error?.code ? getStatusCodeFromErrorCode(responseBody.error.code) : HTTP_STATUS.INTERNAL_SERVER_ERROR;
+  } else if (isZodError(err)) {
+    responseBody = handleZodError(err, context);
     statusCode = HTTP_STATUS.BAD_REQUEST;
-  } else if (isRateLimitError(error as AppError)) {
-    response = handleRateLimitError(error as AppError, context);
-    statusCode = HTTP_STATUS.TOO_MANY_REQUESTS;
-  } else if (isAuthError(error as AppError)) {
-    response = handleAuthError(error as AppError, context);
-    statusCode = HTTP_STATUS.UNAUTHORIZED;
-  } else if ((error as AppError).isOperational) {
-    response = handleOperationalError(error as AppError, context);
-    statusCode = (error as AppError).statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR;
+  } else if (err instanceof Error && (err as AppError).isOperational) {
+    // Errores operacionales (AppError)
+    const appError = err as AppError;
+    
+    if (isRateLimitError(appError)) {
+      responseBody = handleRateLimitError(appError, context, res);
+      statusCode = HTTP_STATUS.TOO_MANY_REQUESTS;
+    } else if (isAuthError(appError)) {
+      responseBody = handleAuthError(appError, context);
+      statusCode = appError.statusCode || HTTP_STATUS.UNAUTHORIZED;
+    } else {
+      responseBody = handleOperationalError(appError, context);
+      statusCode = appError.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR;
+    }
   } else {
-    response = handleUnknownError(error, context);
+    // Errores de programación o desconocidos
+    logger.fatal({ 
+      type: 'unhandled_exception', 
+      error: { message: err.message, stack: err.stack }, 
+      context 
+    }, 'Unhandled exception caught by error middleware');
+
+    responseBody = handleUnknownError(err, context);
     statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR;
   }
-
-  // Establecer headers de seguridad y contexto
-  res.setHeader('X-Request-ID', context.requestId!);
-  if (!config.app.isProduction) {
-    res.setHeader('X-Error-Type', response.error?.code || 'UNKNOWN');
-  }
-
-  // Enviar respuesta
-  res.status(statusCode).json(response);
+  
+  res.status(statusCode).json(responseBody);
 };
 
-// ==============================================
 // MIDDLEWARE DE RUTA NO ENCONTRADA
-// ==============================================
 
 export const notFoundHandler = (req: Request, res: Response): void => {
   const context = extractErrorContext(req);
@@ -558,9 +472,7 @@ export const notFoundHandler = (req: Request, res: Response): void => {
   res.status(HTTP_STATUS.NOT_FOUND).json(response);
 };
 
-// ==============================================
 // FUNCIONES AUXILIARES PARA CREAR ERRORES
-// ==============================================
 
 export const createAppError = (
   message: string,
@@ -598,7 +510,7 @@ export const createNotFoundError = (
   const messages = {
     task: ERROR_MESSAGES.TASK_NOT_FOUND,
     category: ERROR_MESSAGES.CATEGORY_NOT_FOUND,
-    user: ERROR_MESSAGES.USER_NOT_FOUND
+    user: ERROR_MESSAGES.TASK_NOT_FOUND
   };
 
   const codes = {
@@ -645,14 +557,10 @@ export const createRateLimitError = (
   );
 };
 
-// ==============================================
 // TIPOS EXPORTADOS
-// ==============================================
 
 export type { AppError, ValidationError, ErrorContext };
 
-// ==============================================
 // CONSTANTES EXPORTADAS
-// ==============================================
 
 export { PRISMA_ERROR_MAPPINGS };

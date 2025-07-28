@@ -1,8 +1,5 @@
-// ==============================================
 // src/app.ts - Task Service API Contract
 // Punto único de comunicación Frontend <-> Backend
-// ==============================================
-
 import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -11,13 +8,13 @@ import cookieParser from 'cookie-parser';
 import morgan from 'morgan';
 
 // Routes
-import taskRoutes from '@/presentation/routes/task.routes';
-import categoryRoutes from '@/presentation/routes/category.routes';
-import healthRoutes from '@/presentation/routes/health.routes';
+import taskRoutes from '@/commons/routes/task.routes';
+import categoryRoutes from '@/commons/routes/category.routes';
+import healthRoutes from '@/commons/routes/health.routes';
 
 // Middlewares
-import { errorMiddleware } from '@/presentation/middlewares/error.middleware';
-import { rateLimitMiddleware } from '@/presentation/middlewares/rateLimit.middleware';
+import { errorMiddleware } from '@/commons/middlewares/error.middleware';
+import { rateLimitMiddleware } from '@/commons/middlewares/rateLimit.middleware';
 
 // Utils
 import { logger } from '@/utils/logger';

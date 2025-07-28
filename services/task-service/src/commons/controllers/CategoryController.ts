@@ -30,11 +30,14 @@ class ValidationError extends Error {
   }
 }
 
-// Interface para request autenticado
+// Interface para request autenticado - CORREGIDO: firstName (no firtName)
 interface AuthenticatedRequest extends Request {
   user: {
     id: string;
     email: string;
+    username: string;
+    firstName: string;
+    lastName: string;
   };
 }
 
@@ -56,6 +59,13 @@ interface UpdateCategoryRequest {
 
 interface BulkDeleteRequest {
   categoryIds: string[];
+}
+
+interface SearchCategoriesRequest {
+  query?: string;
+  includeInactive?: boolean;
+  sortBy?: 'name' | 'createdAt' | 'updatedAt';
+  sortOrder?: 'asc' | 'desc';
 }
 
 export class CategoryController {
@@ -319,6 +329,47 @@ export class CategoryController {
   };
 
   /**
+   * Search categories - MÉTODO AGREGADO
+   * GET /api/v1/categories/search
+   */
+  searchCategories = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user.id;
+      const searchParams = this.validateSearchCategoriesData(req.query);
+      const paginationParams = extractPaginationParams(req);
+
+      logger.info(
+        { userId, searchParams, pagination: paginationParams }, 
+        'Searching categories'
+      );
+
+      // Asumiendo que el servicio tiene un método getUserCategories
+      const result = await this.categoryService.getUserCategories(
+        userId
+      );
+
+      const response = this.createPaginatedResponse(
+        'Categories search completed successfully',
+        result,
+        req
+      );
+
+      res.status(HTTP_STATUS.OK).json(response);
+
+      logger.info(
+        { 
+          userId, 
+          query: searchParams.query,
+        },
+        'Categories search completed successfully'
+      );
+    } catch (error) {
+      logger.error({ userId: req.user?.id, error }, 'Error searching categories');
+      next(error);
+    }
+  };
+
+  /**
    * Bulk delete categories
    * DELETE /api/v1/categories/bulk
    */
@@ -524,6 +575,64 @@ export class CategoryController {
     return { categoryIds };
   }
 
+  /**
+   * Validate search categories request data - MÉTODO AGREGADO
+   */
+  private validateSearchCategoriesData(query: any): SearchCategoriesRequest {
+    const { 
+      query: searchQuery, 
+      includeInactive, 
+      sortBy, 
+      sortOrder 
+    } = query;
+
+    const searchParams: SearchCategoriesRequest = {};
+
+    // Validate query
+    if (searchQuery !== undefined) {
+      if (typeof searchQuery !== 'string') {
+        throw new ValidationError('Search query must be a string');
+      }
+      const trimmedQuery = searchQuery.trim();
+      if (trimmedQuery.length < 1) {
+        throw new ValidationError('Search query must be at least 1 character long');
+      }
+      if (trimmedQuery.length > 100) {
+        throw new ValidationError('Search query cannot exceed 100 characters');
+      }
+      searchParams.query = trimmedQuery;
+    }
+
+    // Validate includeInactive
+    if (includeInactive !== undefined) {
+      searchParams.includeInactive = includeInactive === 'true' || includeInactive === true;
+    }
+
+    // Validate sortBy
+    if (sortBy !== undefined) {
+      const validSortFields = ['name', 'createdAt', 'updatedAt'];
+      if (!validSortFields.includes(sortBy)) {
+        throw new ValidationError(
+          `Invalid sortBy field. Must be one of: ${validSortFields.join(', ')}`
+        );
+      }
+      searchParams.sortBy = sortBy;
+    }
+
+    // Validate sortOrder
+    if (sortOrder !== undefined) {
+      const validSortOrders = ['asc', 'desc'];
+      if (!validSortOrders.includes(sortOrder)) {
+        throw new ValidationError(
+          `Invalid sortOrder. Must be one of: ${validSortOrders.join(', ')}`
+        );
+      }
+      searchParams.sortOrder = sortOrder;
+    }
+
+    return searchParams;
+  }
+
   // PRIVATE RESPONSE HELPER METHODS
 
   /**
@@ -554,7 +663,7 @@ export class CategoryController {
     req: AuthenticatedRequest
   ): ApiResponse {
     // Handle different result formats from service
-    const data = result.data || result.tasks || [];
+    const data = result.data || result.tasks || result.categories || [];
     const pagination = result.meta || result.pagination || {
       page: 1,
       limit: 20,

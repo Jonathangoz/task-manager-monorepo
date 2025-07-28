@@ -24,6 +24,23 @@ import {
   PAGINATION_CONFIG
 } from '@/utils/constants';
 
+// RE-EXPORTAR TIPOS PRINCIPALES PARA FACILITAR IMPORTACIÓN
+export type {
+  DomainTask,
+  TaskWithCategory,
+  CreateTaskData,
+  UpdateTaskData,
+  TaskQueryResult,
+  TaskStatus,
+  TaskPriority
+} from '@/core/types/TaskDomain';
+
+export type {
+  TaskFilters,
+  SortOptions,
+  PaginationMeta
+} from '@/utils/constants';
+
 // SCHEMAS DE VALIDACIÓN CON ZOD
 
 // Schema para validar CreateTaskData
@@ -37,10 +54,10 @@ export const CreateTaskDataSchema = z.object({
     .max(TASK_CONFIG.MAX_DESCRIPTION_LENGTH, `Description must be less than ${TASK_CONFIG.MAX_DESCRIPTION_LENGTH} characters`)
     .optional(),
   
-  status: z.enum(TaskStatusValues as [string, ...string[]])
+  status: z.enum(TaskStatusValues as [TaskStatus, ...TaskStatus[]])
     .optional(),
   
-  priority: z.enum(TaskPriorityValues as [string, ...string[]])
+  priority: z.enum(TaskPriorityValues as [TaskPriority, ...TaskPriority[]])
     .optional(),
   
   dueDate: z.date()
@@ -79,23 +96,23 @@ export const UpdateTaskDataSchema = z.object({
   
   description: z.string()
     .max(TASK_CONFIG.MAX_DESCRIPTION_LENGTH, `Description must be less than ${TASK_CONFIG.MAX_DESCRIPTION_LENGTH} characters`)
-    .nullable()
+    .optional()
+    .transform(val => val === null ? undefined : val),
+  
+  status: z.enum(TaskStatusValues as [TaskStatus, ...TaskStatus[]])
     .optional(),
   
-  status: z.enum(TaskStatusValues as [string, ...string[]])
-    .optional(),
-  
-  priority: z.enum(TaskPriorityValues as [string, ...string[]])
+  priority: z.enum(TaskPriorityValues as [TaskPriority, ...TaskPriority[]])
     .optional(),
   
   dueDate: z.date()
-    .nullable()
-    .optional(),
+    .optional()
+    .transform(val => val === null ? undefined : val),
   
   categoryId: z.string()
     .uuid('Category ID must be a valid UUID')
-    .nullable()
-    .optional(),
+    .optional()
+    .transform(val => val === null ? undefined : val),
   
   tags: z.array(z.string().max(TASK_CONFIG.MAX_TAG_LENGTH))
     .max(TASK_CONFIG.MAX_TAGS_COUNT, `Maximum ${TASK_CONFIG.MAX_TAGS_COUNT} tags allowed`)
@@ -104,14 +121,14 @@ export const UpdateTaskDataSchema = z.object({
   estimatedHours: z.number()
     .min(0, 'Estimated hours must be positive')
     .max(TASK_CONFIG.MAX_ESTIMATED_HOURS, `Estimated hours cannot exceed ${TASK_CONFIG.MAX_ESTIMATED_HOURS}`)
-    .nullable()
-    .optional(),
+    .optional()
+    .transform(val => val === null ? undefined : val),
   
   actualHours: z.number()
     .min(0, 'Actual hours must be positive')
     .max(TASK_CONFIG.MAX_ESTIMATED_HOURS, `Actual hours cannot exceed ${TASK_CONFIG.MAX_ESTIMATED_HOURS}`)
-    .nullable()
-    .optional(),
+    .optional()
+    .transform(val => val === null ? undefined : val),
   
   attachments: z.array(z.string().url('Invalid attachment URL'))
     .max(TASK_CONFIG.MAX_ATTACHMENTS_COUNT, `Maximum ${TASK_CONFIG.MAX_ATTACHMENTS_COUNT} attachments allowed`)
@@ -135,13 +152,13 @@ export const PaginationParamsSchema = z.object({
 // Schema para validar TaskFilters
 export const TaskFiltersSchema = z.object({
   status: z.union([
-    z.enum(TaskStatusValues as [string, ...string[]]),
-    z.array(z.enum(TaskStatusValues as [string, ...string[]]))
+    z.enum(TaskStatusValues as [TaskStatus, ...TaskStatus[]]),
+    z.array(z.enum(TaskStatusValues as [TaskStatus, ...TaskStatus[]]))
   ]).optional(),
   
   priority: z.union([
-    z.enum(TaskPriorityValues as [string, ...string[]]),
-    z.array(z.enum(TaskPriorityValues as [string, ...string[]]))
+    z.enum(TaskPriorityValues as [TaskPriority, ...TaskPriority[]]),
+    z.array(z.enum(TaskPriorityValues as [TaskPriority, ...TaskPriority[]]))
   ]).optional(),
   
   categoryId: z.string().uuid().optional(),
@@ -169,7 +186,21 @@ export const TaskFiltersSchema = z.object({
  */
 export const validateCreateTaskData = (data: unknown): CreateTaskData => {
   try {
-    return CreateTaskDataSchema.parse(data);
+    const parsed = CreateTaskDataSchema.parse(data);
+    
+    // Transformar al tipo exacto de CreateTaskData
+    return {
+      title: parsed.title,
+      description: parsed.description,
+      status: parsed.status as TaskStatus | undefined,
+      priority: parsed.priority as TaskPriority | undefined,
+      dueDate: parsed.dueDate,
+      userId: parsed.userId,
+      categoryId: parsed.categoryId,
+      tags: parsed.tags,
+      estimatedHours: parsed.estimatedHours,
+      attachments: parsed.attachments,
+    };
   } catch (error) {
     if (error instanceof z.ZodError) {
       const errorMessages = error.errors.map(err => `${err.path.join('.')}: ${err.message}`);
@@ -184,7 +215,21 @@ export const validateCreateTaskData = (data: unknown): CreateTaskData => {
  */
 export const validateUpdateTaskData = (data: unknown): UpdateTaskData => {
   try {
-    return UpdateTaskDataSchema.parse(data);
+    const parsed = UpdateTaskDataSchema.parse(data);
+    
+    // Transformar al tipo exacto de UpdateTaskData
+    return {
+      title: parsed.title,
+      description: parsed.description,
+      status: parsed.status as TaskStatus | undefined,
+      priority: parsed.priority as TaskPriority | undefined,
+      dueDate: parsed.dueDate,
+      categoryId: parsed.categoryId,
+      tags: parsed.tags,
+      estimatedHours: parsed.estimatedHours,
+      actualHours: parsed.actualHours,
+      attachments: parsed.attachments,
+    };
   } catch (error) {
     if (error instanceof z.ZodError) {
       const errorMessages = error.errors.map(err => `${err.path.join('.')}: ${err.message}`);
@@ -386,4 +431,4 @@ export {
   isValidTaskStatus, 
   isValidTaskPriority, 
   validateTaskData 
-} from '@/core/domain/types/TaskDomain';
+} from '@/core/types/TaskDomain';

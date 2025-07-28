@@ -1,10 +1,11 @@
-// src/core/application/AuthMiddleware.ts
-// Middleware de autenticación para Task Service
+// src/core/application/AuthService.ts
+// Service de autenticación para Task Service
 // Integrado con Auth Service, logging estructurado y configuración centralizada
 
 import { Request, Response, NextFunction } from 'express';
-import axios, { AxiosInstance } from 'axios';
-import { logger, logError, loggers } from '@/utils/logger';
+import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
+// Corrected import to include authLogger
+import { logger, logError, loggers, authLogger } from '@/utils/logger'; 
 import { config } from '@/config/environment';
 import { 
   ERROR_CODES, 
@@ -17,10 +18,18 @@ import {
   HTTP_STATUS
 } from '@/utils/constants';
 
+// Added Axios module augmentation to include the custom 'metadata' property
+declare module 'axios' {
+  export interface InternalAxiosRequestConfig {
+    metadata?: { startTime: number };
+  }
+}
+
 // INTERFACES Y TIPOS
 export interface AuthenticatedUser {
   id: string;
   email: string;
+  username: string; // Added 'username' to satisfy the base Request type
   name: string;
   role?: string;
   permissions?: string[];
@@ -31,8 +40,8 @@ export interface AuthenticatedRequest extends Request {
   token?: string;
 }
 
-// AUTH MIDDLEWARE CLASS
-export class AuthMiddleware {
+// AUTH Service CLASS
+export class AuthService {
   private static authServiceClient: AxiosInstance;
   private static isInitialized = false;
 
@@ -40,9 +49,9 @@ export class AuthMiddleware {
   // INICIALIZACIÓN DEL CLIENTE HTTP
 
   private static initializeClient(): void {
-    if (AuthMiddleware.isInitialized) return;
+    if (AuthService.isInitialized) return;
 
-    AuthMiddleware.authServiceClient = axios.create({
+    AuthService.authServiceClient = axios.create({
       baseURL: config.authService.url,
       timeout: 5000, // 5 segundos timeout
       headers: {
@@ -55,16 +64,18 @@ export class AuthMiddleware {
     });
 
     // Interceptor para logging de requests
-    AuthMiddleware.authServiceClient.interceptors.request.use(
-      (config) => {
+    AuthService.authServiceClient.interceptors.request.use(
+      (config: InternalAxiosRequestConfig) => { // Type annotation added for clarity
         const startTime = Date.now();
         config.metadata = { startTime };
         
-        loggers.authService('request', {
+        // Corrected: Used authLogger with a structured message
+        authLogger.info({
+          event: 'auth.service.request',
           method: config.method?.toUpperCase(),
           url: config.url,
           baseURL: config.baseURL,
-        });
+        }, `Requesting Auth Service: ${config.method?.toUpperCase()} ${config.url}`);
         
         return config;
       },
@@ -75,58 +86,62 @@ export class AuthMiddleware {
     );
 
     // Interceptor para logging de responses
-    AuthMiddleware.authServiceClient.interceptors.response.use(
+    AuthService.authServiceClient.interceptors.response.use(
       (response) => {
         const duration = Date.now() - (response.config.metadata?.startTime || 0);
         
-        loggers.authService('response', {
+        // Corrected: Used authLogger with a structured message
+        authLogger.info({
+          event: 'auth.service.response',
           status: response.status,
           duration,
           url: response.config.url,
-        });
+        }, `Response from Auth Service: ${response.status}`);
         
         return response;
       },
       (error) => {
         const duration = Date.now() - (error.config?.metadata?.startTime || 0);
         
-        loggers.authService('error', {
+        // Corrected: Used authLogger with a structured message
+        authLogger.error({
+          event: 'auth.service.error.response',
           status: error.response?.status,
           duration,
           url: error.config?.url,
           message: error.message,
-        });
+        }, `Error response from Auth Service: ${error.message}`);
         
         return Promise.reject(error);
       }
     );
 
-    AuthMiddleware.isInitialized = true;
+    AuthService.isInitialized = true;
     
     logger.info({
       authServiceUrl: config.authService.url,
       timeout: 5000,
-      event: 'auth.middleware.initialized',
+      event: 'auth.Service.initialized',
       domain: 'authentication',
-    }, '🔐 Auth middleware inicializado correctamente');
+    }, '🔐 Auth Service inicializado correctamente');
   }
 
 
-  // MIDDLEWARE PRINCIPAL DE AUTENTICACIÓN
+  // Service PRINCIPAL DE AUTENTICACIÓN
 
   static async authenticate(
     req: AuthenticatedRequest, 
     res: Response, 
     next: NextFunction
   ): Promise<void> {
-    AuthMiddleware.initializeClient();
+    AuthService.initializeClient();
     
     const startTime = Date.now();
     const requestId = req.get(REQUEST_HEADERS.X_REQUEST_ID) || 'unknown';
     
     try {
       // Extraer token del header Authorization
-      const token = AuthMiddleware.extractToken(req);
+      const token = AuthService.extractToken(req);
       
       if (!token) {
         const duration = Date.now() - startTime;
@@ -157,7 +172,7 @@ export class AuthMiddleware {
       }
 
       // Validar token con el Auth Service  
-      const user = await AuthMiddleware.validateToken(token);
+      const user = await AuthService.validateToken(token);
       
       if (!user) {
         const duration = Date.now() - startTime;
@@ -212,7 +227,7 @@ export class AuthMiddleware {
       const duration = Date.now() - startTime;
       
       logError.high(error as Error, {
-        context: 'auth_middleware',
+        context: 'auth_Service',
         ip: req.ip,
         method: req.method,
         url: req.originalUrl,
@@ -229,7 +244,7 @@ export class AuthMiddleware {
         duration,
         event: EVENT_TYPES.AUTH_SERVICE_ERROR,
         domain: 'authentication',
-      }, '❌ Error en middleware de autenticación');
+      }, '❌ Error en Service de autenticación');
 
       res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
         success: false,
@@ -246,22 +261,22 @@ export class AuthMiddleware {
   }
 
 
-  // MIDDLEWARE OPCIONAL DE AUTENTICACIÓN
+  // Service OPCIONAL DE AUTENTICACIÓN
 
   static async optionalAuthenticate(
     req: AuthenticatedRequest, 
     res: Response, 
     next: NextFunction
   ): Promise<void> {
-    AuthMiddleware.initializeClient();
+    AuthService.initializeClient();
     
     const requestId = req.get(REQUEST_HEADERS.X_REQUEST_ID) || 'unknown';
     
     try {
-      const token = AuthMiddleware.extractToken(req);
+      const token = AuthService.extractToken(req);
       
       if (token) {
-        const user = await AuthMiddleware.validateToken(token);
+        const user = await AuthService.validateToken(token);
         if (user) {
           req.user = user;
           req.token = token;
@@ -298,7 +313,7 @@ export class AuthMiddleware {
   }
 
 
-  // MIDDLEWARE PARA VERIFICAR PERMISOS
+  // Service PARA VERIFICAR PERMISOS
 
   static requirePermission(permission: string) {
     return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
@@ -367,7 +382,7 @@ export class AuthMiddleware {
   }
 
 
-  // MIDDLEWARE PARA VERIFICAR ROLES
+  // Service PARA VERIFICAR ROLES
 
   static requireRole(role: string) {
     return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
@@ -462,7 +477,7 @@ export class AuthMiddleware {
     const startTime = Date.now();
     
     try {
-      const response = await AuthMiddleware.authServiceClient.post(
+      const response = await AuthService.authServiceClient.post(
         AUTH_ENDPOINTS.VERIFY_TOKEN,
         { token }
       );
@@ -532,12 +547,12 @@ export class AuthMiddleware {
    * Obtener información adicional del usuario desde el Auth Service
    */
   static async getUserProfile(userId: string): Promise<any> {
-    AuthMiddleware.initializeClient();
+    AuthService.initializeClient();
     
     const startTime = Date.now();
     
     try {
-      const response = await AuthMiddleware.authServiceClient.get(
+      const response = await AuthService.authServiceClient.get(
         AUTH_ENDPOINTS.GET_USER.replace(':id', userId)
       );
       
@@ -581,12 +596,12 @@ export class AuthMiddleware {
    * Verificar si el Auth Service está disponible
    */
   static async healthCheck(): Promise<{ healthy: boolean; details: any }> {
-    AuthMiddleware.initializeClient();
+    AuthService.initializeClient();
     
     const startTime = Date.now();
     
     try {
-      const response = await AuthMiddleware.authServiceClient.get('/api/v1/health', {
+      const response = await AuthService.authServiceClient.get('/api/v1/health', {
         timeout: 3000,
       });
       
@@ -638,8 +653,8 @@ export class AuthMiddleware {
 }
 
 // EXPORTS ADICIONALES PARA CONVENIENCIA
-export const authenticate = AuthMiddleware.authenticate;
-export const optionalAuthenticate = AuthMiddleware.optionalAuthenticate;
-export const requirePermission = AuthMiddleware.requirePermission;
-export const requireRole = AuthMiddleware.requireRole;
-export const authHealthCheck = AuthMiddleware.healthCheck;
+export const authenticate = AuthService.authenticate;
+export const optionalAuthenticate = AuthService.optionalAuthenticate;
+export const requirePermission = AuthService.requirePermission;
+export const requireRole = AuthService.requireRole;
+export const authHealthCheck = AuthService.healthCheck;

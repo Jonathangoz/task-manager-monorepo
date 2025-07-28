@@ -1,16 +1,24 @@
 // src/commons/middlewares/auth.middleware.ts
 import { Request, Response, NextFunction } from 'express';
-import { authServiceClient, UserData } from '@/core/infrastructure/external/AuthServiceClient';
-import { redisCache } from '@/core/infrastructure/cache/RedisCache';
+import { AuthServiceClient, AuthUser } from '@/core/infrastructure/external/AuthServiceClient';
+
+// Crear instancia del cliente de auth service
+const authServiceClient = new AuthServiceClient();
+import { RedisCache } from '@/core/infrastructure/cache/RedisCache';
 import { logger } from '@/utils/logger';
 import { 
   HTTP_STATUS, 
   ERROR_CODES, 
   ERROR_MESSAGES,
-  TOKEN_CONFIG,
   CACHE_KEYS,
   CACHE_TTL 
 } from '@/utils/constants';
+
+// Token configuration constants
+const TOKEN_CONFIG = {
+  ACCESS_TOKEN_HEADER: 'Authorization',
+  TOKEN_PREFIX: 'Bearer ',
+} as const;
 
 // Extend Express Request type
 declare global {
@@ -38,6 +46,21 @@ export interface AuthenticatedRequest extends Request {
     sessionId?: string;
   };
 }
+
+// Additional error codes not present in constants
+const ADDITIONAL_ERROR_CODES = {
+  USER_INACTIVE: 'USER_INACTIVE',
+} as const;
+
+// Additional cache keys not present in constants
+const ADDITIONAL_CACHE_KEYS = {
+  USER_SESSION: (token: string) => `user_session:${Buffer.from(token).toString('base64').slice(0, 16)}`,
+} as const;
+
+// Additional cache TTL values
+const ADDITIONAL_CACHE_TTL = {
+  USER_SESSION: 3600, // 1 hour
+} as const;
 
 /**
  * Middleware principal de autenticación
@@ -107,7 +130,7 @@ export const authenticateToken = async (
         success: false,
         message: 'User account is inactive',
         error: {
-          code: ERROR_CODES.USER_INACTIVE,
+          code: ADDITIONAL_ERROR_CODES.USER_INACTIVE,
         },
         meta: {
           timestamp: new Date().toISOString(),
@@ -253,11 +276,12 @@ function extractTokenFromHeader(req: Request): string | null {
  */
 async function getCachedUserData(token: string): Promise<any | null> {
   try {
-    const cacheKey = CACHE_KEYS.USER_SESSION(token);
+    const cacheKey = ADDITIONAL_CACHE_KEYS.USER_SESSION(token);
+    const redisCache = new RedisCache();
     const cachedData = await redisCache.get(cacheKey);
     
     if (cachedData) {
-      return JSON.parse(cachedData);
+      return cachedData;
     }
     
     return null;
@@ -272,11 +296,12 @@ async function getCachedUserData(token: string): Promise<any | null> {
  */
 async function cacheUserData(token: string, userData: any): Promise<void> {
   try {
-    const cacheKey = CACHE_KEYS.USER_SESSION(token);
-    await redisCache.setex(
+    const cacheKey = ADDITIONAL_CACHE_KEYS.USER_SESSION(token);
+    const redisCache = new RedisCache();
+    await redisCache.set(
       cacheKey,
-      CACHE_TTL.USER_SESSION,
-      JSON.stringify(userData)
+      userData,
+      ADDITIONAL_CACHE_TTL.USER_SESSION
     );
   } catch (error) {
     logger.warn({ error }, 'Failed to cache user data');
@@ -296,7 +321,8 @@ export const clearUserCache = async (
     const token = extractTokenFromHeader(req);
     
     if (token) {
-      const cacheKey = CACHE_KEYS.USER_SESSION(token);
+      const cacheKey = ADDITIONAL_CACHE_KEYS.USER_SESSION(token);
+      const redisCache = new RedisCache();
       await redisCache.del(cacheKey);
     }
     

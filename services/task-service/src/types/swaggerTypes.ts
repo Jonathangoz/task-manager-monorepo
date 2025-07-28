@@ -1,5 +1,6 @@
 // src/types/swagger.ts - Tipos TypeScript para Swagger
-// ==============================================
+import { OpenAPIV3 } from 'openapi-types';
+
 export interface SwaggerConfig {
   enabled: boolean;
   path: string;
@@ -33,8 +34,8 @@ export interface SwaggerInfo {
   title?: string;
   version?: string;
   description?: string;
-  servers: number;
-  paths: number;
-  schemas: number;
-  tags: number;
+  servers: OpenAPIV3.ServerObject[];
+  paths: OpenAPIV3.PathsObject;
+  schemas: OpenAPIV3.SchemaObject;
+  tags: OpenAPIV3.TagObject[];
 }

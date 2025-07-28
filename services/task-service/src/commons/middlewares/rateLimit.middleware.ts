@@ -1,7 +1,4 @@
-// ==============================================
 // src/commons/middlewares/rateLimit.middleware.ts
-// ==============================================
-
 import rateLimit, { RateLimitRequestHandler } from 'express-rate-limit';
 import { Request, Response, NextFunction } from 'express';
 import { taskRedisConnection } from '@/config/redis';
@@ -16,10 +13,7 @@ import {
   ApiResponse,
 } from '@/utils/constants';
 
-// ==============================================
 // TIPOS Y INTERFACES
-// ==============================================
-
 interface RateLimitOptions {
   windowMs?: number;
   max?: number;
@@ -45,10 +39,7 @@ interface ExtendedRequest extends Request {
   };
 }
 
-// ==============================================
 // REDIS RATE LIMIT STORE PERSONALIZADO
-// ==============================================
-
 class TaskServiceRedisRateLimitStore {
   private windowMs: number;
   private keyPrefix = 'rate_limit:'; // Consistente con CACHE_KEYS
@@ -221,10 +212,7 @@ class TaskServiceRedisRateLimitStore {
   }
 }
 
-// ==============================================
 // FACTORY FUNCTION PARA CREAR RATE LIMITERS
-// ==============================================
-
 export const createRateLimiter = (options: RateLimitOptions = {}): RateLimitRequestHandler => {
   const {
     windowMs = config.rateLimit.windowMs,
@@ -307,10 +295,7 @@ export const createRateLimiter = (options: RateLimitOptions = {}): RateLimitRequ
   });
 };
 
-// ==============================================
 // MIDDLEWARE DE ENRIQUECIMIENTO DE RATE LIMIT INFO
-// ==============================================
-
 export const enrichRateLimitInfo = (
   rateLimitStore: TaskServiceRedisRateLimitStore,
   maxRequests: number
@@ -354,10 +339,7 @@ export const enrichRateLimitInfo = (
   };
 };
 
-// ==============================================
 // RATE LIMITERS ESPECÍFICOS PARA DIFERENTES ENDPOINTS
-// ==============================================
-
 /**
  * Rate limiter general para endpoints públicos
  */
@@ -437,9 +419,7 @@ export const adminRateLimit = createRateLimiter({
   },
 });
 
-// ==============================================
 // UTILIDADES DE MONITOREO Y DEBUGGING
-// ==============================================
 
 /**
  * Middleware para logging de rate limit (útil en desarrollo)
@@ -523,10 +503,7 @@ export const resetRateLimit = async (identifier: string): Promise<boolean> => {
   }
 };
 
-// ==============================================
 // EXPORTACIONES
-// ==============================================
-
 export {
   TaskServiceRedisRateLimitStore,
   type RateLimitOptions,

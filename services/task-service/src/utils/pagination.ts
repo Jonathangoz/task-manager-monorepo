@@ -2,10 +2,10 @@
 
 import { Request } from 'express';
 import { z } from 'zod';
-import { 
-  PAGINATION_CONFIG, 
-  SORT_FIELDS, 
-  SORT_ORDERS, 
+import {
+  PAGINATION_CONFIG,
+  SORT_FIELDS,
+  SORT_ORDERS,
   DEFAULT_VALUES,
   PaginationMeta,
   SortOptions,
@@ -24,7 +24,9 @@ const SortFieldSchema = z.enum([
   SORT_FIELDS.DUE_DATE,
   SORT_FIELDS.PRIORITY,
   SORT_FIELDS.STATUS,
-  SORT_FIELDS.TITLE
+  SORT_FIELDS.TITLE,
+  SORT_FIELDS.NAME, // Added for categories
+  SORT_FIELDS.TASK_COUNT // Added for categories
 ] as const).default(SORT_FIELDS.CREATED_AT);
 const SortOrderSchema = z.enum([SORT_ORDERS.ASC, SORT_ORDERS.DESC] as const).default(SORT_ORDERS.DESC);
 
@@ -39,23 +41,23 @@ const PaginationQuerySchema = z.object({
 // Multi-sort schema for advanced sorting
 const MultiSortSchema = z.string().optional().transform((sortQuery) => {
   if (!sortQuery) return [];
-  
+
   const sortItems = sortQuery.split(',').filter(item => item.trim());
   const validSorts: SortOptions[] = [];
   const seenFields = new Set<string>();
 
   for (const sortItem of sortItems) {
     const [field, order = SORT_ORDERS.DESC] = sortItem.trim().split(':');
-    
+
     if (!field || seenFields.has(field)) continue;
-    
-    // Validate field
-    if (!Object.values(SORT_FIELDS).includes(field)) continue;
-    
+
+    // Validate field: Ensure 'field' is one of the actual string values from SORT_FIELDS
+    if (!Object.values(SORT_FIELDS).includes(field as typeof SORT_FIELDS[keyof typeof SORT_FIELDS])) continue;
+
     // Validate and normalize order
     const normalizedOrder = order?.toLowerCase() === SORT_ORDERS.ASC ? SORT_ORDERS.ASC : SORT_ORDERS.DESC;
-    
-    validSorts.push({ field, order: normalizedOrder });
+
+    validSorts.push({ field: field as typeof SORT_FIELDS[keyof typeof SORT_FIELDS], order: normalizedOrder }); // Assert field type
     seenFields.add(field);
   }
 
@@ -132,7 +134,7 @@ export class PaginationError extends Error {
 export const extractPaginationParams = (req: Request): PaginationParams => {
   try {
     const validatedQuery = PaginationQuerySchema.parse(req.query);
-    
+
     const { page, limit, sortBy: field, sortOrder: order } = validatedQuery;
     const offset = (page - 1) * limit;
 
@@ -159,11 +161,11 @@ export const extractPaginationParams = (req: Request): PaginationParams => {
  */
 export const extractSortOptions = (req: Request): SortOptions => {
   try {
-    const { sortBy: field, sortOrder: order } = PaginationQuerySchema.pick({ 
-      sortBy: true, 
-      sortOrder: true 
+    const { sortBy: field, sortOrder: order } = PaginationQuerySchema.pick({
+      sortBy: true,
+      sortOrder: true
     }).parse(req.query);
-    
+
     return { field, order };
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -196,14 +198,16 @@ export const validatePaginationQuery = (query: any): ValidationResult => {
  * Validate if sort field is allowed
  */
 export const isValidSortField = (field: string): boolean => {
-  return Object.values(SORT_FIELDS).includes(field);
+  // Fix: Assert 'field' as one of the actual string values from SORT_FIELDS
+  return Object.values(SORT_FIELDS).includes(field as typeof SORT_FIELDS[keyof typeof SORT_FIELDS]);
 };
 
 /**
  * Validate if sort order is allowed
  */
 export const isValidSortOrder = (order: string): boolean => {
-  return Object.values(SORT_ORDERS).includes(order?.toLowerCase());
+  // Fix: Assert 'order?.toLowerCase()' as one of the actual string values from SORT_ORDERS
+  return Object.values(SORT_ORDERS).includes(order?.toLowerCase() as typeof SORT_ORDERS[keyof typeof SORT_ORDERS]);
 };
 
 /**
@@ -253,7 +257,7 @@ export const createPaginatedResponse = <T>(
   }
 
   const meta = createPaginationMeta(page, limit, total);
-  
+
   return {
     data,
     meta,
@@ -376,7 +380,7 @@ export const buildMultiFieldSort = (sortOptions: SortOptions[]): any[] => {
 export const extractCursorParams = (req: Request): CursorPaginationParams => {
   try {
     const { limit, cursor, sortBy: field, sortOrder: order } = CursorPaginationSchema.parse(req.query);
-    
+
     return {
       limit,
       cursor,
@@ -446,11 +450,11 @@ export const generatePaginationLinks = (
 ): PaginationLinks => {
   const pages = Math.ceil(total / limit) || 1;
   const query = new URLSearchParams(queryParams);
-  
+
   // Remove existing page parameter
   query.delete('page');
   query.delete('limit');
-  
+
   const baseQuery = query.toString();
   const separator = baseQuery ? '&' : '';
 

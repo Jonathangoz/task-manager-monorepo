@@ -1,5 +1,6 @@
 // src/utils/constants.ts - Task-Service Constants (Updated)
-import { config } from '../config/environment';
+import { config } from '@/config/environment';
+import { Prisma } from '@prisma/client';
 
 // HTTP Status Codes
 export const HTTP_STATUS = {
@@ -90,6 +91,7 @@ export const SUCCESS_MESSAGES = {
 export const ERROR_MESSAGES = {
   TASK_NOT_FOUND: 'Tarea no encontrada o acceso denegado',
   TASK_ALREADY_EXISTS: 'Una tarea con este título ya existe',
+  TASK_ACCESS_DENIED: 'Acceso denagado a la tarea',
   CATEGORY_NOT_FOUND: 'Categoria no encontrada o acceso denegado',
   CATEGORY_ALREADY_EXISTS: 'Una categoria con este nombre ya existe',
   CATEGORY_HAS_TASKS: 'No se puede eliminar la categoria porque tiene tareas asociadas',
@@ -127,6 +129,7 @@ export const TASK_CONFIG = {
   MAX_ATTACHMENTS_COUNT: 5,
   MAX_ESTIMATED_HOURS: 999,
   MIN_DUE_DATE_OFFSET_MINUTES: 5,
+  MAX_TASKS_PER_USER: 5
 } as const;
 
 // Category Configuration (Enhanced)
@@ -381,6 +384,183 @@ export const DEFAULT_VALUES = {
   PAGE_SIZE: PAGINATION_CONFIG.DEFAULT_LIMIT,
   SORT_FIELD: SORT_FIELDS.CREATED_AT,
   SORT_ORDER: SORT_ORDERS.DESC,
+} as const;
+
+// Interfaz para el mapeo de errores de Prisma
+interface PrismaErrorMapping {
+  statusCode: number;
+  message: string;
+  errorCode: string;
+  getMessage?: (error: Prisma.PrismaClientKnownRequestError) => string;
+}
+
+// Prisma Error Mappings - Indexado por código de error de Prisma
+export const PRISMA_ERROR_MAPPINGS: Record<string, PrismaErrorMapping> = {
+  'P2000': { // The value provided for the column is too long
+    statusCode: HTTP_STATUS.BAD_REQUEST,
+    message: 'El valor proporcionado es demasiado largo para el campo.',
+    errorCode: ERROR_CODES.VALIDATION_ERROR,
+  },
+  'P2002': { // Unique constraint violation
+    statusCode: HTTP_STATUS.CONFLICT,
+    message: 'Ya existe un recurso con este valor único.',
+    errorCode: ERROR_CODES.TASK_ALREADY_EXISTS,
+    getMessage: (error: Prisma.PrismaClientKnownRequestError) => {
+      const target = error.meta?.target as string[] | undefined;
+      if (target?.includes('name')) {
+        return 'Ya existe una categoría con este nombre.';
+      }
+      if (target?.includes('title')) {
+        return 'Ya existe una tarea con este título.';
+      }
+      return 'Ya existe un recurso con este valor único.';
+    }
+  },
+  'P2003': { // Foreign key constraint failed
+    statusCode: HTTP_STATUS.BAD_REQUEST,
+    message: 'Violación de clave foránea. El recurso relacionado no existe o no se puede vincular.',
+    errorCode: ERROR_CODES.VALIDATION_ERROR,
+  },
+  'P2004': { // A constraint failed on the database
+    statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+    message: 'Fallo una restricción de la base de datos.',
+    errorCode: ERROR_CODES.DATABASE_ERROR,
+  },
+  'P2005': { // The value stored in the database is invalid for the field's type
+    statusCode: HTTP_STATUS.BAD_REQUEST,
+    message: 'El valor en la base de datos es inválido para el tipo de campo.',
+    errorCode: ERROR_CODES.DATABASE_ERROR,
+  },
+  'P2006': { // The provided value is not of the correct type
+    statusCode: HTTP_STATUS.BAD_REQUEST,
+    message: 'El valor proporcionado no es del tipo correcto.',
+    errorCode: ERROR_CODES.VALIDATION_ERROR,
+  },
+  'P2007': { // Validation error
+    statusCode: HTTP_STATUS.BAD_REQUEST,
+    message: 'Error de validación en la base de datos.',
+    errorCode: ERROR_CODES.DATABASE_ERROR,
+  },
+  'P2008': { // Failed to parse the query
+    statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+    message: 'Error al parsear la consulta de la base de datos.',
+    errorCode: ERROR_CODES.DATABASE_ERROR,
+  },
+  'P2009': { // Failed to validate the query
+    statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+    message: 'Error al validar la consulta de la base de datos.',
+    errorCode: ERROR_CODES.DATABASE_ERROR,
+  },
+  'P2010': { // Raw query failed
+    statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+    message: 'La consulta SQL falló.',
+    errorCode: ERROR_CODES.DATABASE_ERROR,
+  },
+  'P2011': { // Null constraint violation
+    statusCode: HTTP_STATUS.BAD_REQUEST,
+    message: 'Faltan campos requeridos.',
+    errorCode: ERROR_CODES.VALIDATION_ERROR,
+  },
+  'P2012': { // Missing a required value
+    statusCode: HTTP_STATUS.BAD_REQUEST,
+    message: 'Falta un valor requerido.',
+    errorCode: ERROR_CODES.VALIDATION_ERROR,
+  },
+  'P2013': { // Missing a required argument
+    statusCode: HTTP_STATUS.BAD_REQUEST,
+    message: 'Falta un argumento requerido.',
+    errorCode: ERROR_CODES.VALIDATION_ERROR,
+  },
+  'P2014': { // The change you are trying to make requires a record that does not exist
+    statusCode: HTTP_STATUS.NOT_FOUND,
+    message: 'La operación requiere un registro que no existe.',
+    errorCode: ERROR_CODES.TASK_NOT_FOUND,
+  },
+  'P2015': { // A related record could not be found
+    statusCode: HTTP_STATUS.NOT_FOUND,
+    message: 'No se encontró un registro relacionado.',
+    errorCode: ERROR_CODES.TASK_NOT_FOUND,
+  },
+  'P2016': { // A query interpretation error occurred
+    statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+    message: 'Error de interpretación de consulta.',
+    errorCode: ERROR_CODES.DATABASE_ERROR,
+  },
+  'P2017': { // The records for relation are not connected
+    statusCode: HTTP_STATUS.BAD_REQUEST,
+    message: 'Los registros para la relación no están conectados.',
+    errorCode: ERROR_CODES.VALIDATION_ERROR,
+  },
+  'P2018': { // The required connected records were not found
+    statusCode: HTTP_STATUS.NOT_FOUND,
+    message: 'No se encontraron los registros conectados requeridos.',
+    errorCode: ERROR_CODES.TASK_NOT_FOUND,
+  },
+  'P2019': { // Input error
+    statusCode: HTTP_STATUS.BAD_REQUEST,
+    message: 'Error en la entrada de datos.',
+    errorCode: ERROR_CODES.VALIDATION_ERROR,
+  },
+  'P2020': { // Value out of range for the type
+    statusCode: HTTP_STATUS.BAD_REQUEST,
+    message: 'Valor fuera de rango para el tipo de dato.',
+    errorCode: ERROR_CODES.VALIDATION_ERROR,
+  },
+  'P2021': { // Table does not exist
+    statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+    message: 'La tabla de la base de datos no existe.',
+    errorCode: ERROR_CODES.DATABASE_ERROR,
+  },
+  'P2022': { // Column does not exist
+    statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+    message: 'La columna de la base de datos no existe.',
+    errorCode: ERROR_CODES.DATABASE_ERROR,
+  },
+  'P2023': { // Raw query syntax error
+    statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+    message: 'Error de sintaxis en la consulta SQL.',
+    errorCode: ERROR_CODES.DATABASE_ERROR,
+  },
+  'P2024': { // Timed out fetching a new connection
+    statusCode: HTTP_STATUS.SERVICE_UNAVAILABLE,
+    message: 'Tiempo de espera agotado al conectar con la base de datos.',
+    errorCode: ERROR_CODES.DATABASE_ERROR,
+  },
+  'P2025': { // An operation failed because it depends on one or more records that were required but not found.
+    statusCode: HTTP_STATUS.NOT_FOUND,
+    message: 'El registro no fue encontrado.',
+    errorCode: ERROR_CODES.TASK_NOT_FOUND,
+  },
+  'P2026': { // The client has a mismatch between the Prisma Client and the Prisma Schema.
+    statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+    message: 'Error de configuración interna de la base de datos.',
+    errorCode: ERROR_CODES.INTERNAL_ERROR,
+  },
+  'P2027': { // Multiple errors occurred on the database query.
+    statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+    message: 'Múltiples errores en la consulta de la base de datos.',
+    errorCode: ERROR_CODES.DATABASE_ERROR,
+  },
+  'P2028': { // Transaction failed
+    statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+    message: 'La transacción de la base de datos falló.',
+    errorCode: ERROR_CODES.DATABASE_ERROR,
+  },
+  'P2030': { // Cannot find a fulltext index to use for the search
+    statusCode: HTTP_STATUS.BAD_REQUEST,
+    message: 'No se encontró un índice de texto completo para la búsqueda.',
+    errorCode: ERROR_CODES.DATABASE_ERROR,
+  },
+  'P2033': { // A number used in the query is too large for its type.
+    statusCode: HTTP_STATUS.BAD_REQUEST,
+    message: 'Un número utilizado en la consulta es demasiado grande para su tipo.',
+    errorCode: ERROR_CODES.VALIDATION_ERROR,
+  },
+  'P2034': { // Transaction failed due to a write conflict or a deadlock.
+    statusCode: HTTP_STATUS.CONFLICT,
+    message: 'La transacción falló debido a un conflicto de escritura o un interbloqueo.',
+    errorCode: ERROR_CODES.DATABASE_ERROR,
+  },
 } as const;
 
 // Auth Service Endpoints
@@ -815,21 +995,21 @@ export const RATE_LIMIT_EXEMPTIONS = {
     '127.0.0.1',
     '::1',
     'localhost',
-  ],
+  ] as const,
   
   // User agents que pueden tener límites diferentes
   TRUSTED_USER_AGENTS: [
     'HealthCheck/1.0',
     'LoadBalancer/1.0',
     'Monitoring/1.0',
-  ],
+  ] as const,
   
   // Rutas que no tienen rate limiting
   EXEMPTED_ROUTES: [
     '/api/v1/health',
     '/favicon.ico',
     '/robots.txt',
-  ],
+  ] as const,
 } as const;
 
 // MENSAJES DE ERROR CONTEXTUALES
@@ -923,14 +1103,14 @@ export const generateRateLimitMessage = (
  * Verifica si una IP está en la whitelist
  */
 export const isWhitelistedIP = (ip: string): boolean => {
-  return RATE_LIMIT_EXEMPTIONS.WHITELISTED_IPS.includes(ip);
+  return (RATE_LIMIT_EXEMPTIONS.WHITELISTED_IPS as readonly string[]).includes(ip);
 };
 
 /**
  * Verifica si una ruta está exenta de rate limiting
  */
 export const isExemptedRoute = (path: string): boolean => {
-  return RATE_LIMIT_EXEMPTIONS.EXEMPTED_ROUTES.some(route => 
+  return (RATE_LIMIT_EXEMPTIONS.EXEMPTED_ROUTES as readonly string[]).some(route => 
     path.startsWith(route) || path === route
   );
 };
@@ -946,21 +1126,22 @@ export const getRateLimitConfig = (type: EndpointRateLimitType) => {
  * Verifica si un color está en la paleta permitida
  */
 export const isValidCategoryColor = (color: string): color is CategoryColor => {
-  return CATEGORY_CONFIG.ALLOWED_COLORS.includes(color as CategoryColor);
+  return (CATEGORY_CONFIG.ALLOWED_COLORS as readonly string[]).includes(color);
 };
 
 /**
  * Verifica si un icono está en la lista permitida
  */
 export const isValidCategoryIcon = (icon: string): icon is CategoryIcon => {
-  return CATEGORY_CONFIG.ALLOWED_ICONS.includes(icon as CategoryIcon);
+  return (CATEGORY_CONFIG.ALLOWED_ICONS as readonly string[]).includes(icon);
 };
 
 /**
  * Verifica si un nombre de categoría está reservado
  */
 export const isReservedCategoryName = (name: string): boolean => {
-  return CATEGORY_CONFIG.RESERVED_NAMES.includes(name.toLowerCase().trim());
+  const normalizedName = name.toLowerCase().trim();
+  return (CATEGORY_CONFIG.RESERVED_NAMES as readonly string[]).includes(normalizedName);
 };
 
 /**
@@ -1112,4 +1293,35 @@ export const DEVELOPMENT_CONFIG = {
     LOG_CACHE_OPERATIONS: process.env.DEBUG_CACHE === 'true',
     TRACE_DATABASE_QUERIES: process.env.DEBUG_DATABASE === 'true'
   }
+} as const;
+
+// Exportar un objeto combinado si se desea (opcional)
+export const ALL_CONSTANTS = {
+  HTTP_STATUS,
+  ERROR_CODES,
+  SUCCESS_MESSAGES,
+  ERROR_MESSAGES,
+  PRISMA_ERROR_MAPPINGS,
+  TASK_CONFIG,
+  CATEGORY_CONFIG,
+  VALIDATION_CONFIG,
+  TASK_STATUSES,
+  TASK_PRIORITIES,
+  PRIORITY_WEIGHTS,
+  SORT_FIELDS,
+  SORT_ORDERS,
+  FILTER_FIELDS,
+  CACHE_KEYS,
+  CACHE_TTL,
+  PAGINATION_CONFIG,
+  DATE_FORMATS,
+  EVENT_TYPES,
+  DEFAULT_VALUES,
+  AUTH_ENDPOINTS,
+  AUTH_SERVICE_CONFIG,
+  HTTP_METHODS,
+  API_VERSIONS,
+  SERVICE_NAMES,
+  REQUEST_HEADERS,
+  CONTENT_TYPES
 } as const;

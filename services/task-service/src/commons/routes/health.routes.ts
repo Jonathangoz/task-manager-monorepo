@@ -16,7 +16,7 @@ import {
   SERVICE_NAMES 
 } from '@/utils/constants';
 
-const router = Router();
+const router: Router = Router();
 
 // ==============================================
 // TYPES & INTERFACES
@@ -90,10 +90,13 @@ class HealthCheckService {
       const responseTime = Date.now() - startTime;
 
       if (healthResult.healthy) {
-        loggers.dbConnection('health_check_passed', { 
+        logger.info({ 
+          event: 'health_check.database.passed',
+          domain: 'health_check',
+          component: 'database',
           responseTime, 
           details: healthResult.details 
-        });
+        }, 'Database health check passed');
 
         return {
           status: 'up',
@@ -101,10 +104,13 @@ class HealthCheckService {
           details: healthResult.details
         };
       } else {
-        loggers.dbConnection('health_check_failed', { 
+        logger.warn({
+          event: 'health_check.database.failed',
+          domain: 'health_check',
+          component: 'database',
           responseTime, 
           error: healthResult.details?.error 
-        });
+        }, 'Database health check failed');
 
         return {
           status: 'down',
@@ -278,61 +284,61 @@ const healthCheckService = new HealthCheckService();
 /**
  * @swagger
  * /api/v1/health:
- *   get:
- *     summary: Comprehensive health check endpoint
- *     tags: [System]
- *     responses:
- *       200:
- *         description: Service is healthy or degraded
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: string
- *                   enum: [healthy, unhealthy, degraded]
- *                 timestamp:
- *                   type: string
- *                   format: date-time
- *                 service:
- *                   type: string
- *                 version:
- *                   type: string
- *                 uptime:
- *                   type: number
- *                 environment:
- *                   type: string
- *                 checks:
- *                   type: object
- *                   properties:
- *                     database:
- *                       type: object
- *                       properties:
- *                         status:
- *                           type: string
- *                           enum: [up, down]
- *                         responseTime:
- *                           type: number
- *                     redis:
- *                       type: object
- *                       properties:
- *                         status:
- *                           type: string
- *                           enum: [up, down]
- *                         responseTime:
- *                           type: number
- *                 metrics:
- *                   type: object
- *                   properties:
- *                     totalResponseTime:
- *                       type: number
- *                     criticalServices:
- *                       type: number
- *                     healthyServices:
- *                       type: number
- *       503:
- *         description: Service is unhealthy
+ * get:
+ * summary: Comprehensive health check endpoint
+ * tags: [System]
+ * responses:
+ * 200:
+ * description: Service is healthy or degraded
+ * content:
+ * application/json:
+ * schema:
+ * type: object
+ * properties:
+ * status:
+ * type: string
+ * enum: [healthy, unhealthy, degraded]
+ * timestamp:
+ * type: string
+ * format: date-time
+ * service:
+ * type: string
+ * version:
+ * type: string
+ * uptime:
+ * type: number
+ * environment:
+ * type: string
+ * checks:
+ * type: object
+ * properties:
+ * database:
+ * type: object
+ * properties:
+ * status:
+ * type: string
+ * enum: [up, down]
+ * responseTime:
+ * type: number
+ * redis:
+ * type: object
+ * properties:
+ * status:
+ * type: string
+ * enum: [up, down]
+ * responseTime:
+ * type: number
+ * metrics:
+ * type: object
+ * properties:
+ * totalResponseTime:
+ * type: number
+ * criticalServices:
+ * type: number
+ * healthyServices:
+ * type: number
+ * 503:
+ * description: Service is unhealthy
  */
 router.get('/', async (req: Request, res: Response): Promise<void> => {
   const requestStartTime = Date.now();
@@ -423,27 +429,27 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 /**
  * @swagger
  * /api/v1/health/ready:
- *   get:
- *     summary: Kubernetes/Docker readiness probe
- *     tags: [System]
- *     responses:
- *       200:
- *         description: Service is ready to accept traffic
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: string
- *                   enum: [ready]
- *                 timestamp:
- *                   type: string
- *                   format: date-time
- *                 service:
- *                   type: string
- *       503:
- *         description: Service is not ready
+ * get:
+ * summary: Kubernetes/Docker readiness probe
+ * tags: [System]
+ * responses:
+ * 200:
+ * description: Service is ready to accept traffic
+ * content:
+ * application/json:
+ * schema:
+ * type: object
+ * properties:
+ * status:
+ * type: string
+ * enum: [ready]
+ * timestamp:
+ * type: string
+ * format: date-time
+ * service:
+ * type: string
+ * 503:
+ * description: Service is not ready
  */
 router.get('/ready', async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
@@ -511,31 +517,31 @@ router.get('/ready', async (req: Request, res: Response): Promise<void> => {
 /**
  * @swagger
  * /api/v1/health/live:
- *   get:
- *     summary: Kubernetes/Docker liveness probe
- *     tags: [System]
- *     responses:
- *       200:
- *         description: Service is alive
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: string
- *                   enum: [alive]
- *                 timestamp:
- *                   type: string
- *                   format: date-time
- *                 service:
- *                   type: string
- *                 uptime:
- *                   type: number
- *                 pid:
- *                   type: number
- *                 memory:
- *                   type: object
+ * get:
+ * summary: Kubernetes/Docker liveness probe
+ * tags: [System]
+ * responses:
+ * 200:
+ * description: Service is alive
+ * content:
+ * application/json:
+ * schema:
+ * type: object
+ * properties:
+ * status:
+ * type: string
+ * enum: [alive]
+ * timestamp:
+ * type: string
+ * format: date-time
+ * service:
+ * type: string
+ * uptime:
+ * type: number
+ * pid:
+ * type: number
+ * memory:
+ * type: object
  */
 router.get('/live', (req: Request, res: Response): void => {
   const startTime = Date.now();
@@ -582,16 +588,16 @@ router.get('/live', (req: Request, res: Response): void => {
 /**
  * @swagger
  * /api/v1/health/detailed:
- *   get:
- *     summary: Detailed health check with metrics (admin only)
- *     tags: [System]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Detailed health information
- *       403:
- *         description: Access denied
+ * get:
+ * summary: Detailed health check with metrics (admin only)
+ * tags: [System]
+ * security:
+ * - bearerAuth: []
+ * responses:
+ * 200:
+ * description: Detailed health information
+ * 403:
+ * description: Access denied
  */
 router.get('/detailed', async (req: Request, res: Response): Promise<void> => {
   // Este endpoint podría requerir autenticación admin en el futuro

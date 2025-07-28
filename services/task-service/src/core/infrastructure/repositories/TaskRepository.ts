@@ -1,12 +1,14 @@
 // src/core/infrastructure/repositories/TaskRepository.ts
 import { PrismaClient, Task, TaskStatus, Priority } from '@prisma/client';
+import { ITaskRepository } from '@/core/domain/interfaces/ITaskRepository';
 import { 
-  ITaskRepository, 
   CreateTaskData, 
   UpdateTaskData, 
   TaskWithCategory, 
-  TaskQueryResult 
-} from '@/core/domain/interfaces/ITaskRepository';
+  TaskQueryResult,
+  TaskStatus as DomainTaskStatus,
+  TaskPriority as DomainTaskPriority
+} from '@/core/types/TaskDomain';
 import { 
   TaskFilters, 
   SortOptions, 
@@ -20,148 +22,99 @@ import {
 import { logger, loggers, logError } from '@/utils/logger';
 import { db } from '@/config/database';
 
-/**
- * Repository implementation for Task entity
- * Handles all database operations for tasks with proper error handling,
- * logging, validation and adherence to SOLID principles
- */
 export class TaskRepository implements ITaskRepository {
-  constructor(private readonly prisma: PrismaClient = db) {}
+  constructor(
+    private readonly prisma: PrismaClient = db,
+    private readonly validator: TaskDataValidator = new TaskDataValidator(),
+    private readonly mapper: TaskDataMapper = new TaskDataMapper(),
+    private readonly queryBuilder: TaskQueryBuilder = new TaskQueryBuilder(),
+    private readonly logger: TaskRepositoryLogger = new TaskRepositoryLogger()
+  ) {}
 
-  /**
-   * Create a new task
-   */
-  async create(data: CreateTaskData): Promise<Task> {
-    const startTime = Date.now();
+  // ==============================================
+  // CORE CRUD OPERATIONS
+  // ==============================================
+
+  async create(data: CreateTaskData): Promise<TaskWithCategory> {
+    const operation = this.logger.startOperation('create');
     
     try {
-      // Validate required fields
-      this.validateCreateData(data);
+      this.validator.validateCreateData(data);
       
-      const task = await this.prisma.task.create({
-        data: {
-          title: data.title.trim(),
-          description: data.description?.trim() || null,
-          status: data.status || DEFAULT_VALUES.TASK_STATUS,
-          priority: data.priority || DEFAULT_VALUES.TASK_PRIORITY,
-          dueDate: data.dueDate || null,
-          userId: data.userId,
-          categoryId: data.categoryId || null,
-          tags: data.tags || [],
-          estimatedHours: data.estimatedHours || null,
-          attachments: data.attachments || [],
-        },
+      const taskData = this.mapper.mapCreateDataToPrisma(data);
+      const createdTask = await this.prisma.task.create({
+        data: taskData,
+        include: this.queryBuilder.getCategoryInclude(),
       });
 
-      const duration = Date.now() - startTime;
+      const result = this.mapper.mapPrismaToTaskWithCategory(createdTask);
       
-      loggers.dbQuery('create', 'tasks', duration, 1);
-      logger.info({
-        taskId: task.id,
+      this.logger.logSuccess(operation, 'Task created successfully', {
+        taskId: result.id,
         userId: data.userId,
-        status: task.status,
-        priority: task.priority,
-        duration,
-        event: 'task.created',
-        domain: 'repository',
-      }, `✅ Task created successfully: "${task.title}"`);
+        status: result.status,
+        priority: result.priority,
+      });
 
-      return task;
+      return result;
       
     } catch (error) {
-      const duration = Date.now() - startTime;
-      
-      loggers.dbError(error as Error, 'create_task', 'tasks');
-      logError.medium(error as Error, {
-        context: 'task_repository_create',
-        data,
-        duration,
-      });
-      
-      // Re-throw with more context
-      if (error instanceof Error) {
-        throw new Error(`Failed to create task: ${error.message}`);
-      }
-      throw error;
+      this.logger.logError(operation, error as Error, { data });
+      throw this.enhanceError(error, 'Failed to create task');
     }
   }
 
-  /**
-   * Find task by ID
-   */
   async findById(id: string): Promise<TaskWithCategory | null> {
-    const startTime = Date.now();
+    const operation = this.logger.startOperation('findById');
     
     try {
-      this.validateId(id);
+      this.validator.validateId(id);
       
       const task = await this.prisma.task.findUnique({
         where: { id },
-        include: {
-          category: {
-            select: {
-              id: true,
-              name: true,
-              color: true,
-              icon: true,
-            },
-          },
-        },
+        include: this.queryBuilder.getCategoryInclude(),
       });
 
-      const duration = Date.now() - startTime;
-      loggers.dbQuery('findById', 'tasks', duration, task ? 1 : 0);
+      const result = task ? this.mapper.mapPrismaToTaskWithCategory(task) : null;
+      
+      this.logger.logSuccess(operation, 'Task retrieved', {
+        taskId: id,
+        found: !!result,
+      });
 
-      return task ? this.mapToTaskWithCategory(task) : null;
+      return result;
       
     } catch (error) {
-      const duration = Date.now() - startTime;
-      
-      loggers.dbError(error as Error, 'find_task_by_id', 'tasks');
-      logError.low(error as Error, {
-        context: 'task_repository_find_by_id',
-        id,
-        duration,
-      });
-      
-      throw new Error(`Failed to find task by ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      this.logger.logError(operation, error as Error, { id });
+      throw this.enhanceError(error, 'Failed to find task by ID');
     }
   }
 
-  /**
-   * Find tasks by user ID with filters, sorting and pagination
-   */
   async findByUserId(
     userId: string,
     filters: TaskFilters = {},
-    sort: SortOptions = { field: DEFAULT_VALUES.SORT_FIELD, order: DEFAULT_VALUES.SORT_ORDER },
+    sort: SortOptions = { 
+      field: DEFAULT_VALUES.SORT_FIELD, 
+      order: DEFAULT_VALUES.SORT_ORDER 
+    },
     page: number = PAGINATION_CONFIG.DEFAULT_PAGE,
     limit: number = PAGINATION_CONFIG.DEFAULT_LIMIT
   ): Promise<TaskQueryResult> {
-    const startTime = Date.now();
+    const operation = this.logger.startOperation('findByUserId');
     
     try {
-      this.validateUserId(userId);
-      this.validatePagination(page, limit);
-      this.validateSortOptions(sort);
+      this.validator.validateUserId(userId);
+      this.validator.validatePagination(page, limit);
+      this.validator.validateSortOptions(sort);
       
-      const where = this.buildWhereClause(userId, filters);
-      const orderBy = this.buildOrderByClause(sort);
+      const where = this.queryBuilder.buildWhereClause(userId, filters);
+      const orderBy = this.queryBuilder.buildOrderByClause(sort);
       const skip = (page - 1) * limit;
 
       const [tasks, total] = await Promise.all([
         this.prisma.task.findMany({
           where,
-          include: {
-            category: {
-              select: {
-                id: true,
-                name: true,
-                color: true,
-                icon: true,
-              },
-            },
-          },
+          include: this.queryBuilder.getCategoryInclude(),
           skip,
           take: limit,
           orderBy,
@@ -169,56 +122,41 @@ export class TaskRepository implements ITaskRepository {
         this.prisma.task.count({ where }),
       ]);
 
-      const duration = Date.now() - startTime;
-      loggers.dbQuery('findByUserId', 'tasks', duration, tasks.length);
+      const result: TaskQueryResult = {
+        tasks: tasks.map(task => this.mapper.mapPrismaToTaskWithCategory(task)),
+        meta: this.buildPaginationMeta(page, limit, total),
+      };
 
-      const meta: PaginationMeta = {
-        page,
-        limit,
+      this.logger.logSuccess(operation, 'Tasks retrieved by user ID', {
+        userId,
+        count: tasks.length,
         total,
-        pages: Math.ceil(total / limit),
-        hasNext: page * limit < total,
-        hasPrev: page > 1,
-      };
+        page,
+        filters,
+      });
 
-      return {
-        tasks: tasks.map(this.mapToTaskWithCategory),
-        meta,
-      };
+      return result;
       
     } catch (error) {
-      const duration = Date.now() - startTime;
-      
-      loggers.dbError(error as Error, 'find_tasks_by_user', 'tasks');
-      logError.medium(error as Error, {
-        context: 'task_repository_find_by_user_id',
-        userId,
-        filters,
-        sort,
-        page,
-        limit,
-        duration,
+      this.logger.logError(operation, error as Error, {
+        userId, filters, sort, page, limit
       });
-      
-      throw new Error(`Failed to find tasks by user ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw this.enhanceError(error, 'Failed to find tasks by user ID');
     }
   }
 
-  /**
-   * Find tasks by category ID
-   */
   async findByCategoryId(
     categoryId: string,
     userId: string,
     page: number = PAGINATION_CONFIG.DEFAULT_PAGE,
     limit: number = PAGINATION_CONFIG.DEFAULT_LIMIT
   ): Promise<TaskQueryResult> {
-    const startTime = Date.now();
+    const operation = this.logger.startOperation('findByCategoryId');
     
     try {
-      this.validateId(categoryId);
-      this.validateUserId(userId);
-      this.validatePagination(page, limit);
+      this.validator.validateId(categoryId);
+      this.validator.validateUserId(userId);
+      this.validator.validatePagination(page, limit);
       
       const skip = (page - 1) * limit;
       const where = { categoryId, userId };
@@ -226,16 +164,7 @@ export class TaskRepository implements ITaskRepository {
       const [tasks, total] = await Promise.all([
         this.prisma.task.findMany({
           where,
-          include: {
-            category: {
-              select: {
-                id: true,
-                name: true,
-                color: true,
-                icon: true,
-              },
-            },
-          },
+          include: this.queryBuilder.getCategoryInclude(),
           skip,
           take: limit,
           orderBy: { createdAt: 'desc' },
@@ -243,269 +172,174 @@ export class TaskRepository implements ITaskRepository {
         this.prisma.task.count({ where }),
       ]);
 
-      const duration = Date.now() - startTime;
-      loggers.dbQuery('findByCategoryId', 'tasks', duration, tasks.length);
-
-      const meta: PaginationMeta = {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
-        hasNext: page * limit < total,
-        hasPrev: page > 1,
+      const result: TaskQueryResult = {
+        tasks: tasks.map(task => this.mapper.mapPrismaToTaskWithCategory(task)),
+        meta: this.buildPaginationMeta(page, limit, total),
       };
 
-      return {
-        tasks: tasks.map(this.mapToTaskWithCategory),
-        meta,
-      };
-      
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      
-      loggers.dbError(error as Error, 'find_tasks_by_category', 'tasks');
-      logError.medium(error as Error, {
-        context: 'task_repository_find_by_category_id',
+      this.logger.logSuccess(operation, 'Tasks retrieved by category ID', {
         categoryId,
         userId,
-        page,
-        limit,
-        duration,
+        count: tasks.length,
+        total,
       });
+
+      return result;
       
-      throw new Error(`Failed to find tasks by category ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch (error) {
+      this.logger.logError(operation, error as Error, {
+        categoryId, userId, page, limit
+      });
+      throw this.enhanceError(error, 'Failed to find tasks by category ID');
     }
   }
 
-  /**
-   * Update a task
-   */
-  async update(id: string, data: UpdateTaskData): Promise<Task> {
-    const startTime = Date.now();
+  async update(id: string, data: UpdateTaskData): Promise<TaskWithCategory> {
+    const operation = this.logger.startOperation('update');
     
     try {
-      this.validateId(id);
-      this.validateUpdateData(data);
+      this.validator.validateId(id);
+      this.validator.validateUpdateData(data);
       
-      // Build update data, excluding undefined values
-      const updateData: any = {};
-      if (data.title !== undefined) updateData.title = data.title.trim();
-      if (data.description !== undefined) updateData.description = data.description?.trim() || null;
-      if (data.status !== undefined) updateData.status = data.status;
-      if (data.priority !== undefined) updateData.priority = data.priority;
-      if (data.dueDate !== undefined) updateData.dueDate = data.dueDate;
-      if (data.categoryId !== undefined) updateData.categoryId = data.categoryId;
-      if (data.tags !== undefined) updateData.tags = data.tags;
-      if (data.estimatedHours !== undefined) updateData.estimatedHours = data.estimatedHours;
-      if (data.actualHours !== undefined) updateData.actualHours = data.actualHours;
-      if (data.attachments !== undefined) updateData.attachments = data.attachments;
+      const updateData = this.mapper.mapUpdateDataToPrisma(data);
 
-      const task = await this.prisma.task.update({
+      const updatedTask = await this.prisma.task.update({
         where: { id },
         data: updateData,
+        include: this.queryBuilder.getCategoryInclude(),
       });
 
-      const duration = Date.now() - startTime;
+      const result = this.mapper.mapPrismaToTaskWithCategory(updatedTask);
       
-      loggers.dbQuery('update', 'tasks', duration, 1);
-      logger.info({
+      this.logger.logSuccess(operation, 'Task updated successfully', {
         taskId: id,
         updatedFields: Object.keys(updateData),
-        duration,
-        event: 'task.updated',
-        domain: 'repository',
-      }, `✅ Task updated successfully: "${task.title}"`);
+      });
 
-      return task;
+      return result;
       
     } catch (error) {
-      const duration = Date.now() - startTime;
-      
-      loggers.dbError(error as Error, 'update_task', 'tasks');
-      logError.medium(error as Error, {
-        context: 'task_repository_update',
-        id,
-        data,
-        duration,
-      });
-      
-      throw new Error(`Failed to update task: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      this.logger.logError(operation, error as Error, { id, data });
+      throw this.enhanceError(error, 'Failed to update task');
     }
   }
 
-  /**
-   * Update task status
-   */
-  async updateStatus(id: string, status: TaskStatus, completedAt?: Date): Promise<Task> {
-    const startTime = Date.now();
+  async updateStatus(
+    id: string, 
+    status: DomainTaskStatus, 
+    completedAt?: Date
+  ): Promise<TaskWithCategory> {
+    const operation = this.logger.startOperation('updateStatus');
     
     try {
-      this.validateId(id);
-      this.validateTaskStatus(status);
+      this.validator.validateId(id);
+      this.validator.validateTaskStatus(status);
       
-      const updateData: any = { status };
-      if (status === 'COMPLETED') {
-        updateData.completedAt = completedAt || new Date();
-      } else if (status !== 'COMPLETED') {
-        updateData.completedAt = null;
-      }
+      const updateData = this.mapper.mapStatusUpdateToPrisma(status, completedAt);
 
-      const task = await this.prisma.task.update({
+      const updatedTask = await this.prisma.task.update({
         where: { id },
         data: updateData,
+        include: this.queryBuilder.getCategoryInclude(),
       });
 
-      const duration = Date.now() - startTime;
+      const result = this.mapper.mapPrismaToTaskWithCategory(updatedTask);
       
-      loggers.dbQuery('updateStatus', 'tasks', duration, 1);
-      logger.info({
+      this.logger.logSuccess(operation, 'Task status updated', {
         taskId: id,
-        oldStatus: 'unknown', // Would need to fetch first to know old status
         newStatus: status,
-        duration,
-        event: 'task.status.updated',
-        domain: 'repository',
-      }, `🔄 Task status updated to ${status}: "${task.title}"`);
+        completedAt,
+      });
 
-      return task;
+      return result;
       
     } catch (error) {
-      const duration = Date.now() - startTime;
-      
-      loggers.dbError(error as Error, 'update_task_status', 'tasks');
-      logError.medium(error as Error, {
-        context: 'task_repository_update_status',
-        id,
-        status,
-        completedAt,
-        duration,
+      this.logger.logError(operation, error as Error, {
+        id, status, completedAt
       });
-      
-      throw new Error(`Failed to update task status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw this.enhanceError(error, 'Failed to update task status');
     }
   }
 
-  /**
-   * Update task priority
-   */
-  async updatePriority(id: string, priority: Priority): Promise<Task> {
-    const startTime = Date.now();
+  async updatePriority(id: string, priority: DomainTaskPriority): Promise<TaskWithCategory> {
+    const operation = this.logger.startOperation('updatePriority');
     
     try {
-      this.validateId(id);
-      this.validateTaskPriority(priority);
+      this.validator.validateId(id);
+      this.validator.validateTaskPriority(priority);
       
-      const task = await this.prisma.task.update({
+      const updatedTask = await this.prisma.task.update({
         where: { id },
         data: { priority },
+        include: this.queryBuilder.getCategoryInclude(),
       });
 
-      const duration = Date.now() - startTime;
+      const result = this.mapper.mapPrismaToTaskWithCategory(updatedTask);
       
-      loggers.dbQuery('updatePriority', 'tasks', duration, 1);
-      logger.info({
+      this.logger.logSuccess(operation, 'Task priority updated', {
         taskId: id,
         newPriority: priority,
-        duration,
-        event: 'task.priority.updated',
-        domain: 'repository',
-      }, `🎯 Task priority updated to ${priority}: "${task.title}"`);
+      });
 
-      return task;
+      return result;
       
     } catch (error) {
-      const duration = Date.now() - startTime;
-      
-      loggers.dbError(error as Error, 'update_task_priority', 'tasks');
-      logError.medium(error as Error, {
-        context: 'task_repository_update_priority',
-        id,
-        priority,
-        duration,
-      });
-      
-      throw new Error(`Failed to update task priority: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      this.logger.logError(operation, error as Error, { id, priority });
+      throw this.enhanceError(error, 'Failed to update task priority');
     }
   }
 
-  /**
-   * Delete a task
-   */
   async delete(id: string): Promise<void> {
-    const startTime = Date.now();
+    const operation = this.logger.startOperation('delete');
     
     try {
-      this.validateId(id);
+      this.validator.validateId(id);
       
-      const task = await this.prisma.task.delete({
+      const deletedTask = await this.prisma.task.delete({
         where: { id },
       });
 
-      const duration = Date.now() - startTime;
-      
-      loggers.dbQuery('delete', 'tasks', duration, 1);
-      logger.info({
+      this.logger.logSuccess(operation, 'Task deleted successfully', {
         taskId: id,
-        taskTitle: task.title,
-        duration,
-        event: 'task.deleted',
-        domain: 'repository',
-      }, `🗑️ Task deleted successfully: "${task.title}"`);
-      
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      
-      loggers.dbError(error as Error, 'delete_task', 'tasks');
-      logError.medium(error as Error, {
-        context: 'task_repository_delete',
-        id,
-        duration,
+        taskTitle: deletedTask.title,
       });
       
-      throw new Error(`Failed to delete task: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch (error) {
+      this.logger.logError(operation, error as Error, { id });
+      throw this.enhanceError(error, 'Failed to delete task');
     }
   }
 
-  /**
-   * Count tasks by user ID with optional filters
-   */
+  // ==============================================
+  // EXTENDED QUERY OPERATIONS
+  // ==============================================
+
   async countByUserId(userId: string, filters: TaskFilters = {}): Promise<number> {
-    const startTime = Date.now();
+    const operation = this.logger.startOperation('countByUserId');
     
     try {
-      this.validateUserId(userId);
+      this.validator.validateUserId(userId);
       
-      const where = this.buildWhereClause(userId, filters);
+      const where = this.queryBuilder.buildWhereClause(userId, filters);
       const count = await this.prisma.task.count({ where });
 
-      const duration = Date.now() - startTime;
-      loggers.dbQuery('countByUserId', 'tasks', duration, count);
+      this.logger.logSuccess(operation, 'Tasks counted', {
+        userId, filters, count
+      });
 
       return count;
       
     } catch (error) {
-      const duration = Date.now() - startTime;
-      
-      loggers.dbError(error as Error, 'count_tasks_by_user', 'tasks');
-      logError.low(error as Error, {
-        context: 'task_repository_count_by_user_id',
-        userId,
-        filters,
-        duration,
-      });
-      
-      throw new Error(`Failed to count tasks by user ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      this.logger.logError(operation, error as Error, { userId, filters });
+      throw this.enhanceError(error, 'Failed to count tasks by user ID');
     }
   }
 
-  /**
-   * Find overdue tasks for a user
-   */
   async findOverdueTasks(userId: string): Promise<TaskWithCategory[]> {
-    const startTime = Date.now();
+    const operation = this.logger.startOperation('findOverdueTasks');
     
     try {
-      this.validateUserId(userId);
+      this.validator.validateUserId(userId);
       
       const tasks = await this.prisma.task.findMany({
         where: {
@@ -513,182 +347,101 @@ export class TaskRepository implements ITaskRepository {
           dueDate: { lt: new Date() },
           status: { notIn: ['COMPLETED', 'CANCELLED'] },
         },
-        include: {
-          category: {
-            select: {
-              id: true,
-              name: true,
-              color: true,
-              icon: true,
-            },
-          },
-        },
+        include: this.queryBuilder.getCategoryInclude(),
         orderBy: { dueDate: 'asc' },
       });
 
-      const duration = Date.now() - startTime;
-      loggers.dbQuery('findOverdueTasks', 'tasks', duration, tasks.length);
+      const result = tasks.map(task => 
+        this.mapper.mapPrismaToTaskWithCategory(task)
+      );
 
-      return tasks.map(this.mapToTaskWithCategory);
+      this.logger.logSuccess(operation, 'Overdue tasks retrieved', {
+        userId, count: result.length
+      });
+
+      return result;
       
     } catch (error) {
-      const duration = Date.now() - startTime;
-      
-      loggers.dbError(error as Error, 'find_overdue_tasks', 'tasks');
-      logError.medium(error as Error, {
-        context: 'task_repository_find_overdue_tasks',
-        userId,
-        duration,
-      });
-      
-      throw new Error(`Failed to find overdue tasks: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      this.logger.logError(operation, error as Error, { userId });
+      throw this.enhanceError(error, 'Failed to find overdue tasks');
     }
   }
 
-  /**
-   * Find tasks by multiple IDs
-   */
   async findByIds(ids: string[]): Promise<TaskWithCategory[]> {
-    const startTime = Date.now();
+    const operation = this.logger.startOperation('findByIds');
     
     try {
-      if (!Array.isArray(ids) || ids.length === 0) {
-        throw new Error('IDs array is required and cannot be empty');
-      }
-      
-      ids.forEach(this.validateId);
+      this.validator.validateIdsArray(ids);
       
       const tasks = await this.prisma.task.findMany({
         where: { id: { in: ids } },
-        include: {
-          category: {
-            select: {
-              id: true,
-              name: true,
-              color: true,
-              icon: true,
-            },
-          },
-        },
+        include: this.queryBuilder.getCategoryInclude(),
       });
 
-      const duration = Date.now() - startTime;
-      loggers.dbQuery('findByIds', 'tasks', duration, tasks.length);
+      const result = tasks.map(task => 
+        this.mapper.mapPrismaToTaskWithCategory(task)
+      );
 
-      return tasks.map(this.mapToTaskWithCategory);
+      this.logger.logSuccess(operation, 'Tasks retrieved by IDs', {
+        requestedIds: ids.length,
+        foundTasks: result.length,
+      });
+
+      return result;
       
     } catch (error) {
-      const duration = Date.now() - startTime;
-      
-      loggers.dbError(error as Error, 'find_tasks_by_ids', 'tasks');
-      logError.medium(error as Error, {
-        context: 'task_repository_find_by_ids',
-        ids,
-        duration,
-      });
-      
-      throw new Error(`Failed to find tasks by IDs: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      this.logger.logError(operation, error as Error, { ids });
+      throw this.enhanceError(error, 'Failed to find tasks by IDs');
     }
   }
 
-  /**
-   * Bulk update status for multiple tasks
-   */
-  async bulkUpdateStatus(ids: string[], status: TaskStatus): Promise<void> {
-    const startTime = Date.now();
+  async bulkUpdateStatus(ids: string[], status: DomainTaskStatus): Promise<void> {
+    const operation = this.logger.startOperation('bulkUpdateStatus');
     
     try {
-      if (!Array.isArray(ids) || ids.length === 0) {
-        throw new Error('IDs array is required and cannot be empty');
-      }
+      this.validator.validateIdsArray(ids);
+      this.validator.validateTaskStatus(status);
       
-      ids.forEach(this.validateId);
-      this.validateTaskStatus(status);
-      
-      const updateData: any = { status };
-      if (status === 'COMPLETED') {
-        updateData.completedAt = new Date();
-      } else if (status !== 'COMPLETED') {
-        updateData.completedAt = null;
-      }
+      const updateData = this.mapper.mapStatusUpdateToPrisma(status);
 
       const result = await this.prisma.task.updateMany({
         where: { id: { in: ids } },
         data: updateData,
       });
 
-      const duration = Date.now() - startTime;
-      
-      loggers.dbQuery('bulkUpdateStatus', 'tasks', duration, result.count);
-      logger.info({
+      this.logger.logSuccess(operation, 'Bulk status update completed', {
         taskIds: ids,
         status,
         updatedCount: result.count,
-        duration,
-        event: 'task.bulk.status.updated',
-        domain: 'repository',
-      }, `🔄 Bulk status update: ${result.count} tasks updated to ${status}`);
-      
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      
-      loggers.dbError(error as Error, 'bulk_update_status', 'tasks');
-      logError.medium(error as Error, {
-        context: 'task_repository_bulk_update_status',
-        ids,
-        status,
-        duration,
       });
       
-      throw new Error(`Failed to bulk update task status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch (error) {
+      this.logger.logError(operation, error as Error, { ids, status });
+      throw this.enhanceError(error, 'Failed to bulk update task status');
     }
   }
 
-  /**
-   * Bulk delete multiple tasks
-   */
   async bulkDelete(ids: string[]): Promise<void> {
-    const startTime = Date.now();
+    const operation = this.logger.startOperation('bulkDelete');
     
     try {
-      if (!Array.isArray(ids) || ids.length === 0) {
-        throw new Error('IDs array is required and cannot be empty');
-      }
-      
-      ids.forEach(this.validateId);
+      this.validator.validateIdsArray(ids);
       
       const result = await this.prisma.task.deleteMany({
         where: { id: { in: ids } },
       });
 
-      const duration = Date.now() - startTime;
-      
-      loggers.dbQuery('bulkDelete', 'tasks', duration, result.count);
-      logger.info({
+      this.logger.logSuccess(operation, 'Bulk delete completed', {
         taskIds: ids,
         deletedCount: result.count,
-        duration,
-        event: 'task.bulk.deleted',
-        domain: 'repository',
-      }, `🗑️ Bulk delete: ${result.count} tasks deleted`);
-      
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      
-      loggers.dbError(error as Error, 'bulk_delete_tasks', 'tasks');
-      logError.medium(error as Error, {
-        context: 'task_repository_bulk_delete',
-        ids,
-        duration,
       });
       
-      throw new Error(`Failed to bulk delete tasks: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch (error) {
+      this.logger.logError(operation, error as Error, { ids });
+      throw this.enhanceError(error, 'Failed to bulk delete tasks');
     }
   }
 
-  /**
-   * Search tasks by query string
-   */
   async search(
     userId: string,
     query: string,
@@ -696,12 +449,12 @@ export class TaskRepository implements ITaskRepository {
     page: number = PAGINATION_CONFIG.DEFAULT_PAGE,
     limit: number = PAGINATION_CONFIG.DEFAULT_LIMIT
   ): Promise<TaskQueryResult> {
-    const startTime = Date.now();
+    const operation = this.logger.startOperation('search');
     
     try {
-      this.validateUserId(userId);
-      this.validateSearchQuery(query);
-      this.validatePagination(page, limit);
+      this.validator.validateUserId(userId);
+      this.validator.validateSearchQuery(query);
+      this.validator.validatePagination(page, limit);
       
       const searchFilters: TaskFilters = {
         ...filters,
@@ -716,36 +469,106 @@ export class TaskRepository implements ITaskRepository {
         limit
       );
 
-      const duration = Date.now() - startTime;
-      
-      loggers.dbQuery('search', 'tasks', duration, result.tasks.length);
-      logger.info({
+      this.logger.logSuccess(operation, 'Task search completed', {
         userId,
         query,
         resultCount: result.tasks.length,
         total: result.meta.total,
-        duration,
-        event: 'task.search',
-        domain: 'repository',
-      }, `🔍 Task search completed: "${query}" - ${result.tasks.length} results`);
+      });
 
       return result;
       
     } catch (error) {
-      const duration = Date.now() - startTime;
-      
-      loggers.dbError(error as Error, 'search_tasks', 'tasks');
-      logError.medium(error as Error, {
-        context: 'task_repository_search',
-        userId,
-        query,
-        filters,
-        page,
-        limit,
-        duration,
+      this.logger.logError(operation, error as Error, {
+        userId, query, filters, page, limit
       });
+      throw this.enhanceError(error, 'Failed to search tasks');
+    }
+  }
+
+  // ==============================================
+  // ADDITIONAL INTERFACE METHODS
+  // ==============================================
+
+  async belongsToUser(taskId: string, userId: string): Promise<boolean> {
+    const operation = this.logger.startOperation('belongsToUser');
+    
+    try {
+      this.validator.validateId(taskId);
+      this.validator.validateUserId(userId);
       
-      throw new Error(`Failed to search tasks: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const task = await this.prisma.task.findFirst({
+        where: { id: taskId, userId },
+        select: { id: true }, // Only select ID for performance
+      });
+
+      const belongs = !!task;
+      
+      this.logger.logSuccess(operation, 'Task ownership checked', {
+        taskId, userId, belongs
+      });
+
+      return belongs;
+      
+    } catch (error) {
+      this.logger.logError(operation, error as Error, { taskId, userId });
+      throw this.enhanceError(error, 'Failed to check task ownership');
+    }
+  }
+
+  async getUserTaskStats(userId: string): Promise<{
+    total: number;
+    completed: number;
+    pending: number;
+    inProgress: number;
+    overdue: number;
+    byPriority: Record<DomainTaskPriority, number>;
+    byStatus: Record<DomainTaskStatus, number>;
+  }> {
+    const operation = this.logger.startOperation('getUserTaskStats');
+    
+    try {
+      this.validator.validateUserId(userId);
+      
+      const [
+        statusStats,
+        priorityStats,
+        overdueCount
+      ] = await Promise.all([
+        this.prisma.task.groupBy({
+          by: ['status'],
+          where: { userId },
+          _count: { status: true },
+        }),
+        this.prisma.task.groupBy({
+          by: ['priority'],
+          where: { userId },
+          _count: { priority: true },
+        }),
+        this.prisma.task.count({
+          where: {
+            userId,
+            dueDate: { lt: new Date() },
+            status: { notIn: ['COMPLETED', 'CANCELLED'] },
+          },
+        }),
+      ]);
+
+      const stats = this.mapper.mapStatsToResponse(
+        statusStats,
+        priorityStats,
+        overdueCount
+      );
+
+      this.logger.logSuccess(operation, 'User task stats retrieved', {
+        userId, stats
+      });
+
+      return stats;
+      
+    } catch (error) {
+      this.logger.logError(operation, error as Error, { userId });
+      throw this.enhanceError(error, 'Failed to get user task stats');
     }
   }
 
@@ -753,12 +576,170 @@ export class TaskRepository implements ITaskRepository {
   // PRIVATE HELPER METHODS
   // ==============================================
 
-  /**
-   * Map Prisma task to TaskWithCategory
-   */
-  private mapToTaskWithCategory(task: any): TaskWithCategory {
+  private buildPaginationMeta(
+    page: number, 
+    limit: number, 
+    total: number
+  ): PaginationMeta {
+    return {
+      page,
+      limit,
+      total,
+      pages: Math.ceil(total / limit),
+      hasNext: page * limit < total,
+      hasPrev: page > 1,
+    };
+  }
+
+  private enhanceError(error: unknown, context: string): Error {
+    if (error instanceof Error) {
+      return new Error(`${context}: ${error.message}`);
+    }
+    return new Error(`${context}: Unknown error`);
+  }
+}
+
+// ==============================================
+// SUPPORTING CLASSES (DEPENDENCY INJECTION)
+// ==============================================
+
+/**
+ * Handles all task data validation logic
+ * Single Responsibility: Only validates data
+ */
+class TaskDataValidator {
+  validateId(id: string): void {
+    if (!id || typeof id !== 'string' || id.trim().length === 0) {
+      throw new Error('Valid ID is required');
+    }
+  }
+
+  validateUserId(userId: string): void {
+    if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
+      throw new Error('Valid user ID is required');
+    }
+  }
+
+  validateCreateData(data: CreateTaskData): void {
+    if (!data.title || typeof data.title !== 'string' || data.title.trim().length === 0) {
+      throw new Error('Task title is required');
+    }
+    if (!data.userId || typeof data.userId !== 'string' || data.userId.trim().length === 0) {
+      throw new Error('User ID is required');
+    }
+  }
+
+  validateUpdateData(data: UpdateTaskData): void {
+    if (data.title !== undefined && (!data.title || typeof data.title !== 'string' || data.title.trim().length === 0)) {
+      throw new Error('Task title cannot be empty');
+    }
+  }
+
+  validateTaskStatus(status: DomainTaskStatus): void {
+    const validStatuses: DomainTaskStatus[] = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'ON_HOLD'];
+    if (!validStatuses.includes(status)) {
+      throw new Error(`Invalid task status: ${status}`);
+    }
+  }
+
+  validateTaskPriority(priority: DomainTaskPriority): void {
+    const validPriorities: DomainTaskPriority[] = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
+    if (!validPriorities.includes(priority)) {
+      throw new Error(`Invalid task priority: ${priority}`);
+    }
+  }
+
+  validatePagination(page: number, limit: number): void {
+    if (!Number.isInteger(page) || page < 1) {
+      throw new Error('Page must be a positive integer');
+    }
+    if (!Number.isInteger(limit) || limit < PAGINATION_CONFIG.MIN_LIMIT || limit > PAGINATION_CONFIG.MAX_LIMIT) {
+      throw new Error(`Limit must be between ${PAGINATION_CONFIG.MIN_LIMIT} and ${PAGINATION_CONFIG.MAX_LIMIT}`);
+    }
+  }
+
+  validateSortOptions(sort: SortOptions): void {
+    const validSortFields = Object.values(SORT_FIELDS);
+    const validSortOrders = Object.values(SORT_ORDERS);
+    
+    if (!validSortFields.includes(sort.field as any)) {
+      throw new Error(`Invalid sort field: ${sort.field}`);
+    }
+    if (!validSortOrders.includes(sort.order as any)) {
+      throw new Error(`Invalid sort order: ${sort.order}`);
+    }
+  }
+
+  validateSearchQuery(query: string): void {
+    if (!query || typeof query !== 'string' || query.trim().length === 0) {
+      throw new Error('Search query is required');
+    }
+    if (query.trim().length < 2) {
+      throw new Error('Search query must be at least 2 characters long');
+    }
+  }
+
+  validateIdsArray(ids: string[]): void {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      throw new Error('IDs array is required and cannot be empty');
+    }
+    ids.forEach(id => this.validateId(id));
+  }
+}
+
+/**
+ * Handles data mapping between domain and persistence layers
+ * Single Responsibility: Only maps data structures
+ */
+class TaskDataMapper {
+  mapCreateDataToPrisma(data: CreateTaskData): any {
+    return {
+      title: data.title.trim(),
+      description: data.description?.trim() || null,
+      status: data.status || DEFAULT_VALUES.TASK_STATUS,
+      priority: data.priority || DEFAULT_VALUES.TASK_PRIORITY,
+      dueDate: data.dueDate || null,
+      userId: data.userId,
+      categoryId: data.categoryId || null,
+      tags: data.tags || [],
+      estimatedHours: data.estimatedHours || null,
+      attachments: data.attachments || [],
+    };
+  }
+
+  mapUpdateDataToPrisma(data: UpdateTaskData): any {
+    const updateData: any = {};
+    
+    if (data.title !== undefined) updateData.title = data.title.trim();
+    if (data.description !== undefined) updateData.description = data.description?.trim() || null;
+    if (data.status !== undefined) updateData.status = data.status;
+    if (data.priority !== undefined) updateData.priority = data.priority;
+    if (data.dueDate !== undefined) updateData.dueDate = data.dueDate;
+    if (data.categoryId !== undefined) updateData.categoryId = data.categoryId;
+    if (data.tags !== undefined) updateData.tags = data.tags;
+    if (data.estimatedHours !== undefined) updateData.estimatedHours = data.estimatedHours;
+    if (data.actualHours !== undefined) updateData.actualHours = data.actualHours;
+    if (data.attachments !== undefined) updateData.attachments = data.attachments;
+
+    return updateData;
+  }
+
+  mapStatusUpdateToPrisma(status: DomainTaskStatus, completedAt?: Date): any {
+    const updateData: any = { status };
+    
+    if (status === 'COMPLETED') {
+      updateData.completedAt = completedAt || new Date();
+    } else {
+      updateData.completedAt = null;
+    }
+
+    return updateData;
+  }
+
+  mapPrismaToTaskWithCategory(task: any): TaskWithCategory {
     return {
       ...task,
+      description: task.description ?? undefined, // Map null to undefined
       category: task.category ? {
         id: task.category.id,
         name: task.category.name,
@@ -768,10 +749,62 @@ export class TaskRepository implements ITaskRepository {
     };
   }
 
-  /**
-   * Build WHERE clause for Prisma queries
-   */
-  private buildWhereClause(userId: string, filters: TaskFilters): any {
+  mapStatsToResponse(
+    statusStats: any[],
+    priorityStats: any[],
+    overdueCount: number
+  ): {
+    total: number;
+    completed: number;
+    pending: number;
+    inProgress: number;
+    overdue: number;
+    byPriority: Record<DomainTaskPriority, number>;
+    byStatus: Record<DomainTaskStatus, number>;
+  } {
+    const total = statusStats.reduce((sum, stat) => sum + stat._count.status, 0);
+    
+    const byStatus = statusStats.reduce((acc, stat) => {
+      acc[stat.status] = stat._count.status;
+      return acc;
+    }, {} as Record<DomainTaskStatus, number>);
+
+    const byPriority = priorityStats.reduce((acc, stat) => {
+      acc[stat.priority] = stat._count.priority;
+      return acc;
+    }, {} as Record<DomainTaskPriority, number>);
+
+    return {
+      total,
+      completed: byStatus.COMPLETED || 0,
+      pending: byStatus.PENDING || 0,
+      inProgress: byStatus.IN_PROGRESS || 0,
+      overdue: overdueCount,
+      byPriority,
+      byStatus,
+    };
+  }
+}
+
+/**
+ * Builds Prisma queries
+ * Single Responsibility: Only constructs queries
+ */
+class TaskQueryBuilder {
+  getCategoryInclude() {
+    return {
+      category: {
+        select: {
+          id: true,
+          name: true,
+          color: true,
+          icon: true,
+        },
+      },
+    };
+  }
+
+  buildWhereClause(userId: string, filters: TaskFilters): any {
     const where: any = { userId };
 
     if (filters.status) {
@@ -822,89 +855,65 @@ export class TaskRepository implements ITaskRepository {
     return where;
   }
 
-  /**
-   * Build ORDER BY clause for Prisma queries
-   */
-  private buildOrderByClause(sort: SortOptions): any {
+  buildOrderByClause(sort: SortOptions): any {
     const validSortFields = Object.values(SORT_FIELDS);
-    const sortField = validSortFields.includes(sort.field) ? sort.field : DEFAULT_VALUES.SORT_FIELD;
-    const sortOrder = [SORT_ORDERS.ASC, SORT_ORDERS.DESC].includes(sort.order) ? sort.order : DEFAULT_VALUES.SORT_ORDER;
+    const sortField = validSortFields.includes(sort.field as any) 
+      ? sort.field 
+      : DEFAULT_VALUES.SORT_FIELD;
+    const sortOrder = [SORT_ORDERS.ASC, SORT_ORDERS.DESC].includes(sort.order as any) 
+      ? sort.order 
+      : DEFAULT_VALUES.SORT_ORDER;
     
     return { [sortField]: sortOrder };
   }
+}
 
-  // ==============================================
-  // VALIDATION METHODS
-  // ==============================================
-
-  private validateId(id: string): void {
-    if (!id || typeof id !== 'string' || id.trim().length === 0) {
-      throw new Error('Valid ID is required');
-    }
+/**
+ * Handles all logging operations for the repository
+ * Single Responsibility: Only handles logging
+ */
+class TaskRepositoryLogger {
+  startOperation(operation: string): { operation: string; startTime: number } {
+    return {
+      operation,
+      startTime: Date.now(),
+    };
   }
 
-  private validateUserId(userId: string): void {
-    if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
-      throw new Error('Valid user ID is required');
-    }
-  }
-
-  private validateCreateData(data: CreateTaskData): void {
-    if (!data.title || typeof data.title !== 'string' || data.title.trim().length === 0) {
-      throw new Error('Task title is required');
-    }
-    if (!data.userId || typeof data.userId !== 'string' || data.userId.trim().length === 0) {
-      throw new Error('User ID is required');
-    }
-  }
-
-  private validateUpdateData(data: UpdateTaskData): void {
-    if (data.title !== undefined && (!data.title || typeof data.title !== 'string' || data.title.trim().length === 0)) {
-      throw new Error('Task title cannot be empty');
-    }
-  }
-
-  private validateTaskStatus(status: TaskStatus): void {
-    const validStatuses: TaskStatus[] = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'ON_HOLD'];
-    if (!validStatuses.includes(status)) {
-      throw new Error(`Invalid task status: ${status}`);
-    }
-  }
-
-  private validateTaskPriority(priority: Priority): void {
-    const validPriorities: Priority[] = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
-    if (!validPriorities.includes(priority)) {
-      throw new Error(`Invalid task priority: ${priority}`);
-    }
-  }
-
-  private validatePagination(page: number, limit: number): void {
-    if (!Number.isInteger(page) || page < 1) {
-      throw new Error('Page must be a positive integer');
-    }
-    if (!Number.isInteger(limit) || limit < PAGINATION_CONFIG.MIN_LIMIT || limit > PAGINATION_CONFIG.MAX_LIMIT) {
-      throw new Error(`Limit must be between ${PAGINATION_CONFIG.MIN_LIMIT} and ${PAGINATION_CONFIG.MAX_LIMIT}`);
-    }
-  }
-
-  private validateSortOptions(sort: SortOptions): void {
-    const validSortFields = Object.values(SORT_FIELDS);
-    const validSortOrders = Object.values(SORT_ORDERS);
+  logSuccess(
+    operationInfo: { operation: string; startTime: number },
+    message: string,
+    context: any = {}
+  ): void {
+    const duration = Date.now() - operationInfo.startTime;
     
-    if (!validSortFields.includes(sort.field)) {
-      throw new Error(`Invalid sort field: ${sort.field}`);
-    }
-    if (!validSortOrders.includes(sort.order)) {
-      throw new Error(`Invalid sort order: ${sort.order}`);
-    }
+    loggers.dbQuery(
+      operationInfo.operation, 
+      'tasks', 
+      duration, 
+      context.count?.toString() || '1'
+    );
+    
+    logger.info({
+      ...context,
+      duration,
+      event: `task.${operationInfo.operation}.success`,
+      domain: 'repository',
+    }, `✅ ${message}`);
   }
 
-  private validateSearchQuery(query: string): void {
-    if (!query || typeof query !== 'string' || query.trim().length === 0) {
-      throw new Error('Search query is required');
-    }
-    if (query.trim().length < 2) {
-      throw new Error('Search query must be at least 2 characters long');
-    }
+  logError(
+    operationInfo: { operation: string; startTime: number },
+    error: Error,
+    context: any = {}
+  ): void {
+    const duration = Date.now() - operationInfo.startTime;
+    
+    loggers.dbError(error, `${operationInfo.operation}_task`, 'tasks');
+    logError.medium(error, {
+      context: `task_repository_${operationInfo.operation}`,
+      ...context,
+      duration,
+    });
   }
 }

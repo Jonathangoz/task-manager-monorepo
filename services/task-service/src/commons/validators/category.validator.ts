@@ -10,13 +10,11 @@ import {
   PAGINATION_CONFIG,
   ERROR_MESSAGES,
   ERROR_CODES,
-  EXPORT_FORMATS
+  EXPORT_FORMATS,
+  VALIDATION_RULES
 } from '@/utils/constants';
 
-// ==============================================
 // DOMAIN-SPECIFIC VALIDATION PRIMITIVES
-// ==============================================
-
 /**
  * Base validation schemas for category domain
  * These primitives ensure consistent validation across all category operations
@@ -78,16 +76,13 @@ const categoryIconSchema = z
   })
   .describe('Category icon with optional strict validation');
 
-// Active status validation
+// Active status validation - Fixed default value
 const isActiveSchema = z
   .boolean()
-  .default(BUSINESS_RULES.CATEGORY.DEFAULT_IS_ACTIVE)
+  .default(BUSINESS_RULES.CATEGORY.AUTO_ACTIVATE_ON_CREATE)
   .describe('Category active status');
 
-// ==============================================
 // SHARED VALIDATION COMPONENTS
-// ==============================================
-
 // Pagination schema with category-specific defaults
 const categoryPaginationSchema = z.object({
   page: z
@@ -139,10 +134,7 @@ const searchQuerySchema = z
   .optional()
   .describe('Search query for category filtering');
 
-// ==============================================
 // CATEGORY CRUD OPERATION SCHEMAS
-// ==============================================
-
 /**
  * Schema for creating a new category
  * POST /api/v1/categories
@@ -201,9 +193,98 @@ export const updateCategoryStatusSchema = z.object({
   query: z.object({})
 }).describe('Category status update validation schema');
 
-// ==============================================
 // QUERY AND FILTERING SCHEMAS
-// ==============================================
+// Base query schema without refinements first
+const baseCategoryQuerySchema = z.object({
+  // Pagination
+  page: z
+    .string()
+    .optional()
+    .transform((val) => val ? parseInt(val, 10) : PAGINATION_CONFIG.DEFAULT_PAGE)
+    .pipe(z.number().int().min(1, 'Page must be a positive integer')),
+  limit: z
+    .string()
+    .optional()
+    .transform((val) => val ? parseInt(val, 10) : PAGINATION_CONFIG.DEFAULT_LIMIT)
+    .pipe(
+      z.number()
+        .int()
+        .min(PAGINATION_CONFIG.MIN_LIMIT, `Limit must be at least ${PAGINATION_CONFIG.MIN_LIMIT}`)
+        .max(PAGINATION_CONFIG.MAX_LIMIT, `Limit cannot exceed ${PAGINATION_CONFIG.MAX_LIMIT}`)
+    ),
+  
+  // Sorting
+  sortBy: z.enum([
+    SORT_FIELDS.NAME,
+    SORT_FIELDS.CREATED_AT,
+    SORT_FIELDS.UPDATED_AT,
+    SORT_FIELDS.TASK_COUNT
+  ] as [string, ...string[]], {
+    errorMap: () => ({ 
+      message: `sortBy must be one of: ${[SORT_FIELDS.NAME, SORT_FIELDS.CREATED_AT, SORT_FIELDS.UPDATED_AT, SORT_FIELDS.TASK_COUNT].join(', ')}` 
+    })
+  }).default(SORT_FIELDS.CREATED_AT),
+  sortOrder: z.enum(Object.values(SORT_ORDERS) as [string, ...string[]], {
+    errorMap: () => ({ 
+      message: `sortOrder must be one of: ${Object.values(SORT_ORDERS).join(', ')}` 
+    })
+  }).default(SORT_ORDERS.DESC),
+
+  // Active status filter
+  isActive: z
+    .string()
+    .optional()
+    .transform((val) => val === 'true' ? true : val === 'false' ? false : undefined)
+    .pipe(z.boolean().optional()),
+
+  // Color filter (exact match or array of colors)
+  color: z.union([
+    categoryColorSchema,
+    z.array(categoryColorSchema)
+  ]).optional()
+    .transform((val) => Array.isArray(val) ? val : val ? [val] : undefined),
+
+  // Icon filter (exact match or array of icons)
+  icon: z.union([
+    categoryIconSchema,
+    z.array(categoryIconSchema)
+  ]).optional()
+    .transform((val) => Array.isArray(val) ? val : val ? [val] : undefined),
+
+  // Task count filters
+  minTasks: z
+    .string()
+    .optional()
+    .transform((val) => val ? parseInt(val, 10) : undefined)
+    .pipe(z.number().int().min(0, 'Minimum task count cannot be negative').optional()),
+  
+  maxTasks: z
+    .string()
+    .optional()
+    .transform((val) => val ? parseInt(val, 10) : undefined)
+    .pipe(z.number().int().min(0, 'Maximum task count cannot be negative').optional()),
+
+  // Boolean filters
+  hasIcon: z
+    .string()
+    .optional()
+    .transform((val) => val === 'true' ? true : val === 'false' ? false : undefined)
+    .pipe(z.boolean().optional()),
+
+  // Search functionality
+  search: searchQuerySchema,
+
+  // Date range filters
+  createdFrom: z
+    .string()
+    .datetime({ message: 'createdFrom must be a valid ISO 8601 date' })
+    .optional(),
+  
+  createdTo: z
+    .string()
+    .datetime({ message: 'createdTo must be a valid ISO 8601 date' })
+    .optional()
+});
 
 /**
  * Schema for getting categories with advanced filtering
@@ -214,64 +295,7 @@ export const updateCategoryStatusSchema = z.object({
 export const getCategoriesSchema = z.object({
   body: z.object({}),
   params: z.object({}),
-  query: categoryPaginationSchema
-    .extend(categorySortingSchema.shape)
-    .extend({
-      // Active status filter
-      isActive: z
-        .string()
-        .optional()
-        .transform((val) => val === 'true' ? true : val === 'false' ? false : undefined)
-        .pipe(z.boolean().optional()),
-
-      // Color filter (exact match or array of colors)
-      color: z.union([
-        categoryColorSchema,
-        z.array(categoryColorSchema)
-      ]).optional()
-        .transform((val) => Array.isArray(val) ? val : val ? [val] : undefined),
-
-      // Icon filter (exact match or array of icons)
-      icon: z.union([
-        categoryIconSchema,
-        z.array(categoryIconSchema)
-      ]).optional()
-        .transform((val) => Array.isArray(val) ? val : val ? [val] : undefined),
-
-      // Task count filters
-      minTasks: z
-        .string()
-        .optional()
-        .transform((val) => val ? parseInt(val, 10) : undefined)
-        .pipe(z.number().int().min(0, 'Minimum task count cannot be negative').optional()),
-      
-      maxTasks: z
-        .string()
-        .optional()
-        .transform((val) => val ? parseInt(val, 10) : undefined)
-        .pipe(z.number().int().min(0, 'Maximum task count cannot be negative').optional()),
-
-      // Boolean filters
-      hasIcon: z
-        .string()
-        .optional()
-        .transform((val) => val === 'true' ? true : val === 'false' ? false : undefined)
-        .pipe(z.boolean().optional()),
-
-      // Search functionality
-      search: searchQuerySchema,
-
-      // Date range filters
-      createdFrom: z
-        .string()
-        .datetime({ message: 'createdFrom must be a valid ISO 8601 date' })
-        .optional(),
-      
-      createdTo: z
-        .string()
-        .datetime({ message: 'createdTo must be a valid ISO 8601 date' })
-        .optional()
-    })
+  query: baseCategoryQuerySchema
     .refine((data) => {
       // Validate task count range consistency
       if (data.minTasks !== undefined && data.maxTasks !== undefined) {
@@ -342,10 +366,7 @@ export const deleteCategorySchema = z.object({
   })
 }).describe('Category deletion validation schema');
 
-// ==============================================
 // BULK OPERATIONS SCHEMAS
-// ==============================================
-
 // Reusable category IDs array validation
 const categoryIdsArraySchema = z
   .array(cuidSchema)
@@ -403,10 +424,7 @@ export const bulkDeleteCategoriesSchema = z.object({
   query: z.object({})
 }).describe('Bulk category deletion validation schema');
 
-// ==============================================
 // SPECIALIZED OPERATION SCHEMAS
-// ==============================================
-
 /**
  * Schema for category search
  * GET /api/v1/categories/search
@@ -423,7 +441,23 @@ export const searchCategoriesSchema = z.object({
       .max(VALIDATION_CONFIG.SEARCH.MAX_LENGTH, 
         `Search query cannot exceed ${VALIDATION_CONFIG.SEARCH.MAX_LENGTH} characters`)
       .regex(VALIDATION_CONFIG.SEARCH.PATTERN, 'Search query contains invalid characters')
-  }).merge(getCategoriesSchema.shape.query.omit({ search: true }))
+  }).merge(
+    // Create new schema without search field for merging
+    z.object({
+      page: baseCategoryQuerySchema.shape.page,
+      limit: baseCategoryQuerySchema.shape.limit,
+      sortBy: baseCategoryQuerySchema.shape.sortBy,
+      sortOrder: baseCategoryQuerySchema.shape.sortOrder,
+      isActive: baseCategoryQuerySchema.shape.isActive,
+      color: baseCategoryQuerySchema.shape.color,
+      icon: baseCategoryQuerySchema.shape.icon,
+      minTasks: baseCategoryQuerySchema.shape.minTasks,
+      maxTasks: baseCategoryQuerySchema.shape.maxTasks,
+      hasIcon: baseCategoryQuerySchema.shape.hasIcon,
+      createdFrom: baseCategoryQuerySchema.shape.createdFrom,
+      createdTo: baseCategoryQuerySchema.shape.createdTo
+    })
+  )
 }).describe('Category search validation schema');
 
 /**
@@ -493,18 +527,18 @@ export const exportCategoriesSchema = z.object({
       .optional()
       .transform((val) => val === 'true')
       .pipe(z.boolean().optional())
-  }).merge(getCategoriesSchema.shape.query.pick({ 
-    isActive: true, 
-    color: true, 
-    createdFrom: true, 
-    createdTo: true 
-  }))
+  }).merge(
+    // Merge specific fields from base query schema
+    z.object({
+      isActive: baseCategoryQuerySchema.shape.isActive,
+      color: baseCategoryQuerySchema.shape.color,
+      createdFrom: baseCategoryQuerySchema.shape.createdFrom,
+      createdTo: baseCategoryQuerySchema.shape.createdTo
+    })
+  )
 }).describe('Category export validation schema');
 
-// ==============================================
 // TYPE EXPORTS (Auto-generated from Zod Schemas)
-// ==============================================
-
 // Input types for controllers and services
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>['body'];
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>['body'];
@@ -518,16 +552,13 @@ export type ExportCategoriesQuery = z.infer<typeof exportCategoriesSchema>['quer
 // Parameter types
 export type CategoryIdParam = z.infer<typeof getCategoryByIdSchema>['params'];
 
-// ==============================================
 // VALIDATION MIDDLEWARE FACTORY
-// ==============================================
-
 /**
  * Generic validation middleware factory with enhanced error handling
  * Follows Single Responsibility Principle - only handles validation
  */
 export const validateCategorySchema = <T extends z.ZodSchema>(schema: T) => {
-  return async (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       // Enhanced validation with detailed context
       const validationResult = await schema.parseAsync({
@@ -549,11 +580,12 @@ export const validateCategorySchema = <T extends z.ZodSchema>(schema: T) => {
           field: err.path.join('.'),
           message: err.message,
           code: err.code,
-          received: err.received,
-          expected: err.expected
+          // Only include received/expected if they exist on the error
+          ...(('received' in err) && { received: (err as any).received }),
+          ...(('expected' in err) && { expected: (err as any).expected })
         }));
         
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           error: {
             code: ERROR_CODES.VALIDATION_ERROR,
@@ -566,6 +598,7 @@ export const validateCategorySchema = <T extends z.ZodSchema>(schema: T) => {
             validationErrors: formattedErrors.length
           }
         });
+        return;
       }
       
       // Pass non-validation errors to global error handler
@@ -574,10 +607,7 @@ export const validateCategorySchema = <T extends z.ZodSchema>(schema: T) => {
   };
 };
 
-// ==============================================
 // VALIDATION HELPER FUNCTIONS
-// ==============================================
-
 /**
  * Validates category name uniqueness at runtime
  * This is separated from schema validation as it requires database access
@@ -618,16 +648,13 @@ export const validateCategoryDeletion = (
   }).parse({ categoryId, force, moveTasksTo });
 };
 
-// ==============================================
 // SCHEMA COMPOSITION HELPERS
-// ==============================================
-
 /**
  * Creates a composed schema for complex validation scenarios
  * Follows Open/Closed Principle - extensible without modification
  */
 export const createComposedCategorySchema = (
-  baseSchema: z.ZodSchema,
+  baseSchema: z.ZodObject<any>,
   extensions: Record<string, z.ZodSchema> = {}
 ) => {
   let composedSchema = baseSchema;
@@ -644,9 +671,9 @@ export const createComposedCategorySchema = (
  * Allows different validation rules in different environments
  */
 export const createConditionalCategorySchema = (
-  baseSchema: z.ZodSchema,
+  baseSchema: z.ZodObject<any>,
   conditions: Record<string, () => boolean>,
-  conditionalSchemas: Record<string, z.ZodSchema>
+  conditionalSchemas: Record<string, z.ZodObject<any>>
 ) => {
   let schema = baseSchema;
   
@@ -659,10 +686,7 @@ export const createConditionalCategorySchema = (
   return schema;
 };
 
-// ==============================================
 // UTILITY FUNCTIONS (imported from constants)
-// ==============================================
-
 // These functions are imported from constants but re-exported for convenience
 import {
   isValidCategoryColor,
@@ -684,89 +708,3 @@ export {
   getDefaultCategoryIcon,
   isFeatureEnabled
 };
-
-// ==============================================
-// USAGE EXAMPLES AND DOCUMENTATION
-// ==============================================
-
-/*
-USAGE EXAMPLES:
-
-// In your route files:
-import { 
-  validateCategorySchema, 
-  createCategorySchema, 
-  getCategoriesSchema,
-  bulkUpdateCategoriesSchema 
-} from './validators/category.validator';
-
-// Category CRUD routes
-router.post('/categories', 
-  validateCategorySchema(createCategorySchema), 
-  CategoryController.createCategory
-);
-
-router.get('/categories', 
-  validateCategorySchema(getCategoriesSchema), 
-  CategoryController.getCategories
-);
-
-router.patch('/categories/bulk', 
-  validateCategorySchema(bulkUpdateCategoriesSchema), 
-  CategoryController.bulkUpdateCategories
-);
-
-// In your controller:
-export class CategoryController {
-  static async createCategory(req: Request, res: Response) {
-    // req.body is now fully typed and validated
-    const categoryData: CreateCategoryInput = req.body;
-    
-    // Additional business rule validation
-    await validateCategoryNameUniqueness(categoryData.name, req.user.id);
-    await validateUserCategoryLimit(req.user.id);
-    
-    // ... rest of controller logic
-  }
-  
-  static async getCategories(req: Request, res: Response) {
-    // req.query is now fully typed and validated
-    const filters: GetCategoriesQuery = req.query;
-    
-    // All query parameters are properly typed and transformed
-    const categories = await CategoryService.getCategories(req.user.id, filters);
-    
-    // ... rest of controller logic
-  }
-}
-
-ADVANCED USAGE:
-
-// Conditional validation based on feature flags
-const conditionalCreateSchema = createConditionalCategorySchema(
-  createCategorySchema,
-  {
-    'strictColorValidation': () => isFeatureEnabled('CATEGORY_COLOR_PALETTE_STRICT'),
-    'strictIconValidation': () => isFeatureEnabled('CATEGORY_ICON_VALIDATION_STRICT')
-  },
-  {
-    'strictColorValidation': z.object({
-      color: categoryColorSchema.refine(isValidCategoryColor)
-    }),
-    'strictIconValidation': z.object({
-      icon: categoryIconSchema.refine(isValidCategoryIcon)
-    })
-  }
-);
-
-// Extended validation for admin operations
-const adminCategorySchema = createComposedCategorySchema(
-  createCategorySchema,
-  {
-    adminOverrides: z.object({
-      bypassLimits: z.boolean().optional(),
-      auditReason: z.string().optional()
-    })
-  }
-);
-*/

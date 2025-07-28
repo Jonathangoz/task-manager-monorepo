@@ -1,16 +1,18 @@
 // src/utils/swagger.ts - Task Service
 import swaggerJsdoc from 'swagger-jsdoc';
 import { SwaggerUiOptions } from 'swagger-ui-express';
+import { OpenAPIV3 } from 'openapi-types';
+import { ValidationResult, SwaggerInfo } from '@/types/swaggerTypes';
 import { config } from '@/config/environment';
 
 // ==============================================
 // CONFIGURACIÓN PRINCIPAL DE SWAGGER
 // ==============================================
-const swaggerDefinition: swaggerJsdoc.SwaggerDefinition = {
-  openapi: '3.0.3',
+const swaggerDefinition: OpenAPIV3.Document = {
+  openapi: '3.0.0',
   info: {
     title: 'Task Manager - Task Service API',
-    version: '1.0.0',
+    version: process.env.npm_package_version || '1.0.0',
     description: `
 # 📋 Task Service API
 
@@ -54,6 +56,8 @@ Microservicio para la gestión completa de tareas y categorías.
     },
   ],
   
+  paths: {}, // Propiedad 'paths' requerida añadida
+
   // ==============================================
   // COMPONENTES
   // ==============================================
@@ -530,20 +534,25 @@ Microservicio para la gestión completa de tareas y categorías.
       description: 'Estado del servicio',
     },
   ],
+
+  // ==============================================
+  // DOCUMENTACIÓN EXTERNA
+  // ==============================================
+  externalDocs: {
+    description: '📚 Documentación completa en GitHub',
+    url: 'https://github.com/Jonathangoz/task-manager-monorepo'
+  }
 };
 
 // ==============================================
 // CONFIGURACIÓN SWAGGER-JSDOC
 // ==============================================
 const swaggerOptions: swaggerJsdoc.Options = {
-  definition: swaggerDefinition,
-  apis: [
-    './src/routes/*.ts',
-    './src/controllers/*.ts',
-  ],
+    swaggerDefinition,
+    apis: ['./src/routes/*.ts', './src/schemas/*.ts'],
 };
 
-export const swaggerSpec = swaggerJsdoc(swaggerOptions);
+export const swaggerSpec = swaggerJsdoc(swaggerOptions) as OpenAPIV3.Document;
 
 // ==============================================
 // OPCIONES DE SWAGGER UI
@@ -571,12 +580,44 @@ export const swaggerUiOptions: SwaggerUiOptions = {
 // ==============================================
 // UTILIDADES
 // ==============================================
-export const validateSwaggerSpec = (): { isValid: boolean; errors: string[] } => {
-  const errors: string[] = [];
+
+/**
+ * Retrieves basic information from the Swagger definition.
+ * @returns {SwaggerInfo} An object with API title, version, etc.
+ */
+export function getSwaggerInfo(): SwaggerInfo {
+  const { title, version, description } = swaggerSpec.info;
+  const { servers, paths, components, tags } = swaggerSpec;
+
+  return {
+    title,
+    version,
+    description,
+    servers: servers || [],
+    paths: paths || {},
+    schemas: components?.schemas || {}, 
+    tags: tags || [],
+  };
+}
+
+/**
+ * Generates the full URL for the Swagger documentation.
+ * @returns {string} The Swagger UI URL.
+ */
+export function getSwaggerUrl(): string {
+  const baseUrl = config.app.isProduction
+    ? `https://task-manager-task-service.onrender.com`
+    : `http://localhost:${config.app.port}`;
+  return `${baseUrl}/api/${config.app.apiVersion}/docs`;
+}
+
+export function validateSwaggerSpec(): ValidationResult {
+    const errors: string[] = [];
+    const spec = swaggerSpec;
   
-  if (!swaggerSpec?.openapi) errors.push('OpenAPI version missing');
-  if (!swaggerSpec?.info?.title) errors.push('API title missing');
-  if (!swaggerSpec?.info?.version) errors.push('API version missing');
+  if (!spec?.openapi) errors.push('OpenAPI version missing');
+  if (!spec?.info?.title) errors.push('API title missing');
+  if (!spec?.info?.version) errors.push('API version missing');
   
   return {
     isValid: errors.length === 0,
@@ -584,8 +625,24 @@ export const validateSwaggerSpec = (): { isValid: boolean; errors: string[] } =>
   };
 };
 
+// ==============================================
+// VALIDACIÓN AL CARGAR
+// ==============================================
+if (config.app.isDevelopment) {
+  const validation = validateSwaggerSpec();
+  if (!validation.isValid) {
+    console.warn('⚠️ Swagger Documentation Issues:');
+    validation.errors.forEach(error => console.warn(`  - ${error}`));
+  } else {
+    console.log('✅ Swagger documentation is valid');
+    console.log(`📚 Swagger URL: ${getSwaggerUrl()}`);
+  }
+}
+
 export default {
   swaggerSpec,
   swaggerUiOptions,
-  validateSwaggerSpec
+  validateSwaggerSpec,
+  getSwaggerInfo,
+  getSwaggerUrl
 };

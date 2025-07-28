@@ -11,7 +11,6 @@ import {
 // Configuración optimizada para producción
 const getRedisConfig = (): RedisOptions => {
   const baseConfig: RedisOptions = {
-    retryDelayOnFailover: 1000,
     maxRetriesPerRequest: 3,
     lazyConnect: true,
     keyPrefix: config.redis.prefix,
@@ -24,7 +23,6 @@ const getRedisConfig = (): RedisOptions => {
     
     // Configuración de cluster si es necesario
     enableReadyCheck: true,
-    maxLoadingTimeout: 10000,
     
     // Configuración de reintentos mejorada
     retryStrategy: (times: number) => {

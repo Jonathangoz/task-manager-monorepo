@@ -293,7 +293,8 @@ class TaskDatabase {
 
       const duration = Date.now() - startTime;
       
-      loggers.dbQuery('cleanup', 'tasks', duration, result.count);
+      // Corregido: pasar count como string
+      loggers.dbQuery('cleanup', 'tasks', duration, result.count.toString());
       
       logger.info({
         deletedCount: result.count,
@@ -324,18 +325,18 @@ class TaskDatabase {
     const startTime = Date.now();
     
     try {
-      // Obtener estadísticas agrupadas con tipos correctos
+      // Obtener estadísticas agrupadas - removido el cast as
       const statusStats = await this.client.task.groupBy({
         by: ['status'],
         where: { userId },
         _count: { status: true },
-      }) as StatusGroupBy[];
+      });
 
       const priorityStats = await this.client.task.groupBy({
         by: ['priority'],
         where: { userId },
         _count: { priority: true },
-      }) as PriorityGroupBy[];
+      });
 
       // Contar tareas vencidas
       const overdueTasks = await this.client.task.count({
@@ -347,28 +348,28 @@ class TaskDatabase {
       });
 
       // Calcular totales con tipos seguros
-      const totalTasks = statusStats.reduce((sum: number, stat: StatusGroupBy) => 
+      const totalTasks = statusStats.reduce((sum: number, stat) => 
         sum + stat._count.status, 0);
       
-      const completedTasks = statusStats.find((s: StatusGroupBy) => 
+      const completedTasks = statusStats.find((s) => 
         s.status === 'COMPLETED')?._count.status || 0;
       
-      const pendingTasks = statusStats.find((s: StatusGroupBy) => 
+      const pendingTasks = statusStats.find((s) => 
         s.status === 'PENDING')?._count.status || 0;
       
-      const inProgressTasks = statusStats.find((s: StatusGroupBy) => 
+      const inProgressTasks = statusStats.find((s) => 
         s.status === 'IN_PROGRESS')?._count.status || 0;
 
-      const urgentTasks = priorityStats.find((p: PriorityGroupBy) => 
+      const urgentTasks = priorityStats.find((p) => 
         p.priority === 'URGENT')?._count.priority || 0;
       
-      const highTasks = priorityStats.find((p: PriorityGroupBy) => 
+      const highTasks = priorityStats.find((p) => 
         p.priority === 'HIGH')?._count.priority || 0;
       
-      const mediumTasks = priorityStats.find((p: PriorityGroupBy) => 
+      const mediumTasks = priorityStats.find((p) => 
         p.priority === 'MEDIUM')?._count.priority || 0;
       
-      const lowTasks = priorityStats.find((p: PriorityGroupBy) => 
+      const lowTasks = priorityStats.find((p) => 
         p.priority === 'LOW')?._count.priority || 0;
 
       const statsData: DatabaseStats = {
@@ -395,7 +396,8 @@ class TaskDatabase {
 
       const duration = Date.now() - startTime;
       
-      loggers.dbQuery('update_stats', 'task_stats', duration, 1);
+      // Corregido: pasar 1 como string
+      loggers.dbQuery('update_stats', 'task_stats', duration, '1');
       
       logger.info({
         userId,
@@ -430,7 +432,9 @@ class TaskDatabase {
       });
 
       const duration = Date.now() - startTime;
-      loggers.dbQuery('get_stats', 'task_stats', duration, stats ? 1 : 0);
+      
+      // Corregido: pasar count como string
+      loggers.dbQuery('get_stats', 'task_stats', duration, stats ? '1' : '0');
 
       return stats;
       

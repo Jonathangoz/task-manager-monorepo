@@ -1,5 +1,5 @@
 // src/commons/validators/task.validator.ts
-import { z } from 'zod';
+import { z } from 'zod';import { Request, Response, NextFunction } from 'express';
 import { 
   TASK_CONFIG, 
   CATEGORY_CONFIG,
@@ -140,6 +140,64 @@ const sortingSchema = z.object({
   }).optional()
 });
 
+// Base query schema for filtering (without refine to allow omit)
+const baseQuerySchema = z.object({
+  // Status filters - support multiple values
+  status: z.union([
+    statusSchema,
+    z.array(statusSchema)
+  ]).optional()
+    .transform((val) => Array.isArray(val) ? val : val ? [val] : undefined),
+
+  // Priority filters - support multiple values  
+  priority: z.union([
+    prioritySchema,
+    z.array(prioritySchema)
+  ]).optional()
+    .transform((val) => Array.isArray(val) ? val : val ? [val] : undefined),
+
+  // Category filter
+  categoryId: cuidSchema.optional(),
+
+  // Date range filters
+  dueDateFrom: z
+    .string()
+    .datetime({ message: 'dueDateFrom must be a valid ISO 8601 date' })
+    .optional(),
+  dueDateTo: z
+    .string()
+    .datetime({ message: 'dueDateTo must be a valid ISO 8601 date' })
+    .optional(),
+
+  // Boolean filters
+  isOverdue: z
+    .string()
+    .optional()
+    .transform((val) => val === 'true' ? true : val === 'false' ? false : undefined)
+    .pipe(z.boolean().optional()),
+  hasDueDate: z
+    .string()
+    .optional()
+    .transform((val) => val === 'true' ? true : val === 'false' ? false : undefined)
+    .pipe(z.boolean().optional()),
+
+  // Search functionality
+  search: z
+    .string()
+    .trim()
+    .min(2, 'Search term must be at least 2 characters')
+    .max(100, 'Search term cannot exceed 100 characters')
+    .optional(),
+
+  // Tags filter
+  tags: z.union([
+    z.string(),
+    z.array(z.string())
+  ]).optional()
+    .transform((val) => Array.isArray(val) ? val : val ? [val] : undefined)
+    .pipe(z.array(z.string().max(TASK_CONFIG.MAX_TAG_LENGTH)).optional())
+});
+
 // ==============================================
 // TASK CRUD OPERATION SCHEMAS
 // ==============================================
@@ -228,62 +286,7 @@ export const getTasksSchema = z.object({
   params: z.object({}),
   query: paginationSchema
     .extend(sortingSchema.shape)
-    .extend({
-      // Status filters - support multiple values
-      status: z.union([
-        statusSchema,
-        z.array(statusSchema)
-      ]).optional()
-        .transform((val) => Array.isArray(val) ? val : val ? [val] : undefined),
-
-      // Priority filters - support multiple values  
-      priority: z.union([
-        prioritySchema,
-        z.array(prioritySchema)
-      ]).optional()
-        .transform((val) => Array.isArray(val) ? val : val ? [val] : undefined),
-
-      // Category filter
-      categoryId: cuidSchema.optional(),
-
-      // Date range filters
-      dueDateFrom: z
-        .string()
-        .datetime({ message: 'dueDateFrom must be a valid ISO 8601 date' })
-        .optional(),
-      dueDateTo: z
-        .string()
-        .datetime({ message: 'dueDateTo must be a valid ISO 8601 date' })
-        .optional(),
-
-      // Boolean filters
-      isOverdue: z
-        .string()
-        .optional()
-        .transform((val) => val === 'true' ? true : val === 'false' ? false : undefined)
-        .pipe(z.boolean().optional()),
-      hasDueDate: z
-        .string()
-        .optional()
-        .transform((val) => val === 'true' ? true : val === 'false' ? false : undefined)
-        .pipe(z.boolean().optional()),
-
-      // Search functionality
-      search: z
-        .string()
-        .trim()
-        .min(2, 'Search term must be at least 2 characters')
-        .max(100, 'Search term cannot exceed 100 characters')
-        .optional(),
-
-      // Tags filter
-      tags: z.union([
-        z.string(),
-        z.array(z.string())
-      ]).optional()
-        .transform((val) => Array.isArray(val) ? val : val ? [val] : undefined)
-        .pipe(z.array(z.string().max(TASK_CONFIG.MAX_TAG_LENGTH)).optional())
-    })
+    .extend(baseQuerySchema.shape)
     .refine((data) => {
       // Validate date range consistency
       if (data.dueDateFrom && data.dueDateTo) {
@@ -394,7 +397,20 @@ export const searchTasksSchema = z.object({
       .trim()
       .min(2, 'Search query must be at least 2 characters')
       .max(100, 'Search query cannot exceed 100 characters')
-  }).merge(getTasksSchema.shape.query.omit({ search: true }))
+  }).merge(
+    paginationSchema
+      .extend(sortingSchema.shape)
+      .extend(baseQuerySchema.omit({ search: true }).shape)
+  ).refine((data) => {
+    // Validate date range consistency
+    if (data.dueDateFrom && data.dueDateTo) {
+      return new Date(data.dueDateFrom) < new Date(data.dueDateTo);
+    }
+    return true;
+  }, {
+    message: 'dueDateFrom must be before dueDateTo',
+    path: ['dueDateTo']
+  })
 });
 
 /**
@@ -448,13 +464,11 @@ export type SearchTasksQuery = z.infer<typeof searchTasksSchema>['query'];
 // VALIDATION MIDDLEWARE HELPER
 // ==============================================
 
-import { Request, Response, NextFunction } from 'express';
-
 /**
  * Generic validation middleware factory for Zod schemas
  */
 export const validateSchema = <T extends z.ZodSchema>(schema: T) => {
-  return async (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const result = await schema.parseAsync({
         body: req.body,
@@ -476,7 +490,7 @@ export const validateSchema = <T extends z.ZodSchema>(schema: T) => {
           code: err.code
         }));
         
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           error: {
             code: ERROR_CODES.VALIDATION_ERROR,
@@ -484,6 +498,7 @@ export const validateSchema = <T extends z.ZodSchema>(schema: T) => {
             details: formattedErrors
           }
         });
+        return;
       }
       
       next(error);
