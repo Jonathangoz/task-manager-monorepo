@@ -203,7 +203,8 @@ class AuthServer {
         this.server.on('clientError', (error, socket) => {
           this.serverLogger.warn('Client error', { 
             error: error.message,
-            remoteAddress: socket.remoteAddress
+            remoteAddress: socket,
+            remotePort: socket
           });
           if (socket.writable) {
             socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');

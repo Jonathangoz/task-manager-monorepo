@@ -1,8 +1,4 @@
-// ==============================================
-// src/core/infrastructure/repositories/UserRepository.ts
-// Repositorio de usuarios con logging estructurado y manejo de errores
-// ==============================================
-
+// src/core/infrastructure/repositories/UserRepository.ts - Repositorio de usuarios con logging estructurado y manejo de errores
 import { PrismaClient } from '@prisma/client';
 import { db } from '@/config/database';
 import { loggers, dbLogger } from '@/utils/logger';
@@ -10,7 +6,9 @@ import { User } from '@/core/domain/entities/User';
 import { 
   IUserRepository, 
   CreateUserData, 
-  UpdateUserData 
+  UpdateUserData,
+  UserWithPassword,
+  UserWithoutPassword
 } from '@/core/domain/interfaces/IUserRepository';
 import { 
   UserFilters, 
@@ -31,7 +29,7 @@ export class UserRepository implements IUserRepository {
   /**
    * Crear un nuevo usuario
    */
-  async create(data: CreateUserData): Promise<User> {
+  async create(data: CreateUserData): Promise<UserWithPassword> {
     const startTime = Date.now();
     
     try {
@@ -61,7 +59,7 @@ export class UserRepository implements IUserRepository {
         duration
       }, 'User created successfully');
       
-      return this.mapToEntity(user);
+      return this.mapToUserWithPassword(user);
     } catch (error: any) {
       const duration = Date.now() - startTime;
       loggers.dbError(error, 'create', 'user');
@@ -90,9 +88,9 @@ export class UserRepository implements IUserRepository {
   }
 
   /**
-   * Buscar usuario por ID
+   * Buscar usuario por ID (sin password)
    */
-  async findById(id: string): Promise<User | null> {
+  async findById(id: string): Promise<UserWithoutPassword | null> {
     const startTime = Date.now();
     
     try {
@@ -100,6 +98,20 @@ export class UserRepository implements IUserRepository {
       
       const user = await this.database.user.findUnique({
         where: { id },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+          isActive: true,
+          isVerified: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
+          // password: false - explícitamente excluido
+        },
       });
 
       const duration = Date.now() - startTime;
@@ -111,7 +123,7 @@ export class UserRepository implements IUserRepository {
       }
 
       dbLogger.debug({ userId: id, duration }, 'User found by ID');
-      return this.mapToEntity(user);
+      return this.mapToUserWithoutPassword(user);
     } catch (error: any) {
       const duration = Date.now() - startTime;
       loggers.dbError(error, 'findUnique', 'user', id);
@@ -128,9 +140,47 @@ export class UserRepository implements IUserRepository {
   }
 
   /**
-   * Buscar usuario por email
+   * Buscar usuario por ID (con password para autenticación)
    */
-  async findByEmail(email: string): Promise<User | null> {
+  async findByIdWithPassword(id: string): Promise<UserWithPassword | null> {
+    const startTime = Date.now();
+    
+    try {
+      dbLogger.debug({ userId: id, operation: 'findByIdWithPassword' }, 'Finding user by ID with password');
+      
+      const user = await this.database.user.findUnique({
+        where: { id },
+      });
+
+      const duration = Date.now() - startTime;
+      loggers.dbQuery('findUnique', 'user', duration, id);
+
+      if (!user) {
+        dbLogger.debug({ userId: id, duration }, 'User not found by ID');
+        return null;
+      }
+
+      dbLogger.debug({ userId: id, duration }, 'User found by ID with password');
+      return this.mapToUserWithPassword(user);
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      loggers.dbError(error, 'findUnique', 'user', id);
+      
+      dbLogger.error({
+        error,
+        userId: id,
+        duration,
+        operation: 'findByIdWithPassword'
+      }, 'Failed to find user by ID with password');
+      
+      throw new Error(ERROR_MESSAGES.DATABASE_CONNECTION_ERROR);
+    }
+  }
+
+  /**
+   * Buscar usuario por email (sin password)
+   */
+  async findByEmail(email: string): Promise<UserWithoutPassword | null> {
     const startTime = Date.now();
     const normalizedEmail = email.toLowerCase();
     
@@ -139,6 +189,70 @@ export class UserRepository implements IUserRepository {
         email: normalizedEmail, 
         operation: 'findByEmail' 
       }, 'Finding user by email');
+      
+      const user = await this.database.user.findUnique({
+        where: { email: normalizedEmail },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+          isActive: true,
+          isVerified: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
+          // password: false - explícitamente excluido
+        },
+      });
+
+      const duration = Date.now() - startTime;
+      loggers.dbQuery('findUnique', 'user', duration);
+
+      if (!user) {
+        dbLogger.debug({ 
+          email: normalizedEmail, 
+          duration 
+        }, 'User not found by email');
+        return null;
+      }
+
+      dbLogger.debug({ 
+        userId: user.id, 
+        email: normalizedEmail, 
+        duration 
+      }, 'User found by email');
+      
+      return this.mapToUserWithoutPassword(user);
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      loggers.dbError(error, 'findUnique', 'user');
+      
+      dbLogger.error({
+        error,
+        email: normalizedEmail,
+        duration,
+        operation: 'findByEmail'
+      }, 'Failed to find user by email');
+      
+      throw new Error(ERROR_MESSAGES.DATABASE_CONNECTION_ERROR);
+    }
+  }
+
+  /**
+   * Buscar usuario por email (con password para autenticación)
+   */
+  async findByEmailWithPassword(email: string): Promise<UserWithPassword | null> {
+    const startTime = Date.now();
+    const normalizedEmail = email.toLowerCase();
+    
+    try {
+      dbLogger.debug({ 
+        email: normalizedEmail, 
+        operation: 'findByEmailWithPassword' 
+      }, 'Finding user by email with password');
       
       const user = await this.database.user.findUnique({
         where: { email: normalizedEmail },
@@ -159,9 +273,9 @@ export class UserRepository implements IUserRepository {
         userId: user.id, 
         email: normalizedEmail, 
         duration 
-      }, 'User found by email');
+      }, 'User found by email with password');
       
-      return this.mapToEntity(user);
+      return this.mapToUserWithPassword(user);
     } catch (error: any) {
       const duration = Date.now() - startTime;
       loggers.dbError(error, 'findUnique', 'user');
@@ -170,17 +284,17 @@ export class UserRepository implements IUserRepository {
         error,
         email: normalizedEmail,
         duration,
-        operation: 'findByEmail'
-      }, 'Failed to find user by email');
+        operation: 'findByEmailWithPassword'
+      }, 'Failed to find user by email with password');
       
       throw new Error(ERROR_MESSAGES.DATABASE_CONNECTION_ERROR);
     }
   }
 
   /**
-   * Buscar usuario por username
+   * Buscar usuario por username (sin password)
    */
-  async findByUsername(username: string): Promise<User | null> {
+  async findByUsername(username: string): Promise<UserWithoutPassword | null> {
     const startTime = Date.now();
     
     try {
@@ -188,6 +302,69 @@ export class UserRepository implements IUserRepository {
         username, 
         operation: 'findByUsername' 
       }, 'Finding user by username');
+      
+      const user = await this.database.user.findUnique({
+        where: { username },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+          isActive: true,
+          isVerified: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
+          // password: false - explícitamente excluido
+        },
+      });
+
+      const duration = Date.now() - startTime;
+      loggers.dbQuery('findUnique', 'user', duration);
+
+      if (!user) {
+        dbLogger.debug({ 
+          username, 
+          duration 
+        }, 'User not found by username');
+        return null;
+      }
+
+      dbLogger.debug({ 
+        userId: user.id, 
+        username, 
+        duration 
+      }, 'User found by username');
+      
+      return this.mapToUserWithoutPassword(user);
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      loggers.dbError(error, 'findUnique', 'user');
+      
+      dbLogger.error({
+        error,
+        username,
+        duration,
+        operation: 'findByUsername'
+      }, 'Failed to find user by username');
+      
+      throw new Error(ERROR_MESSAGES.DATABASE_CONNECTION_ERROR);
+    }
+  }
+
+  /**
+   * Buscar usuario por username (con password para autenticación)
+   */
+  async findByUsernameWithPassword(username: string): Promise<UserWithPassword | null> {
+    const startTime = Date.now();
+    
+    try {
+      dbLogger.debug({ 
+        username, 
+        operation: 'findByUsernameWithPassword' 
+      }, 'Finding user by username with password');
       
       const user = await this.database.user.findUnique({
         where: { username },
@@ -208,9 +385,9 @@ export class UserRepository implements IUserRepository {
         userId: user.id, 
         username, 
         duration 
-      }, 'User found by username');
+      }, 'User found by username with password');
       
-      return this.mapToEntity(user);
+      return this.mapToUserWithPassword(user);
     } catch (error: any) {
       const duration = Date.now() - startTime;
       loggers.dbError(error, 'findUnique', 'user');
@@ -219,8 +396,8 @@ export class UserRepository implements IUserRepository {
         error,
         username,
         duration,
-        operation: 'findByUsername'
-      }, 'Failed to find user by username');
+        operation: 'findByUsernameWithPassword'
+      }, 'Failed to find user by username with password');
       
       throw new Error(ERROR_MESSAGES.DATABASE_CONNECTION_ERROR);
     }
@@ -229,7 +406,7 @@ export class UserRepository implements IUserRepository {
   /**
    * Actualizar datos del usuario
    */
-  async update(id: string, data: UpdateUserData): Promise<User> {
+  async update(id: string, data: UpdateUserData): Promise<UserWithoutPassword> {
     const startTime = Date.now();
     
     try {
@@ -245,6 +422,20 @@ export class UserRepository implements IUserRepository {
           ...data,
           updatedAt: new Date(),
         },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+          isActive: true,
+          isVerified: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
+          // password: false - explícitamente excluido
+        },
       });
 
       const duration = Date.now() - startTime;
@@ -256,7 +447,7 @@ export class UserRepository implements IUserRepository {
         duration 
       }, 'User updated successfully');
       
-      return this.mapToEntity(user);
+      return this.mapToUserWithoutPassword(user);
     } catch (error: any) {
       const duration = Date.now() - startTime;
       loggers.dbError(error, 'update', 'user', id);
@@ -441,7 +632,7 @@ export class UserRepository implements IUserRepository {
       }
 
       // Configurar ordenamiento
-      const orderBy: any = { createdAt: 'desc' };
+      let orderBy: any = { createdAt: 'desc' };
       if (pagination?.sortBy) {
         const validSortFields = ['createdAt', 'updatedAt', 'email', 'username', 'lastLoginAt'];
         if (validSortFields.includes(pagination.sortBy)) {
@@ -487,7 +678,7 @@ export class UserRepository implements IUserRepository {
       const totalPages = Math.ceil(total / limit);
       
       // Mapear usuarios sin password
-      const mappedUsers = users.map(user => this.mapToEntity({ 
+      const mappedUsers = users.map(user => User.fromPrisma({ 
         ...user, 
         password: '' // Password vacío para listados
       }));
@@ -601,9 +792,9 @@ export class UserRepository implements IUserRepository {
         id: session.id,
         sessionId: session.sessionId || session.id, // Fallback si no existe sessionId
         userId: session.userId,
-        device: session.deviceInfo || undefined,
+        device: session.device || undefined, // Corregido: usar 'device' en lugar de 'deviceInfo'
         ipAddress: session.ipAddress || undefined,
-        location: undefined, // Si tienes este campo en el schema
+        location: session.location || undefined, // Usar el campo correcto
         userAgent: session.userAgent || undefined,
         isActive: session.isActive,
         lastSeen: session.lastSeen,
@@ -756,10 +947,10 @@ export class UserRepository implements IUserRepository {
           where: { email: user.email },
         });
 
-        // Eliminar tokens de verificación/reset
-        await tx.token.deleteMany({
-          where: { userId: id },
-        });
+        // Eliminar tokens de verificación/reset si existen en tu schema
+        // await tx.verificationToken.deleteMany({
+        //   where: { userId: id },
+        // });
 
         // Finalmente eliminar el usuario
         await tx.user.delete({
@@ -794,15 +985,15 @@ export class UserRepository implements IUserRepository {
   }
 
   /**
-   * Mapear datos de Prisma a entidad de dominio
+   * Mapear datos de Prisma a UserWithPassword
    */
-  private mapToEntity(prismaUser: any): User {
+  private mapToUserWithPassword(prismaUser: any): UserWithPassword {
     try {
-      return User.fromPrisma({
+      return {
         id: prismaUser.id,
         email: prismaUser.email,
         username: prismaUser.username,
-        password: prismaUser.password || '',
+        password: prismaUser.password,
         firstName: prismaUser.firstName,
         lastName: prismaUser.lastName,
         avatar: prismaUser.avatar,
@@ -811,13 +1002,42 @@ export class UserRepository implements IUserRepository {
         lastLoginAt: prismaUser.lastLoginAt,
         createdAt: prismaUser.createdAt,
         updatedAt: prismaUser.updatedAt,
-      });
+      };
     } catch (error: any) {
       dbLogger.error({
         error,
         userId: prismaUser?.id,
-        operation: 'mapToEntity'
-      }, 'Failed to map Prisma user to entity');
+        operation: 'mapToUserWithPassword'
+      }, 'Failed to map Prisma user to UserWithPassword');
+      
+      throw new Error('Invalid user data structure');
+    }
+  }
+
+  /**
+   * Mapear datos de Prisma a UserWithoutPassword
+   */
+  private mapToUserWithoutPassword(prismaUser: any): UserWithoutPassword {
+    try {
+      return {
+        id: prismaUser.id,
+        email: prismaUser.email,
+        username: prismaUser.username,
+        firstName: prismaUser.firstName,
+        lastName: prismaUser.lastName,
+        avatar: prismaUser.avatar,
+        isActive: prismaUser.isActive,
+        isVerified: prismaUser.isVerified,
+        lastLoginAt: prismaUser.lastLoginAt,
+        createdAt: prismaUser.createdAt,
+        updatedAt: prismaUser.updatedAt,
+      };
+    } catch (error: any) {
+      dbLogger.error({
+        error,
+        userId: prismaUser?.id,
+        operation: 'mapToUserWithoutPassword'
+      }, 'Failed to map Prisma user to UserWithoutPassword');
       
       throw new Error('Invalid user data structure');
     }

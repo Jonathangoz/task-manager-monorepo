@@ -31,3 +31,5 @@ export interface ITokenService {
   isTokenExpired(token: string): boolean;
   getTokenExpirationTime(expiresIn: string): number;
 }
+
+export default ITokenService;

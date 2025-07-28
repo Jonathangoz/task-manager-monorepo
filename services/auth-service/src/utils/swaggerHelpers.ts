@@ -1,6 +1,5 @@
 // src/utils/swagger-helpers.ts - Utilidades adicionales
-// ==============================================
-import { Response } from 'express';
+import { ValidationResult } from '@/types/swaggerTypes'
 
 /**
  * Genera respuestas estandarizadas para la documentación

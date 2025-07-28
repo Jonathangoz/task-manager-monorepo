@@ -1,5 +1,5 @@
 // src/commons/validators/auth.validator.ts
-import { body, ValidationChain } from 'express-validator';
+import { z } from 'zod';
 import { 
   VALIDATION_PATTERNS, 
   SECURITY_CONFIG,
@@ -7,328 +7,468 @@ import {
   PASSWORD_VALIDATION 
 } from '@/utils/constants';
 
-/**
- * Validaciones para registro de usuario
- */
-export const registerValidation: ValidationChain[] = [
-  body('email')
-    .isEmail()
-    .withMessage('El email debe tener un formato válido')
-    .isLength({ max: SECURITY_CONFIG.EMAIL_MAX_LENGTH })
-    .withMessage(`El email no puede exceder ${SECURITY_CONFIG.EMAIL_MAX_LENGTH} caracteres`)
-    .normalizeEmail()
-    .matches(VALIDATION_PATTERNS.EMAIL)
-    .withMessage('Formato de email inválido'),
+// Base Schemas - Reutilización y principio DRY
+const EmailSchema = z.string()
+  .min(1, 'El email es requerido')
+  .max(SECURITY_CONFIG.EMAIL_MAX_LENGTH, `El email no puede exceder ${SECURITY_CONFIG.EMAIL_MAX_LENGTH} caracteres`)
+  .email('El email debe tener un formato válido')
+  .regex(VALIDATION_PATTERNS.EMAIL, 'Formato de email inválido')
+  .transform(email => email.toLowerCase().trim());
 
-  body('username')
-    .isLength({ 
-      min: SECURITY_CONFIG.USERNAME_MIN_LENGTH, 
-      max: SECURITY_CONFIG.USERNAME_MAX_LENGTH 
-    })
-    .withMessage(`El username debe tener entre ${SECURITY_CONFIG.USERNAME_MIN_LENGTH} y ${SECURITY_CONFIG.USERNAME_MAX_LENGTH} caracteres`)
-    .matches(VALIDATION_PATTERNS.USERNAME)
-    .withMessage('El username solo puede contener letras, números y guiones bajos')
-    .trim(),
+const UsernameSchema = z.string()
+  .min(SECURITY_CONFIG.USERNAME_MIN_LENGTH, `El username debe tener al menos ${SECURITY_CONFIG.USERNAME_MIN_LENGTH} caracteres`)
+  .max(SECURITY_CONFIG.USERNAME_MAX_LENGTH, `El username no puede exceder ${SECURITY_CONFIG.USERNAME_MAX_LENGTH} caracteres`)
+  .regex(VALIDATION_PATTERNS.USERNAME, 'El username solo puede contener letras, números y guiones bajos')
+  .transform(username => username.trim());
 
-  body('password')
-    .isLength({ 
-      min: SECURITY_CONFIG.PASSWORD_MIN_LENGTH, 
-      max: SECURITY_CONFIG.PASSWORD_MAX_LENGTH 
-    })
-    .withMessage(`La contraseña debe tener entre ${SECURITY_CONFIG.PASSWORD_MIN_LENGTH} y ${SECURITY_CONFIG.PASSWORD_MAX_LENGTH} caracteres`)
-    .matches(VALIDATION_PATTERNS.PASSWORD_STRONG)
-    .withMessage('La contraseña debe contener al menos: 1 mayúscula, 1 minúscula, 1 número y 1 carácter especial')
-    .custom((value) => {
-      // Verificar patrones prohibidos
-      for (const pattern of PASSWORD_VALIDATION.FORBIDDEN_PATTERNS) {
-        if (pattern.test(value)) {
-          throw new Error('La contraseña contiene un patrón no permitido');
+const PasswordSchema = z.string()
+  .min(SECURITY_CONFIG.PASSWORD_MIN_LENGTH, `La contraseña debe tener al menos ${SECURITY_CONFIG.PASSWORD_MIN_LENGTH} caracteres`)
+  .max(SECURITY_CONFIG.PASSWORD_MAX_LENGTH, `La contraseña no puede exceder ${SECURITY_CONFIG.PASSWORD_MAX_LENGTH} caracteres`)
+  .regex(VALIDATION_PATTERNS.PASSWORD_STRONG, 'La contraseña debe contener al menos: 1 mayúscula, 1 minúscula, 1 número y 1 carácter especial')
+  .refine(password => {
+    return !PASSWORD_VALIDATION.FORBIDDEN_PATTERNS.some(pattern => pattern.test(password));
+  }, 'La contraseña contiene un patrón no permitido');
+
+const SimplePasswordSchema = z.string()
+  .min(1, 'La contraseña es requerida')
+  .nonempty('La contraseña no puede estar vacía');
+
+const NameSchema = z.string()
+  .min(1, 'Este campo debe tener al menos 1 carácter')
+  .max(50, 'No puede exceder 50 caracteres')
+  .regex(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/, 'Solo puede contener letras y espacios')
+  .transform(name => name.trim());
+
+const AvatarSchema = z.string()
+  .url('El avatar debe ser una URL válida')
+  .max(500, 'La URL del avatar no puede exceder 500 caracteres');
+
+const TokenSchema = z.string()
+  .min(10, 'El token debe tener al menos 10 caracteres')
+  .nonempty('El token es requerido');
+
+const CUIDSchema = z.string().regex(
+  VALIDATION_PATTERNS.CUID,
+  'El ID debe ser un CUID válido'
+);
+
+const ServiceSchema = z.string()
+  .min(1, 'El nombre del servicio es requerido')
+  .max(50, 'El nombre del servicio debe tener entre 1 y 50 caracteres')
+  .transform(service => service.trim());
+
+// Authentication Schemas - Separación por funcionalidad
+
+export const RegisterBodySchema = z.object({
+  email: EmailSchema,
+  username: UsernameSchema,
+  password: PasswordSchema,
+  firstName: NameSchema.optional(),
+  lastName: NameSchema.optional()
+});
+
+export const LoginBodySchema = z.object({
+  email: EmailSchema,
+  password: SimplePasswordSchema
+});
+
+export const RefreshTokenBodySchema = z.object({
+  refreshToken: TokenSchema
+});
+
+export const VerifyTokenBodySchema = z.object({
+  token: TokenSchema,
+  service: ServiceSchema.optional()
+});
+
+// Profile Management Schemas
+export const UpdateProfileBodySchema = z.object({
+  firstName: NameSchema.optional(),
+  lastName: NameSchema.optional(),
+  avatar: AvatarSchema.optional()
+}).refine(data => {
+  // Al menos un campo debe estar presente
+  return Object.values(data).some(value => value !== undefined);
+}, {
+  message: 'Debe proporcionar al menos un campo para actualizar'
+});
+
+export const ChangePasswordBodySchema = z.object({
+  currentPassword: z.string()
+    .min(1, 'La contraseña actual es requerida')
+    .nonempty('La contraseña actual es requerida'),
+  newPassword: PasswordSchema
+}).refine(data => {
+  // La nueva contraseña debe ser diferente de la actual
+  return data.newPassword !== data.currentPassword;
+}, {
+  message: 'La nueva contraseña debe ser diferente a la actual',
+  path: ['newPassword']
+});
+
+// Password Recovery Schemas
+export const ForgotPasswordBodySchema = z.object({
+  email: EmailSchema
+});
+
+export const ResetPasswordBodySchema = z.object({
+  token: TokenSchema,
+  password: PasswordSchema,
+  email: EmailSchema
+});
+
+export const VerifyEmailBodySchema = z.object({
+  token: TokenSchema
+});
+
+// Session Management Schemas
+export const LogoutBodySchema = z.object({
+  refreshToken: z.string().optional()
+});
+
+export const TerminateSessionBodySchema = z.object({
+  sessionId: CUIDSchema.optional()
+});
+
+// Validation Factory - Patrón Factory para crear middlewares
+class AuthValidationFactory {
+  private static createErrorResponse(errors: z.ZodError) {
+    return {
+      success: false,
+      message: 'Errores de validación en la autenticación',
+      errors: errors.errors.map(err => ({
+        field: err.path.join('.'),
+        message: err.message,
+        code: err.code
+      }))
+    };
+  }
+
+  static createBodyValidator<T extends z.ZodSchema>(schema: T) {
+    return (req: any, res: any, next: any) => {
+      try {
+        req.body = schema.parse(req.body);
+        next();
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json(this.createErrorResponse(error));
         }
+        next(error);
       }
-      return true;
-    }),
+    };
+  }
 
-  body('firstName')
-    .optional()
-    .isLength({ min: 1, max: 50 })
-    .withMessage('El nombre debe tener entre 1 y 50 caracteres')
-    .matches(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/)
-    .withMessage('El nombre solo puede contener letras y espacios')
-    .trim(),
-
-  body('lastName')
-    .optional()
-    .isLength({ min: 1, max: 50 })
-    .withMessage('El apellido debe tener entre 1 y 50 caracteres')
-    .matches(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/)
-    .withMessage('El apellido solo puede contener letras y espacios')
-    .trim(),
-];
-
-/**
- * Validaciones para login
- */
-export const loginValidation: ValidationChain[] = [
-  body('email')
-    .isEmail()
-    .withMessage('El email debe tener un formato válido')
-    .normalizeEmail()
-    .matches(VALIDATION_PATTERNS.EMAIL)
-    .withMessage('Formato de email inválido'),
-
-  body('password')
-    .notEmpty()
-    .withMessage('La contraseña es requerida')
-    .isLength({ min: 1 })
-    .withMessage('La contraseña no puede estar vacía'),
-];
-
-/**
- * Validaciones para refresh token
- */
-export const refreshTokenValidation: ValidationChain[] = [
-  body('refreshToken')
-    .notEmpty()
-    .withMessage('El refresh token es requerido')
-    .isLength({ min: 10 })
-    .withMessage('El refresh token debe tener al menos 10 caracteres')
-    .isString()
-    .withMessage('El refresh token debe ser una cadena válida'),
-];
-
-/**
- * Validaciones para verificación de token (usado por otros servicios)
- */
-export const verifyTokenValidation: ValidationChain[] = [
-  body('token')
-    .notEmpty()
-    .withMessage('El token es requerido')
-    .isString()
-    .withMessage('El token debe ser una cadena válida')
-    .isLength({ min: 10 })
-    .withMessage('El token debe tener al menos 10 caracteres'),
-
-  body('service')
-    .optional()
-    .isString()
-    .withMessage('El servicio debe ser una cadena válida')
-    .isLength({ min: 1, max: 50 })
-    .withMessage('El nombre del servicio debe tener entre 1 y 50 caracteres')
-    .trim(),
-];
-
-/**
- * Validaciones para actualizar perfil
- */
-export const updateProfileValidation: ValidationChain[] = [
-  body('firstName')
-    .optional()
-    .isLength({ min: 1, max: 50 })
-    .withMessage('El nombre debe tener entre 1 y 50 caracteres')
-    .matches(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/)
-    .withMessage('El nombre solo puede contener letras y espacios')
-    .trim(),
-
-  body('lastName')
-    .optional()
-    .isLength({ min: 1, max: 50 })
-    .withMessage('El apellido debe tener entre 1 y 50 caracteres')
-    .matches(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/)
-    .withMessage('El apellido solo puede contener letras y espacios')
-    .trim(),
-
-  body('avatar')
-    .optional()
-    .isURL()
-    .withMessage('El avatar debe ser una URL válida')
-    .isLength({ max: 500 })
-    .withMessage('La URL del avatar no puede exceder 500 caracteres'),
-
-  // Validación personalizada para asegurar que al menos un campo esté presente
-  body()
-    .custom((value, { req }) => {
-      const allowedFields = ['firstName', 'lastName', 'avatar'];
-      const providedFields = Object.keys(req.body).filter(key => 
-        allowedFields.includes(key) && req.body[key] !== undefined && req.body[key] !== ''
-      );
-      
-      if (providedFields.length === 0) {
-        throw new Error('Debe proporcionar al menos un campo para actualizar');
+  static createOptionalBodyValidator<T extends z.ZodSchema>(schema: T) {
+    return (req: any, res: any, next: any) => {
+      // Si no hay body, continúa sin validar
+      if (!req.body || Object.keys(req.body).length === 0) {
+        return next();
       }
-      return true;
-    }),
-];
 
-/**
- * Validaciones para cambio de contraseña
- */
-export const changePasswordValidation: ValidationChain[] = [
-  body('currentPassword')
-    .notEmpty()
-    .withMessage('La contraseña actual es requerida')
-    .isString()
-    .withMessage('La contraseña actual debe ser una cadena válida'),
-
-  body('newPassword')
-    .isLength({ 
-      min: SECURITY_CONFIG.PASSWORD_MIN_LENGTH, 
-      max: SECURITY_CONFIG.PASSWORD_MAX_LENGTH 
-    })
-    .withMessage(`La nueva contraseña debe tener entre ${SECURITY_CONFIG.PASSWORD_MIN_LENGTH} y ${SECURITY_CONFIG.PASSWORD_MAX_LENGTH} caracteres`)
-    .matches(VALIDATION_PATTERNS.PASSWORD_STRONG)
-    .withMessage('La nueva contraseña debe contener al menos: 1 mayúscula, 1 minúscula, 1 número y 1 carácter especial')
-    .custom((value, { req }) => {
-      // Verificar que la nueva contraseña sea diferente de la actual
-      if (value === req.body.currentPassword) {
-        throw new Error('La nueva contraseña debe ser diferente a la actual');
-      }
-      
-      // Verificar patrones prohibidos
-      for (const pattern of PASSWORD_VALIDATION.FORBIDDEN_PATTERNS) {
-        if (pattern.test(value)) {
-          throw new Error('La nueva contraseña contiene un patrón no permitido');
+      try {
+        req.body = schema.parse(req.body);
+        next();
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json(this.createErrorResponse(error));
         }
+        next(error);
       }
-      
-      return true;
-    }),
-];
+    };
+  }
+}
 
-/**
- * Validaciones para recuperación de contraseña
- */
-export const forgotPasswordValidation: ValidationChain[] = [
-  body('email')
-    .isEmail()
-    .withMessage('El email debe tener un formato válido')
-    .normalizeEmail()
-    .matches(VALIDATION_PATTERNS.EMAIL)
-    .withMessage('Formato de email inválido'),
-];
+// Middleware Validators - Interfaz simple para uso en rutas
+export const validateRegisterBody = AuthValidationFactory.createBodyValidator(RegisterBodySchema);
+export const validateLoginBody = AuthValidationFactory.createBodyValidator(LoginBodySchema);
+export const validateRefreshTokenBody = AuthValidationFactory.createBodyValidator(RefreshTokenBodySchema);
+export const validateVerifyTokenBody = AuthValidationFactory.createBodyValidator(VerifyTokenBodySchema);
+export const validateUpdateProfileBody = AuthValidationFactory.createBodyValidator(UpdateProfileBodySchema);
+export const validateChangePasswordBody = AuthValidationFactory.createBodyValidator(ChangePasswordBodySchema);
+export const validateForgotPasswordBody = AuthValidationFactory.createBodyValidator(ForgotPasswordBodySchema);
+export const validateResetPasswordBody = AuthValidationFactory.createBodyValidator(ResetPasswordBodySchema);
+export const validateVerifyEmailBody = AuthValidationFactory.createBodyValidator(VerifyEmailBodySchema);
+export const validateLogoutBody = AuthValidationFactory.createOptionalBodyValidator(LogoutBodySchema);
+export const validateTerminateSessionBody = AuthValidationFactory.createOptionalBodyValidator(TerminateSessionBodySchema);
 
-/**
- * Validaciones para reset de contraseña
- */
-export const resetPasswordValidation: ValidationChain[] = [
-  body('token')
-    .notEmpty()
-    .withMessage('El token de reset es requerido')
-    .isString()
-    .withMessage('El token debe ser una cadena válida')
-    .isLength({ min: 10 })
-    .withMessage('El token debe tener al menos 10 caracteres'),
+// Type Inference - Tipos automáticos desde los schemas
+export type RegisterRequest = z.infer<typeof RegisterBodySchema>;
+export type LoginRequest = z.infer<typeof LoginBodySchema>;
+export type RefreshTokenRequest = z.infer<typeof RefreshTokenBodySchema>;
+export type VerifyTokenRequest = z.infer<typeof VerifyTokenBodySchema>;
+export type UpdateProfileRequest = z.infer<typeof UpdateProfileBodySchema>;
+export type ChangePasswordRequest = z.infer<typeof ChangePasswordBodySchema>;
+export type ForgotPasswordRequest = z.infer<typeof ForgotPasswordBodySchema>;
+export type ResetPasswordRequest = z.infer<typeof ResetPasswordBodySchema>;
+export type VerifyEmailRequest = z.infer<typeof VerifyEmailBodySchema>;
+export type LogoutRequest = z.infer<typeof LogoutBodySchema>;
+export type TerminateSessionRequest = z.infer<typeof TerminateSessionBodySchema>;
 
-  body('password')
-    .isLength({ 
-      min: SECURITY_CONFIG.PASSWORD_MIN_LENGTH, 
-      max: SECURITY_CONFIG.PASSWORD_MAX_LENGTH 
-    })
-    .withMessage(`La contraseña debe tener entre ${SECURITY_CONFIG.PASSWORD_MIN_LENGTH} y ${SECURITY_CONFIG.PASSWORD_MAX_LENGTH} caracteres`)
-    .matches(VALIDATION_PATTERNS.PASSWORD_STRONG)
-    .withMessage('La contraseña debe contener al menos: 1 mayúscula, 1 minúscula, 1 número y 1 carácter especial')
-    .custom((value) => {
-      // Verificar patrones prohibidos
-      for (const pattern of PASSWORD_VALIDATION.FORBIDDEN_PATTERNS) {
-        if (pattern.test(value)) {
-          throw new Error('La contraseña contiene un patrón no permitido');
+// Utility Functions - Funciones helper especializadas para auth
+export class AuthValidationUtils {
+  /**
+   * Valida si un email es válido sin lanzar excepción
+   */
+  static validateEmail(email: string): boolean {
+    return EmailSchema.safeParse(email).success;
+  }
+
+  /**
+   * Valida si un username es válido sin lanzar excepción
+   */
+  static validateUsername(username: string): boolean {
+    return UsernameSchema.safeParse(username).success;
+  }
+
+  /**
+   * Valida si una contraseña es fuerte y devuelve detalles
+   */
+  static validatePassword(password: string): {
+    isValid: boolean;
+    errors: string[];
+    strength: 'weak' | 'medium' | 'strong';
+  } {
+    const result = PasswordSchema.safeParse(password);
+    
+    if (result.success) {
+      return { isValid: true, errors: [], strength: 'strong' };
+    }
+
+    const errors = result.error.errors.map(err => err.message);
+    const strength = password.length < SECURITY_CONFIG.PASSWORD_MIN_LENGTH ? 'weak' : 'medium';
+
+    return { isValid: false, errors, strength };
+  }
+
+  /**
+   * Valida si un token tiene el formato correcto
+   */
+  static validateToken(token: string): boolean {
+    return TokenSchema.safeParse(token).success;
+  }
+
+  /**
+   * Valida si un CUID es válido
+   */
+  static validateCUID(id: string): boolean {
+    return CUIDSchema.safeParse(id).success;
+  }
+
+  /**
+   * Sanitiza datos de entrada para prevenir ataques
+   */
+  static sanitizeInput(input: string): string {
+    return input
+      .trim()
+      .replace(/[<>\"'%;()&+]/g, '') // Remover caracteres peligrosos
+      .substring(0, 500); // Limitar longitud
+  }
+
+  /**
+   * Verifica si dos contraseñas son diferentes
+   */
+  static arePasswordsDifferent(current: string, newPassword: string): boolean {
+    return current !== newPassword;
+  }
+
+  /**
+   * Valida datos de forma segura sin lanzar excepciones
+   */
+  static safeValidate<T extends z.ZodSchema>(schema: T, data: unknown): {
+    success: boolean;
+    data?: z.infer<T>;
+    errors?: Array<{ field: string; message: string; code: string }>;
+  } {
+    const result = schema.safeParse(data);
+    
+    if (result.success) {
+      return { success: true, data: result.data };
+    }
+
+    return {
+      success: false,
+      errors: result.error.errors.map(err => ({
+        field: err.path.join('.'),
+        message: err.message,
+        code: err.code
+      }))
+    };
+  }
+
+  /**
+   * Valida múltiples campos a la vez
+   */
+  static validateAuthData(data: {
+    email?: string;
+    username?: string;
+    password?: string;
+  }): {
+    isValid: boolean;
+    fieldErrors: Record<string, string[]>;
+  } {
+    const fieldErrors: Record<string, string[]> = {};
+    let isValid = true;
+
+    if (data.email) {
+      const emailResult = this.safeValidate(EmailSchema, data.email);
+      if (!emailResult.success) {
+        fieldErrors.email = emailResult.errors?.map(e => e.message) || [];
+        isValid = false;
+      }
+    }
+
+    if (data.username) {
+      const usernameResult = this.safeValidate(UsernameSchema, data.username);
+      if (!usernameResult.success) {
+        fieldErrors.username = usernameResult.errors?.map(e => e.message) || [];
+        isValid = false;
+      }
+    }
+
+    if (data.password) {
+      const passwordResult = this.validatePassword(data.password);
+      if (!passwordResult.isValid) {
+        fieldErrors.password = passwordResult.errors;
+        isValid = false;
+      }
+    }
+
+    return { isValid, fieldErrors };
+  }
+}
+
+// Validation Presets - Conjuntos predefinidos para flujos comunes
+export const AuthValidationPresets = {
+  // Flujo de registro completo
+  registration: {
+    body: validateRegisterBody
+  },
+
+  // Flujo de autenticación
+  authentication: {
+    login: validateLoginBody,
+    refresh: validateRefreshTokenBody,
+    verify: validateVerifyTokenBody,
+    logout: validateLogoutBody
+  },
+
+  // Flujo de gestión de perfil
+  profile: {
+    update: validateUpdateProfileBody,
+    changePassword: validateChangePasswordBody
+  },
+
+  // Flujo de recuperación de contraseña
+  passwordRecovery: {
+    forgot: validateForgotPasswordBody,
+    reset: validateResetPasswordBody
+  },
+
+  // Flujo de verificación de email
+  emailVerification: {
+    verify: validateVerifyEmailBody
+  },
+
+  // Flujo de gestión de sesiones
+  sessionManagement: {
+    terminate: validateTerminateSessionBody
+  }
+} as const;
+
+// Advanced Validation Compositors - Para casos complejos
+export class AuthValidationCompositor {
+  /**
+   * Crea un validador condicional basado en el tipo de operación
+   */
+  static createConditionalValidator(conditions: {
+    [key: string]: z.ZodSchema;
+  }) {
+    return (req: any, res: any, next: any) => {
+      const operationType = req.body?.operationType || req.query?.type;
+      const schema = conditions[operationType];
+
+      if (!schema) {
+        return res.status(400).json({
+          success: false,
+          message: 'Tipo de operación no válido o no especificado',
+          error: { code: 'INVALID_OPERATION_TYPE' }
+        });
+      }
+
+      try {
+        req.body = schema.parse(req.body);
+        next();
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({
+            success: false,
+            message: 'Errores de validación',
+            errors: error.errors.map(err => ({
+              field: err.path.join('.'),
+              message: err.message,
+              code: err.code
+            }))
+          });
         }
+        next(error);
       }
-      return true;
-    }),
+    };
+  }
 
-  body('email')
-    .isEmail()
-    .withMessage('El email debe tener un formato válido')
-    .normalizeEmail()
-    .matches(VALIDATION_PATTERNS.EMAIL)
-    .withMessage('Formato de email inválido'),
-];
+  /**
+   * Combina múltiples validadores en uno solo
+   */
+  static combineValidators(...validators: Array<(req: any, res: any, next: any) => void>) {
+    return (req: any, res: any, next: any) => {
+      let currentIndex = 0;
 
-/**
- * Validaciones para verificación de email
- */
-export const verifyEmailValidation: ValidationChain[] = [
-  body('token')
-    .notEmpty()
-    .withMessage('El token de verificación es requerido')
-    .isString()
-    .withMessage('El token debe ser una cadena válida')
-    .isLength({ min: 10 })
-    .withMessage('El token debe tener al menos 10 caracteres'),
-];
+      const runNext = (error?: any) => {
+        if (error) return next(error);
 
-/**
- * Validaciones para logout (solo refresh token opcional)
- */
-export const logoutValidation: ValidationChain[] = [
-  body('refreshToken')
-    .optional()
-    .isString()
-    .withMessage('El refresh token debe ser una cadena válida'),
-];
+        if (currentIndex >= validators.length) {
+          return next();
+        }
 
-/**
- * Validaciones para terminar sesión específica
- */
-export const terminateSessionValidation: ValidationChain[] = [
-  body('sessionId')
-    .optional()
-    .matches(VALIDATION_PATTERNS.CUID)
-    .withMessage('El ID de sesión debe ser un CUID válido'),
-];
+        const validator = validators[currentIndex++];
+        validator(req, res, runNext);
+      };
 
-// Tipos TypeScript para las requests (inferidos de las validaciones)
-export interface RegisterRequest {
-  email: string;
-  username: string;
-  password: string;
-  firstName?: string;
-  lastName?: string;
+      runNext();
+    };
+  }
 }
 
-export interface LoginRequest {
-  email: string;
-  password: string;
-}
+// Export Default - Objeto principal con toda la funcionalidad
+export default {
+  // Schemas
+  RegisterBodySchema,
+  LoginBodySchema,
+  RefreshTokenBodySchema,
+  VerifyTokenBodySchema,
+  UpdateProfileBodySchema,
+  ChangePasswordBodySchema,
+  ForgotPasswordBodySchema,
+  ResetPasswordBodySchema,
+  VerifyEmailBodySchema,
+  LogoutBodySchema,
+  TerminateSessionBodySchema,
 
-export interface RefreshTokenRequest {
-  refreshToken: string;
-}
+  // Validators
+  validateRegisterBody,
+  validateLoginBody,
+  validateRefreshTokenBody,
+  validateVerifyTokenBody,
+  validateUpdateProfileBody,
+  validateChangePasswordBody,
+  validateForgotPasswordBody,
+  validateResetPasswordBody,
+  validateVerifyEmailBody,
+  validateLogoutBody,
+  validateTerminateSessionBody,
 
-export interface VerifyTokenRequest {
-  token: string;
-  service?: string;
-}
-
-export interface UpdateProfileRequest {
-  firstName?: string;
-  lastName?: string;
-  avatar?: string;
-}
-
-export interface ChangePasswordRequest {
-  currentPassword: string;
-  newPassword: string;
-}
-
-export interface ForgotPasswordRequest {
-  email: string;
-}
-
-export interface ResetPasswordRequest {
-  token: string;
-  password: string;
-  email: string;
-}
-
-export interface VerifyEmailRequest {
-  token: string;
-}
-
-export interface LogoutRequest {
-  refreshToken?: string;
-}
-
-export interface TerminateSessionRequest {
-  sessionId?: string;
-}
+  // Utils y herramientas avanzadas
+  AuthValidationUtils,
+  AuthValidationPresets,
+  AuthValidationCompositor,
+  AuthValidationFactory
+};

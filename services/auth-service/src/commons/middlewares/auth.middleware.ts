@@ -2,7 +2,7 @@
 import { ITokenService } from '@/core/interfaces/ITokenService';
 import { IUserService } from '@/core/interfaces/IUserService';
 import { ICacheService } from '@/core/interfaces/ICacheService';
-import { IAuthService } from '@/core/interfaces/IAuthService';
+import { TokenPayload } from '@/core/interfaces/IAuthService';
 import { RedisCache } from '@/core/cache/RedisCache';
 import { Request, Response, NextFunction } from 'express';
 import { logger } from '@/utils/logger';
@@ -15,27 +15,26 @@ import {
 } from '@/utils/constants';
 
 interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string;
-    email: string;
-    username: string;
-    sessionId?: string;
-  };
   correlationId?: string;
 }
 
-interface TokenPayload {
-  sub: string; // user id
-  email: string;
-  username: string;
-  sessionId?: string;
-  exp: number;
-  iat: number;
-}
 export class AuthMiddleware {
-  private static tokenService = new TokenService();
-  private static userService = new UserService();
-  private static cache = new RedisCache();
+  private static tokenService: ITokenService;
+  private static userService: IUserService;
+  private static cache: ICacheService = new RedisCache();
+
+  // Método para configurar las dependencias
+  static configure(
+    tokenService: ITokenService,
+    userService: IUserService,
+    cache?: ICacheService
+  ): void {
+    AuthMiddleware.tokenService = tokenService;
+    AuthMiddleware.userService = userService;
+    if (cache) {
+      AuthMiddleware.cache = cache;
+    }
+  }
 
   /**
    * Middleware para verificar token JWT en las peticiones
@@ -45,80 +44,86 @@ export class AuthMiddleware {
     res: Response,
     next: NextFunction
   ): Promise<void> {
+    if (!AuthMiddleware.tokenService || !AuthMiddleware.userService) {
+      throw new Error('AuthMiddleware no ha sido configurado. Llama a AuthMiddleware.configure() primero.');
+    }
+
     const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     req.correlationId = correlationId;
-    
+
     try {
       const token = AuthMiddleware.extractToken(req);
-      
+
       if (!token) {
         logger.warn('Token no proporcionado', { correlationId });
-        return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        res.status(HTTP_STATUS.UNAUTHORIZED).json({
           success: false,
           error: {
             code: ERROR_CODES.TOKEN_REQUIRED,
             message: ERROR_MESSAGES.TOKEN_REQUIRED
           }
         });
+        return;
       }
 
-      // Verificar token JWT
-      const payload = await AuthMiddleware.tokenService.verifyAccessToken(token);
-      
+      const payload: TokenPayload = await AuthMiddleware.tokenService.validateAccessToken(token);
+
       if (!payload) {
         logger.warn('Token inválido', { correlationId });
-        return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        res.status(HTTP_STATUS.UNAUTHORIZED).json({
           success: false,
           error: {
             code: ERROR_CODES.TOKEN_INVALID,
             message: ERROR_MESSAGES.TOKEN_INVALID
           }
         });
+        return;
       }
 
-      // Verificar si el usuario existe y está activo
       const user = await AuthMiddleware.userService.findById(payload.sub);
-      
+
       if (!user || !user.isActive) {
-        logger.warn('Usuario no encontrado o inactivo', { 
-          correlationId, 
-          userId: payload.sub 
+        logger.warn('Usuario no encontrado o inactivo', {
+          correlationId,
+          userId: payload.sub
         });
-        return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        res.status(HTTP_STATUS.UNAUTHORIZED).json({
           success: false,
           error: {
             code: ERROR_CODES.USER_NOT_FOUND,
             message: ERROR_MESSAGES.USER_NOT_FOUND
           }
         });
+        return;
       }
 
-      // Verificar sesión si existe sessionId en el token
       if (payload.sessionId) {
         const sessionKey = CACHE_KEYS.USER_SESSION(payload.sessionId);
         const sessionExists = await AuthMiddleware.cache.exists(sessionKey);
-        
+
         if (!sessionExists) {
-          logger.warn('Sesión no válida', { 
-            correlationId, 
-            sessionId: payload.sessionId 
+          logger.warn('Sesión no válida', {
+            correlationId,
+            sessionId: payload.sessionId
           });
-          return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+          res.status(HTTP_STATUS.UNAUTHORIZED).json({
             success: false,
             error: {
               code: ERROR_CODES.SESSION_INVALID,
               message: 'Sesión no válida'
             }
           });
+          return;
         }
       }
 
-      // Adjuntar información del usuario a la request
       req.user = {
         id: user.id,
         email: user.email,
         username: user.username,
-        sessionId: payload.sessionId
+        sessionId: payload.sessionId,
+        iat: payload.iat,
+        exp: payload.exp
       };
 
       logger.debug('Token verificado exitosamente', {
@@ -134,20 +139,18 @@ export class AuthMiddleware {
         error: error instanceof Error ? error.message : 'Error desconocido'
       });
       
-      // Determinar tipo de error de token
-      if (error instanceof Error) {
-        if (error.message.includes('expired')) {
-          return res.status(HTTP_STATUS.UNAUTHORIZED).json({
-            success: false,
-            error: {
-              code: ERROR_CODES.TOKEN_EXPIRED,
-              message: ERROR_MESSAGES.TOKEN_EXPIRED
-            }
-          });
-        }
+      if (error instanceof Error && error.message.includes('expired')) {
+        res.status(HTTP_STATUS.UNAUTHORIZED).json({
+          success: false,
+          error: {
+            code: ERROR_CODES.TOKEN_EXPIRED,
+            message: ERROR_MESSAGES.TOKEN_EXPIRED
+          }
+        });
+        return;
       }
 
-      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({
         success: false,
         error: {
           code: ERROR_CODES.TOKEN_INVALID,
@@ -165,6 +168,11 @@ export class AuthMiddleware {
     res: Response,
     next: NextFunction
   ): Promise<void> {
+    if (!AuthMiddleware.tokenService || !AuthMiddleware.userService) {
+      next();
+      return;
+    }
+
     const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     req.correlationId = correlationId;
     
@@ -172,7 +180,7 @@ export class AuthMiddleware {
       const token = AuthMiddleware.extractToken(req);
       
       if (token) {
-        const payload = await AuthMiddleware.tokenService.verifyAccessToken(token);
+        const payload = await AuthMiddleware.tokenService.validateAccessToken(token);
         
         if (payload) {
           const user = await AuthMiddleware.userService.findById(payload.sub);
@@ -182,7 +190,9 @@ export class AuthMiddleware {
               id: user.id,
               email: user.email,
               username: user.username,
-              sessionId: payload.sessionId
+              sessionId: payload.sessionId,
+              iat: payload.iat,
+              exp: payload.exp
             };
           }
         }
@@ -190,7 +200,6 @@ export class AuthMiddleware {
 
       next();
     } catch (error) {
-      // En auth opcional, continuamos sin usuario
       logger.debug('Auth opcional falló, continuando sin usuario', {
         correlationId,
         error: error instanceof Error ? error.message : 'Error desconocido'
@@ -210,17 +219,16 @@ export class AuthMiddleware {
     const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     if (!req.user) {
-      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({
         success: false,
         error: {
           code: ERROR_CODES.TOKEN_REQUIRED,
           message: ERROR_MESSAGES.TOKEN_REQUIRED
         }
       });
+      return;
     }
 
-    // Para verificar si está verificado, necesitaríamos consultar la BD
-    // Por ahora asumimos que el middleware de auth ya verificó esto
     next();
   }
 
@@ -232,13 +240,14 @@ export class AuthMiddleware {
       const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
       if (!req.user) {
-        return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        res.status(HTTP_STATUS.UNAUTHORIZED).json({
           success: false,
           error: {
             code: ERROR_CODES.TOKEN_REQUIRED,
             message: ERROR_MESSAGES.TOKEN_REQUIRED
           }
         });
+        return;
       }
 
       const resourceUserId = req.params[userIdParam] || req.body.userId;
@@ -250,13 +259,14 @@ export class AuthMiddleware {
           resourceUserId
         });
 
-        return res.status(HTTP_STATUS.FORBIDDEN).json({
+        res.status(HTTP_STATUS.FORBIDDEN).json({
           success: false,
           error: {
             code: ERROR_CODES.FORBIDDEN,
             message: 'No tienes permisos para acceder a este recurso'
           }
         });
+        return;
       }
 
       next();
@@ -268,7 +278,7 @@ export class AuthMiddleware {
    */
   private static extractToken(req: Request): string | null {
     const authHeader = req.headers[TOKEN_CONFIG.ACCESS_TOKEN_HEADER.toLowerCase()];
-    
+
     if (!authHeader || typeof authHeader !== 'string') {
       return null;
     }
@@ -292,11 +302,9 @@ export class AuthMiddleware {
     const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     req.correlationId = correlationId;
 
-    // Extraer información del dispositivo/sesión
     const userAgent = req.get('User-Agent') || 'unknown';
     const ipAddress = req.ip || req.connection.remoteAddress || 'unknown';
     
-    // Agregar a la request para uso posterior
     (req as any).sessionInfo = {
       userAgent,
       ipAddress,
@@ -318,14 +326,15 @@ export class AuthMiddleware {
 
     try {
       if (!req.user) {
-        return next();
+        next();
+        return;
       }
 
       const sessionKey = CACHE_KEYS.USER_SESSIONS(req.user.id);
       const activeSessions = await AuthMiddleware.cache.get(sessionKey);
       
       if (activeSessions && Array.isArray(activeSessions)) {
-        const maxSessions = 10; // Configurable
+        const maxSessions = 10;
         
         if (activeSessions.length >= maxSessions) {
           logger.warn('Límite de sesiones concurrentes excedido', {
@@ -335,13 +344,14 @@ export class AuthMiddleware {
             maxSessions
           });
 
-          return res.status(HTTP_STATUS.FORBIDDEN).json({
+          res.status(HTTP_STATUS.FORBIDDEN).json({
             success: false,
             error: {
               code: ERROR_CODES.MAX_SESSIONS_EXCEEDED,
               message: 'Límite de sesiones concurrentes excedido'
             }
           });
+          return;
         }
       }
 
@@ -352,7 +362,6 @@ export class AuthMiddleware {
         error: error instanceof Error ? error.message : 'Error desconocido'
       });
       
-      // En caso de error, permitir continuar
       next();
     }
   }

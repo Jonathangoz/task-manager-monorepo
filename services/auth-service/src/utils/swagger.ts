@@ -1,16 +1,18 @@
 // src/utils/swagger.ts - Auth Service
 import swaggerJsdoc, { Options } from 'swagger-jsdoc';
 import { SwaggerUiOptions } from 'swagger-ui-express';
+import { OpenAPIV3 } from 'openapi-types';
 import { environment } from '@/config/environment';
+import { ValidationResult, SwaggerInfo } from '@/types/swaggerTypes';
 
 // ==============================================
 // CONFIGURACIÓN PRINCIPAL DE SWAGGER
 // ==============================================
-const swaggerDefinition: swaggerJsdoc.SwaggerDefinition = {
-  openapi: '3.0.3',
+const swaggerDefinition: OpenAPIV3.Document = {
+  openapi: '3.0.0',
   info: {
     title: 'Task Manager - Auth Service API',
-    version: '1.0.0',
+    version: process.env.npm_package_version || '1.0.0',
     description: `
 # 🔐 Authentication Service API
 
@@ -768,6 +770,7 @@ Para endpoints protegidos, incluye el header:
       }
     }
   },
+  paths: {},
 
   security: [{ BearerAuth: [] }],
 
@@ -810,19 +813,17 @@ Para endpoints protegidos, incluye el header:
 // CONFIGURACIÓN SWAGGER-JSDOC
 // ==============================================
 const swaggerOptions: swaggerJsdoc.Options = {
-  definition: swaggerDefinition,
-  apis: [
-    './src/routes/*.ts',
-    './src/controllers/*.ts',
-  ],
+    swaggerDefinition,
+    apis: ['./src/routes/*.ts', './src/schemas/*.ts'],
 };
 
-export const swaggerSpec = swaggerJsdoc(swaggerOptions);
+export const swaggerSpec = swaggerJsdoc(swaggerOptions) as OpenAPIV3.Document;
 
 // ==============================================
 // OPCIONES DE SWAGGER UI
 // ==============================================
 export const swaggerUiOptions: SwaggerUiOptions = {
+  explorer: true,
   customCss: `
     .swagger-ui .topbar { display: none; }
     .swagger-ui .info .title { color: #2563eb; font-size: 2rem; }
@@ -852,21 +853,19 @@ export const swaggerUiOptions: SwaggerUiOptions = {
 // ==============================================
 // UTILIDADES
 // ==============================================
-export const validateSwaggerSpec = (): { isValid: boolean; errors: string[] } => {
-  const errors: string[] = [];
-  
-  if (!swaggerSpec?.openapi) errors.push('OpenAPI version missing');
-  if (!swaggerSpec?.info?.title) errors.push('API title missing');
-  if (!swaggerSpec?.info?.version) errors.push('API version missing');
-  if (!swaggerSpec?.servers || swaggerSpec.servers.length === 0) {
-    errors.push('Server configuration missing');
-  }
-  
-  return {
-    isValid: errors.length === 0,
-    errors
-  };
-};
+export function validateSwaggerSpec(): ValidationResult {
+    const errors: string[] = [];
+    const spec = swaggerSpec;
+
+    if (!spec?.openapi) errors.push('OpenAPI version missing');
+    if (!spec?.info?.title) errors.push('API title missing');
+    if (!spec?.info?.version) errors.push('API version missing');
+    if (!spec?.servers || spec.servers.length === 0) {
+        errors.push('Servers configuration missing');
+    }
+
+    return { isValid: errors.length === 0, errors };
+}
 
 export const getSwaggerInfo = () => ({
   title: swaggerSpec.info?.title,

@@ -1,25 +1,35 @@
 #!/bin/sh
-# services/auth-service/docker-entrypoint.sh
-
 set -e
 
-echo "🔄 Waiting for database to be ready..."
-while ! curl -f http://auth-db:5432 > /dev/null 2>&1; do
-  echo "⏳ Database not ready yet, waiting..."
-  sleep 2
-done
-
-echo "🔄 Waiting for Redis to be ready..."
-while ! redis-cli -h redis -p 6379 -a redis_password ping > /dev/null 2>&1; do
-  echo "⏳ Redis not ready yet, waiting..."
-  sleep 2
-done
-
-echo "📦 Running Prisma migrations..."
-pnpm prisma:migrate:dev --name init || true
-
-echo "🌱 Running database seed..."
-pnpm prisma:seed || true
-
 echo "🚀 Starting Auth Service..."
+
+# Esperar a que la base de datos esté disponible
+echo "⏳ Waiting for database to be ready..."
+until pg_isready -h auth-db -p 5432 -U postgres -d auth_db; do
+  echo "Database is unavailable - sleeping"
+  sleep 2
+done
+
+echo "✅ Database is ready!"
+
+# Esperar a que Redis esté disponible
+echo "⏳ Waiting for Redis to be ready..."
+until redis-cli -h redis -p 6379 ping; do
+  echo "Redis is unavailable - sleeping"
+  sleep 2
+done
+
+echo "✅ Redis is ready!"
+
+# Ejecutar migraciones de Prisma
+echo "🔄 Running database migrations..."
+pnpm prisma:migrate:dev
+
+# Generar cliente de Prisma (por si acaso)
+echo "🔄 Generating Prisma client..."
+pnpm prisma:generate
+
+echo "🎉 All setup complete! Starting application..."
+
+# Ejecutar el comando pasado como argumentos
 exec "$@"

@@ -4,14 +4,17 @@ import { SignJWT, jwtVerify, EncryptJWT, jwtDecrypt } from 'jose';
 import { createHash, randomBytes } from 'crypto';
 import { 
   ITokenService, 
-  TokenPayload, 
-  RefreshTokenPayload, 
-  SessionInfo, 
-  TokenOptions 
+  TokenOptions,
+  RefreshTokenData,
 } from '@/core/interfaces/ITokenService';
+import {
+  TokenPayload,
+  RefreshTokenPayload,
+  SessionInfo,
+} from '@/core/domain/interfaces/IAuthService';
 import { IUserRepository } from '@/core/interfaces/IUserRepository';
-import { ICacheService } from '@/core/interfaces/ICacheService';
-import { config } from '@/config/environment';
+import { ICacheService, CacheOptions } from '@/core/interfaces/ICacheService';
+import  config  from '@/config/environment';
 import { logger } from '@/utils/logger';
 import { 
   ERROR_CODES, 
@@ -105,12 +108,15 @@ export class TokenService implements ITokenService {
 
       return tokenPayload;
     } catch (error) {
-      logger.warn({ error: error.message }, 'Access token validation failed');
-      
-      if (error.code === 'ERR_JWT_EXPIRED') {
+      if ((error as any).code === 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED') {
+        logger.warn({ err: error as Error }, 'Acceso del token fallido');
+        throw new Error(ERROR_CODES.TOKEN_INVALID);
+      }
+      if ((error as any).code === 'ERR_JWT_EXPIRED') {
+        logger.warn({ err: error as Error }, 'Acceso de validación del token fallido: expirado');
         throw new Error(ERROR_CODES.TOKEN_EXPIRED);
       }
-      
+      logger.warn({ err: error as Error }, 'Acceso de validación del token fallido');
       throw new Error(ERROR_CODES.TOKEN_INVALID);
     }
   }
@@ -218,16 +224,18 @@ export class TokenService implements ITokenService {
 
       return tokenPayload;
     } catch (error) {
-      logger.warn({ error: error.message }, 'Refresh token validation failed');
-      
-      if (error.code === 'ERR_JWT_EXPIRED') {
+      if ((error as any).code === 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED') {
+        logger.warn({ err: error as Error }, 'verificación de refresh token fallida: firma inválida');
+        throw new Error(ERROR_CODES.REFRESH_TOKEN_INVALID);
+      }
+      if ((error as any).code === 'ERR_JWT_EXPIRED') {
+        logger.warn({ err: error as Error }, 'validacion de refresh token fallida: expirado');
         throw new Error(ERROR_CODES.REFRESH_TOKEN_EXPIRED);
       }
-      
-      if (error.message === ERROR_CODES.REFRESH_TOKEN_INVALID) {
-        throw error;
+      if ((error as Error).message === ERROR_CODES.REFRESH_TOKEN_INVALID) {
+        throw error; // Re-lanza el error personalizado
       }
-      
+      logger.warn({ err: error as Error }, 'validacion de refresh token fallida');
       throw new Error(ERROR_CODES.REFRESH_TOKEN_INVALID);
     }
   }
@@ -270,7 +278,7 @@ export class TokenService implements ITokenService {
       logger.debug('Token decrypted successfully');
       return token;
     } catch (error) {
-      logger.warn({ error: error.message }, 'Failed to decrypt token');
+      logger.warn({ err: error as Error }, 'Failed to decrypt token');
       throw new Error(ERROR_CODES.TOKEN_INVALID);
     }
   }
@@ -440,14 +448,15 @@ export class TokenService implements ITokenService {
     try {
       const cacheKey = CACHE_KEYS.REFRESH_TOKEN(tokenId);
       const ttl = Math.floor((expiresAt.getTime() - Date.now()) / 1000);
-      
+      const options: CacheOptions = { ttl };
+
       await this.cacheService.set(
-        cacheKey, 
-        JSON.stringify({ userId, sessionId, expiresAt }), 
-        ttl
+        cacheKey,
+        JSON.stringify({ userId, sessionId, expiresAt }),
+        options,
       );
     } catch (error) {
-      logger.warn({ error, tokenId }, 'Failed to cache refresh token');
+      logger.warn({ err: error as Error, tokenId }, 'Failed to cache refresh token');
     }
   }
 
@@ -457,7 +466,7 @@ export class TokenService implements ITokenService {
   private async removeCachedRefreshToken(tokenId: string): Promise<void> {
     try {
       const cacheKey = CACHE_KEYS.REFRESH_TOKEN(tokenId);
-      await this.cacheService.delete(cacheKey);
+      await this.cacheService.del(cacheKey);
     } catch (error) {
       logger.warn({ error, tokenId }, 'Failed to remove cached refresh token');
     }

@@ -1,4 +1,5 @@
-// src/commons/routes/user.routes.ts
+// src/commons/routes/user.routes.ts - Versión actualizada sin método deprecated
+
 import { Router } from 'express';
 import { UserController } from '@/commons/controllers/UserController';
 import { 
@@ -7,30 +8,44 @@ import {
   extractSessionInfo 
 } from '@/commons/middlewares/auth.middleware';
 import { 
-  validate, 
+  createValidator,
   validatePagination, 
   requireBody, 
   validateCUID, 
   sanitizeInput 
 } from '@/commons/middlewares/validation.middleware';
-import { rateLimitPerUser } from '@/commons/middlewares/rateLimit.middleware';
+import RateLimitMiddleware from '@/commons/middlewares/rateLimit.middleware';
 import { 
-  updateUserValidation,
-  getUsersQueryValidation,
-  deactivateUserValidation
+  validateGetUsersQuery,
+  validateUpdateUserBody,
+  validateUpdateAvatarBody,
+  validateDeactivateUserBody,
+  validateUserParams,
+  validateVerifyEmailTokenParams,
+  UserParamsSchema,
+  VerifyEmailTokenParamsSchema
 } from '@/commons/validators/user.validator';
 import { asyncHandler } from '@/commons/middlewares/error.middleware';
 
+interface UserRoutesDependencies {
+  userController: UserController;
+}
+
 export class UserRoutes {
-  static get routes(): Router {
+  private userController: UserController;
+
+  constructor(dependencies: UserRoutesDependencies) {
+    this.userController = dependencies.userController;
+  }
+
+  public get routes(): Router {
     const router = Router();
-    const userController = new UserController();
 
     // Middleware global para todas las rutas de usuario
     router.use(extractSessionInfo);
     router.use(sanitizeInput);
     router.use(verifyToken); // Todas las rutas de usuario requieren autenticación
-    router.use(rateLimitPerUser);
+    router.use(RateLimitMiddleware.perUser());
 
     // === RUTAS DE CONSULTA ===
 
@@ -40,9 +55,8 @@ export class UserRoutes {
      */
     router.get(
       '/',
-      validatePagination,
-      validate(getUsersQueryValidation),
-      asyncHandler(userController.getUsers.bind(userController))
+      validateGetUsersQuery,
+      asyncHandler(this.userController.getUsers)
     );
 
     /**
@@ -51,8 +65,8 @@ export class UserRoutes {
      */
     router.get(
       '/:id',
-      validateCUID('id'),
-      asyncHandler(userController.getUserById.bind(userController))
+      validateUserParams,
+      asyncHandler(this.userController.getUserById)
     );
 
     /**
@@ -61,8 +75,8 @@ export class UserRoutes {
      */
     router.get(
       '/:id/profile',
-      validateCUID('id'),
-      asyncHandler(userController.getUserProfile.bind(userController))
+      validateUserParams,
+      asyncHandler(this.userController.getUserProfile)
     );
 
     // === RUTAS DE MODIFICACIÓN (requieren ownership) ===
@@ -74,11 +88,11 @@ export class UserRoutes {
      */
     router.put(
       '/:id',
-      validateCUID('id'),
+      validateUserParams,
       requireOwnership('id'),
       requireBody,
-      validate(updateUserValidation),
-      asyncHandler(userController.updateUser.bind(userController))
+      validateUpdateUserBody,
+      asyncHandler(this.userController.updateUser)
     );
 
     /**
@@ -87,10 +101,11 @@ export class UserRoutes {
      */
     router.patch(
       '/:id/avatar',
-      validateCUID('id'),
+      validateUserParams,
       requireOwnership('id'),
       requireBody,
-      asyncHandler(userController.updateAvatar.bind(userController))
+      validateUpdateAvatarBody,
+      asyncHandler(this.userController.updateAvatar)
     );
 
     /**
@@ -100,10 +115,10 @@ export class UserRoutes {
      */
     router.delete(
       '/:id',
-      validateCUID('id'),
+      validateUserParams,
       requireOwnership('id'),
-      validate(deactivateUserValidation),
-      asyncHandler(userController.deactivateUser.bind(userController))
+      validateDeactivateUserBody,
+      asyncHandler(this.userController.deactivateUser)
     );
 
     /**
@@ -113,9 +128,9 @@ export class UserRoutes {
      */
     router.patch(
       '/:id/activate',
-      validateCUID('id'),
+      validateUserParams,
       requireOwnership('id'),
-      asyncHandler(userController.activateUser.bind(userController))
+      asyncHandler(this.userController.activateUser)
     );
 
     // === RUTAS DE VERIFICACIÓN ===
@@ -126,9 +141,9 @@ export class UserRoutes {
      */
     router.post(
       '/:id/verify-email',
-      validateCUID('id'),
+      validateUserParams,
       requireOwnership('id'),
-      asyncHandler(userController.sendEmailVerification.bind(userController))
+      asyncHandler(this.userController.sendEmailVerification)
     );
 
     /**
@@ -137,11 +152,21 @@ export class UserRoutes {
      */
     router.patch(
       '/:id/verify-email/:token',
-      validateCUID('id'),
+      createValidator(
+        UserParamsSchema.merge(VerifyEmailTokenParamsSchema), 
+        'params'
+      ),
       requireOwnership('id'),
-      asyncHandler(userController.verifyEmail.bind(userController))
+      asyncHandler(this.userController.verifyEmail)
     );
 
     return router;
+  }
+
+  /**
+   * Método estático para crear instancia con factory pattern
+   */
+  static create(dependencies: UserRoutesDependencies): UserRoutes {
+    return new UserRoutes(dependencies);
   }
 }

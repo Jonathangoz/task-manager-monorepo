@@ -9,11 +9,10 @@ class RedisConnection {
   private isConnected = false;
 
   private constructor() {
-    this.client = new Redis(environment.REDIS_URL, {
-      retryDelayOnFailover: 1000,
+    this.client = new Redis(environment.redis.url, {
       maxRetriesPerRequest: 3,
       lazyConnect: true,
-      keyPrefix: environment.REDIS_PREFIX,
+      keyPrefix: environment.redis.prefix,
       // Configuración para producción
       connectTimeout: 10000,
       commandTimeout: 5000,

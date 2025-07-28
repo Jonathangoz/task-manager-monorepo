@@ -70,18 +70,25 @@ const baseLoggerConfig: pino.LoggerOptions = {
     env: process.env.NODE_ENV || 'development',
     timezone: BOGOTA_TIMEZONE,
   },
-  timestamp: () => `,"timestamp":"${formatTimestamp()}"`,
+  // Removemos el timestamp personalizado para evitar conflictos con pino-pretty
   formatters: {
     level: (label) => ({ level: label }),
-    error: (err) => ({
-      error: {
-        type: err.constructor.name,
-        message: err.message,
-        stack: isDevelopment ? err.stack : undefined,
-        code: (err as any).code,
-        statusCode: (err as any).statusCode,
-      },
-    }),
+    log: (object) => {
+      if (object.err) {
+        const err = object.err as any;
+        return {
+          ...object,
+          error: {
+            type: err.constructor.name,
+            message: err.message,
+            stack: isDevelopment ? err.stack : undefined,
+            code: err.code,
+            statusCode: err.statusCode,
+          },
+        };
+      }
+      return object;
+    },
   },
 };
 
@@ -97,23 +104,10 @@ const createDevelopmentLogger = (): pino.Logger => {
       options: {
         colorize: true,
         ignore: 'pid,hostname,timezone',
-        translateTime: false, // Usamos nuestro timestamp personalizado
+        translateTime: 'SYS:yyyy-mm-dd HH:MM:ss', // Dejamos que pino-pretty maneje el timestamp
         messageFormat: '[{service}] {msg}',
         singleLine: false,
-        customPrettifiers: {
-          timestamp: (timestamp: string) => `🕐 ${timestamp}`,
-          level: (logLevel: string) => {
-            const levelEmojis: Record<string, string> = {
-              trace: '🔍',
-              debug: '🐛',
-              info: 'ℹ️',
-              warn: '⚠️',
-              error: '❌',
-              fatal: '💀',
-            };
-            return `${levelEmojis[logLevel] || '📝'} ${logLevel}`;
-          },
-        },
+        // Sin customPrettifiers para evitar DataCloneError
       },
     };
   }
@@ -636,28 +630,35 @@ export const reconfigureLogger = (envConfig: any) => {
   const isDev = envConfig.app?.isDevelopment ?? envConfig.NODE_ENV === 'development';
   const isProd = envConfig.app?.isProduction ?? envConfig.NODE_ENV === 'production';
 
-  const reconfiguredConfig: pino.LoggerOptions = {
-    level: logLevel,
-    base: {
-      service: 'auth-service',
-      version: process.env.npm_package_version || '1.0.0',
-      env: envConfig.app?.env || envConfig.NODE_ENV || 'development',
-      timezone: BOGOTA_TIMEZONE,
+const reconfiguredConfig: pino.LoggerOptions = {
+  level: logLevel,
+  base: {
+    service: 'auth-service',
+    version: process.env.npm_package_version || '1.0.0',
+    env: envConfig.app?.env || envConfig.NODE_ENV || 'development',
+    timezone: BOGOTA_TIMEZONE,
+  },
+  // Removemos el timestamp personalizado para evitar conflictos con pino-pretty
+  formatters: {
+    level: (label) => ({ level: label }),
+    log: (object) => {
+      if (object.err) {
+        const err = object.err as any;
+        return {
+          ...object,
+          error: {
+            type: err.constructor.name,
+            message: err.message,
+            stack: isDev ? err.stack : undefined,
+            code: err.code,
+            statusCode: err.statusCode,
+          },
+        };
+      }
+      return object;
     },
-    timestamp: () => `,"timestamp":"${formatTimestamp()}"`,
-    formatters: {
-      level: (label) => ({ level: label }),
-      error: (err) => ({
-        error: {
-          type: err.constructor.name,
-          message: err.message,
-          stack: isDev ? err.stack : undefined,
-          code: (err as any).code,
-          statusCode: (err as any).statusCode,
-        },
-      }),
-    },
-  };
+  },
+};
 
   if (isDev && logPretty) {
     reconfiguredConfig.transport = {
@@ -665,23 +666,10 @@ export const reconfigureLogger = (envConfig: any) => {
       options: {
         colorize: true,
         ignore: 'pid,hostname,timezone',
-        translateTime: false,
+        translateTime: 'SYS:yyyy-mm-dd HH:MM:ss', // Dejamos que pino-pretty maneje el timestamp
         messageFormat: '[{service}] {msg}',
         singleLine: false,
-        customPrettifiers: {
-          timestamp: (timestamp: string) => `🕐 ${timestamp}`,
-          level: (logLevel: string) => {
-            const levelEmojis: Record<string, string> = {
-              trace: '🔍',
-              debug: '🐛',
-              info: 'ℹ️',
-              warn: '⚠️',
-              error: '❌',
-              fatal: '💀',
-            };
-            return `${levelEmojis[logLevel] || '📝'} ${logLevel}`;
-          },
-        },
+        // Sin customPrettifiers para evitar DataCloneError
       },
     };
   } else if (isProd) {

@@ -15,12 +15,6 @@ import {
 
 interface RateLimitRequest extends Request {
   correlationId?: string;
-  user?: {
-    id: string;
-    email: string;
-    username: string;
-    sessionId?: string;
-  };
 }
 
 interface RateLimitConfig {
@@ -114,7 +108,7 @@ export class RateLimitMiddleware {
             finalOptions.onLimitReached(req, rateLimitInfo);
           }
 
-          return res.status(HTTP_STATUS.TOO_MANY_REQUESTS).json({
+          res.status(HTTP_STATUS.TOO_MANY_REQUESTS).json({
             success: false,
             error: {
               code: ERROR_CODES.RATE_LIMIT_EXCEEDED,
@@ -269,7 +263,7 @@ export class RateLimitMiddleware {
       // Intentar usar Redis primero
       const isHealthy = await RateLimitMiddleware.cache.healthCheck();
       if (isHealthy) {
-        return await RateLimitMiddleware.checkRateLimitRedis(key, windowMs, maxRequests, now);
+        return await RateLimitMiddleware.checkRateLimit(key, windowMs, maxRequests);
       }
     } catch (error) {
       securityLogger.warn('Redis unavailable for rate limiting, falling back to memory store', {
@@ -280,42 +274,6 @@ export class RateLimitMiddleware {
 
     // Fallback a store en memoria
     return RateLimitMiddleware.checkRateLimitMemory(key, windowMs, maxRequests, now, windowStart);
-  }
-
-  /**
-   * Rate limiting usando Redis con sliding window
-   */
-  private static async checkRateLimitRedis(
-    key: string,
-    windowMs: number,
-    maxRequests: number,
-    now: number
-  ): Promise<RateLimitInfo> {
-    const redisKey = CACHE_KEYS.RATE_LIMIT(key);
-    const windowStart = now - windowMs;
-    const windowSeconds = Math.ceil(windowMs / 1000);
-
-    try {
-      // Incrementar contador usando el método del RedisCache
-      const count = await RateLimitMiddleware.cache.incrementRateLimit(key, windowMs);
-      
-      const resetTime = now + windowMs;
-      const remaining = Math.max(0, maxRequests - count);
-
-      return {
-        count,
-        resetTime,
-        firstRequest: now,
-        remaining,
-      };
-    } catch (error) {
-      securityLogger.error('Error in Redis rate limiting', {
-        error: error instanceof Error ? error.message : 'Error desconocido',
-        stack: error instanceof Error ? error.stack : undefined,
-        key: redisKey
-      });
-      throw error;
-    }
   }
 
   /**
@@ -397,7 +355,7 @@ export class RateLimitMiddleware {
         // Limpiar Redis si está disponible
         const isHealthy = await RateLimitMiddleware.cache.healthCheck();
         if (isHealthy) {
-          await RateLimitMiddleware.cache.deletePattern('*ratelimit:*');
+          await RateLimitMiddleware.cache.deleteByPattern('*ratelimit:*');
         }
 
         securityLogger.info('All rate limits cleared', {
@@ -433,7 +391,7 @@ export class RateLimitMiddleware {
         const isHealthy = await RateLimitMiddleware.cache.healthCheck();
         if (isHealthy) {
           const pattern = `*${keyPattern}*`;
-          await RateLimitMiddleware.cache.deletePattern(pattern);
+          await RateLimitMiddleware.cache.deleteByPattern(pattern);
         }
 
         securityLogger.info('Rate limit cleared', { 
@@ -631,4 +589,4 @@ export const rateLimitPasswordReset = RateLimitMiddleware.passwordReset();
 export const rateLimitEmailVerification = RateLimitMiddleware.emailVerification();
 
 // Exportar clase para uso avanzado
-export { RateLimitMiddleware };
+export default RateLimitMiddleware;

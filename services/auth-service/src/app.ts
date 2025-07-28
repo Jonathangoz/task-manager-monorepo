@@ -1,8 +1,5 @@
-// ==============================================
 // src/app.ts - Auth Service Application
 // Configuración principal de la aplicación Express con middlewares de seguridad optimizados
-// ==============================================
-
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -19,22 +16,19 @@ import slowDown from 'express-slow-down';
 import { environment } from '@/config/environment';
 
 // Utils
-import { 
-  logger, 
-  httpLogger, 
-  securityLogger, 
-  createContextLogger 
+import {
+  logger,
+  httpLogger,
+  securityLogger,
+  createContextLogger
 } from '@/utils/logger';
-import { 
-  swaggerSpec, 
-  swaggerUiOptions, 
+import {
+  swaggerSpec,
+  swaggerUiOptions,
   validateSwaggerSpec,
-  getSwaggerInfo 
+  getSwaggerInfo
 } from '@/utils/swagger';
-import { 
-  HTTP_STATUS, 
-  ERROR_CODES, 
-  ERROR_MESSAGES,
+import {
   REQUEST_HEADERS,
   MIDDLEWARE_CONFIG,
   TIMEOUT_CONFIG,
@@ -42,31 +36,36 @@ import {
 } from '@/utils/constants';
 
 // Middlewares
-import { 
-  ErrorMiddleware,
+import {
   errorHandler,
   notFoundHandler,
-  asyncHandler,
   payloadTooLargeHandler,
   timeoutHandler,
   jsonErrorHandler
 } from '@/commons/middlewares/error.middleware';
-import { 
-  RateLimitMiddleware,
-  rateLimitGeneral 
-} from '@/commons/middlewares/rateLimit.middleware';
 
-// Validation Middleware
-import { validateRequest } from '@/commons/middlewares/validation.middleware';
-
-// Routes
-import { AuthRoutes } from '@/commons/routes/auth.routes';
+// Services and Dependencies
+import { UserService } from '@/core/application/UserService';
+import { AuthService } from '@/core/application/AuthService';
+import { TokenService } from '@/core/application/TokenService';
+import { UserController } from '@/commons/controllers/UserController';
 import { UserRoutes } from '@/commons/routes/user.routes';
+import { AuthRoutes } from '@/commons/routes/auth.routes';
 import { HealthRoutes } from '@/commons/routes/health.routes';
 
-// ==============================================
+// Infrastructure
+import { db } from '@/config/database';
+import { RedisCache } from '@/core/infrastructure/cache/RedisCache';
+import { UserRepository } from '@/core/infrastructure/repositories/UserRepository';
+
+// Interfaces
+import { IUserService } from '@/core/interfaces/IUserService';
+import { IAuthService } from '@/core/interfaces/IAuthService';
+import { ITokenService } from '@/core/interfaces/ITokenService';
+import { IUserRepository } from '@/core/interfaces/IUserRepository';
+import { ICacheService } from '@/core/interfaces/ICacheService';
+
 // INTERFACES Y TIPOS
-// ==============================================
 interface AppRequest extends Request {
   correlationId?: string;
   requestId?: string;
@@ -86,9 +85,15 @@ interface SecurityConfig {
   slowDown: any;
 }
 
-// ==============================================
+interface ServiceDependencies {
+  userRepository: IUserRepository;
+  cacheService: ICacheService;
+  tokenService: ITokenService;
+  userService: IUserService;
+  authService: IAuthService;
+}
+
 // ESQUEMAS ZOD PARA VALIDACIÓN
-// ==============================================
 const RequestHeadersSchema = z.object({
   'user-agent': z.string().optional(),
   'x-forwarded-for': z.string().optional(),
@@ -106,17 +111,43 @@ const CorsOriginSchema = z.union([
   z.array(z.string().url())
 ]);
 
-// ==============================================
+// HELPER FUNCTIONS
+/**
+ * Convierte un string de tamaño (e.g., '10mb') a bytes.
+ * @param sizeStr - El string de tamaño.
+ * @returns El tamaño en bytes.
+ */
+const parseSize = (sizeStr: string): number => {
+    const sizeRegex = /^(\d+)(mb|kb|gb)$/i;
+    const match = sizeStr.match(sizeRegex);
+    if (!match) return 10485760; // Default 10mb
+
+    const size = parseInt(match[1], 10);
+    const unit = match[2].toLowerCase();
+
+    switch (unit) {
+        case 'gb':
+            return size * 1024 * 1024 * 1024;
+        case 'mb':
+            return size * 1024 * 1024;
+        case 'kb':
+            return size * 1024;
+        default:
+            return size;
+    }
+};
+
 // CLASE PRINCIPAL DE LA APLICACIÓN
-// ==============================================
 class App {
   public app: Express;
   private readonly appLogger = createContextLogger({ component: 'app' });
   private securityConfig: SecurityConfig;
+  private services: ServiceDependencies;
 
   constructor() {
     this.app = express();
     this.securityConfig = this.buildSecurityConfig();
+    this.services = {} as ServiceDependencies; // Se inicializará en initializeServices
     this.initializeApp();
   }
 
@@ -128,18 +159,21 @@ class App {
         port: environment.app.port,
         swaggerEnabled: environment.features?.swaggerEnabled
       });
-      
+
       // Validar configuración inicial
       await this.validateConfiguration();
+      
+      // Inicializar servicios y dependencias
+      await this.initializeServices();
       
       // Inicializar en orden específico
       await this.initializeSecurityMiddlewares();
       await this.initializeCoreMiddlewares();
       await this.initializeValidationMiddlewares();
-      this.initializeRoutes();
+      await this.initializeRoutes();
       this.initializeSwagger();
       this.initializeErrorHandling();
-      
+
       this.appLogger.info('Auth Service application initialized successfully', {
         environment: environment.app.env,
         port: environment.app.port,
@@ -163,9 +197,43 @@ class App {
     }
   }
 
-  // ==============================================
+  // INICIALIZACIÓN DE SERVICIOS Y DEPENDENCIAS
+  private async initializeServices(): Promise<void> {
+    this.appLogger.info('Initializing services and dependencies...');
+
+    try {
+      // 1. Inicializar dependencias de infraestructura
+      const userRepository: IUserRepository = new UserRepository(db);
+      const cacheService: ICacheService = new RedisCache();
+
+      // 2. Inicializar TokenService con sus dependencias
+      const tokenService: ITokenService = new TokenService(userRepository, cacheService);
+
+      // 3. Inicializar servicios de aplicación
+      const userService: IUserService = new UserService(userRepository, cacheService);
+      const authService: IAuthService = new AuthService(userRepository, tokenService, cacheService);
+
+      // 4. Guardar servicios en la instancia
+      this.services = {
+        userRepository,
+        cacheService,
+        tokenService,
+        userService,
+        authService
+      };
+
+      this.appLogger.info('Services initialized successfully', {
+        services: ['UserRepository', 'RedisCache', 'TokenService', 'UserService', 'AuthService']
+      });
+    } catch (error) {
+      this.appLogger.error('Failed to initialize services', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    }
+  }
+
   // VALIDACIÓN DE CONFIGURACIÓN
-  // ==============================================
   private async validateConfiguration(): Promise<void> {
     this.appLogger.info('Validating application configuration...');
 
@@ -173,7 +241,7 @@ class App {
       // Validar variables de entorno críticas
       const requiredEnvVars = ['JWT_SECRET', 'DATABASE_URL'];
       const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-      
+
       if (missingVars.length > 0) {
         throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
       }
@@ -188,7 +256,7 @@ class App {
         if (!validateSwaggerSpec()) {
           throw new Error('Invalid Swagger specification');
         }
-        
+
         const swaggerInfo = getSwaggerInfo();
         this.appLogger.info('Swagger validation successful', swaggerInfo);
       }
@@ -200,9 +268,7 @@ class App {
     }
   }
 
-  // ==============================================
   // CONFIGURACIÓN DE SEGURIDAD
-  // ==============================================
   private buildSecurityConfig(): SecurityConfig {
     const helmetConfig = environment.app.isProduction ? {
       contentSecurityPolicy: {
@@ -268,7 +334,7 @@ class App {
         'X-Device-Id'
       ],
       exposedHeaders: [
-        'X-Total-Count', 
+        'X-Total-Count',
         'X-Page-Count',
         'X-RateLimit-Limit',
         'X-RateLimit-Remaining',
@@ -283,8 +349,8 @@ class App {
     };
 
     const rateLimitConfig = rateLimit({
-      windowMs: RATE_LIMIT_CONFIG?.WINDOW_MS || 15 * 60 * 1000, // 15 minutos
-      max: RATE_LIMIT_CONFIG?.MAX_REQUESTS || 100,
+      windowMs: RATE_LIMIT_CONFIG.GENERAL.WINDOW_MS || 15 * 60 * 1000, // 15 minutos
+      max: RATE_LIMIT_CONFIG.GENERAL.MAX_REQUESTS || 100,
       message: {
         success: false,
         message: 'Too many requests from this IP, please try again later',
@@ -317,7 +383,7 @@ class App {
     const slowDownConfig = slowDown({
       windowMs: 15 * 60 * 1000, // 15 minutos
       delayAfter: 50, // Permitir 50 requests normales
-      delayMs: 500, // Agregar 500ms de delay después del límite
+      delayMs: (hits) => hits * 100, // Aumenta el delay con cada hit
       maxDelayMs: 20000, // Máximo 20 segundos de delay
     });
 
@@ -329,9 +395,7 @@ class App {
     };
   }
 
-  // ==============================================
   // MIDDLEWARES DE SEGURIDAD
-  // ==============================================
   private async initializeSecurityMiddlewares(): Promise<void> {
     this.appLogger.info('Initializing security middlewares...');
 
@@ -344,8 +408,8 @@ class App {
     // CORS - Control de acceso entre orígenes
     this.app.use(cors(this.securityConfig.cors));
 
-    // Rate limiting y slow down (solo en producción y staging)
-    if (!environment.app.isTest && !environment.app.isDevelopment) {
+    // Rate limiting y slow down (no en test)
+    if (!environment.app.isTest) {
       this.app.use(this.securityConfig.slowDown);
       this.app.use(this.securityConfig.rateLimit);
     }
@@ -356,25 +420,21 @@ class App {
     this.appLogger.info('Security middlewares initialized successfully');
   }
 
-  // ==============================================
   // MIDDLEWARES CORE
-  // ==============================================
   private async initializeCoreMiddlewares(): Promise<void> {
     this.appLogger.info('Initializing core middlewares...');
 
     // Request timeout
-    this.app.use(timeout(TIMEOUT_CONFIG?.HTTP_REQUEST || '30s'));
+    this.app.use(timeout(String(TIMEOUT_CONFIG?.HTTP_REQUEST || '30s')));
 
     // Compression con configuración optimizada
     this.app.use(compression({
       threshold: MIDDLEWARE_CONFIG?.COMPRESSION_THRESHOLD || 1024,
       level: environment.app.isProduction ? 6 : 1,
       filter: (req, res) => {
-        // No comprimir si el cliente lo solicita
         if (req.headers['x-no-compression']) {
           return false;
         }
-        // No comprimir archivos ya comprimidos
         const contentType = res.getHeader('content-type');
         if (typeof contentType === 'string') {
           const skipTypes = ['image/', 'video/', 'audio/', 'application/zip', 'application/gzip'];
@@ -387,36 +447,32 @@ class App {
     }));
 
     // Body parsing con validación
-    this.app.use(express.json({ 
-      limit: MIDDLEWARE_CONFIG?.MAX_REQUEST_SIZE || '10mb',
+    const maxRequestSizeBytes = parseSize(MIDDLEWARE_CONFIG?.MAX_REQUEST_SIZE || '10mb');
+    this.app.use(express.json({
+      limit: maxRequestSizeBytes,
       strict: true,
       type: ['application/json', 'application/*+json'],
-      verify: (req, res, buf, encoding) => {
+      verify: (req, res, buf) => {
         if (buf && buf.length === 0) {
           throw new Error('Request body cannot be empty');
         }
-        // Validar tamaño del payload
         const contentLength = parseInt(req.headers['content-length'] || '0', 10);
-        if (contentLength > (MIDDLEWARE_CONFIG?.MAX_REQUEST_SIZE_BYTES || 10485760)) {
-          throw new Error('Payload too large');
+        if (contentLength > maxRequestSizeBytes) {
+            // Este error será manejado por payloadTooLargeHandler
+            throw new Error('Payload too large');
         }
       }
     }));
 
-    this.app.use(express.urlencoded({ 
-      extended: true, 
-      limit: MIDDLEWARE_CONFIG?.MAX_REQUEST_SIZE || '10mb',
+    this.app.use(express.urlencoded({
+      extended: true,
+      limit: maxRequestSizeBytes,
       parameterLimit: 100,
       type: 'application/x-www-form-urlencoded'
     }));
-    
-    // Cookie parser con configuración segura
-    this.app.use(cookieParser(environment.jwt?.secret, {
-      httpOnly: true,
-      secure: environment.app.isProduction,
-      sameSite: environment.app.isProduction ? 'strict' : 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 días
-    }));
+
+    // Cookie parser con secreto
+    this.app.use(cookieParser(environment.jwt?.secret));
 
     // Morgan HTTP logging con formato personalizado
     this.setupMorganLogging();
@@ -432,30 +488,25 @@ class App {
     this.appLogger.info('Core middlewares initialized successfully');
   }
 
-  // ==============================================
   // CONFIGURACIÓN DE MORGAN
-  // ==============================================
   private setupMorganLogging(): void {
     // Tokens personalizados de Morgan
-    morgan.token('correlation-id', (req: AppRequest) => req.correlationId || 'unknown');
-    morgan.token('request-id', (req: AppRequest) => req.requestId || 'unknown');
-    morgan.token('real-ip', (req: AppRequest) => req.clientIp || req.ip || 'unknown');
+    morgan.token('correlation-id', (req: Request) => (req as AppRequest).correlationId || 'unknown');
+    morgan.token('request-id', (req: Request) => (req as AppRequest).requestId || 'unknown');
+    morgan.token('real-ip', (req: Request) => (req as AppRequest).clientIp || req.ip || 'unknown');
     morgan.token('user-id', (req: any) => req.user?.id || 'anonymous');
-    morgan.token('response-time-ms', (req, res) => {
-      const startTime = req['startTime'] || Date.now();
+    morgan.token('response-time-ms', (req: Request, res: Response) => {
+      const startTime = (req as AppRequest).startTime || Date.now();
       return `${Date.now() - startTime}ms`;
     });
 
     const productionFormat = ':real-ip - :user-id [:date[iso]] ":method :url HTTP/:http-version" :status :res[content-length] ":referrer" ":user-agent" :response-time-ms :correlation-id';
-    
     const developmentFormat = ':method :url :status :response-time-ms - :res[content-length] :correlation-id';
-
     const morganFormat = environment.app.isProduction ? productionFormat : developmentFormat;
 
     this.app.use(morgan(morganFormat, {
       stream: {
         write: (message: string) => {
-          // Limpiar el mensaje y registrar
           const cleanMessage = message.trim();
           if (cleanMessage) {
             httpLogger.info(cleanMessage);
@@ -463,11 +514,9 @@ class App {
         }
       },
       skip: (req: Request, res: Response) => {
-        // Skip logging en casos específicos
         const skipPaths = ['/health', '/metrics', '/favicon.ico'];
         const shouldSkip = skipPaths.some(path => req.url.startsWith(path));
-        
-        // En producción, skip health checks exitosos
+
         if (environment.app.isProduction && req.url.startsWith('/health') && res.statusCode < 400) {
           return true;
         }
@@ -477,16 +526,12 @@ class App {
     }));
   }
 
-  // ==============================================
   // MIDDLEWARES DE VALIDACIÓN
-  // ==============================================
   private async initializeValidationMiddlewares(): Promise<void> {
     this.appLogger.info('Initializing validation middlewares...');
 
-    // Middleware de validación de headers comunes
     this.app.use((req: Request, res: Response, next: NextFunction) => {
       try {
-        // Validar headers básicos (opcional, no fallar si no están)
         const headers = {
           'user-agent': req.get('user-agent'),
           'x-forwarded-for': req.get('x-forwarded-for'),
@@ -497,7 +542,6 @@ class App {
           'x-api-key': req.get('x-api-key')
         };
 
-        // Validación suave - no fallar, solo log warnings
         const validation = RequestHeadersSchema.safeParse(headers);
         if (!validation.success) {
           this.appLogger.debug('Header validation warnings', {
@@ -509,30 +553,24 @@ class App {
         next();
       } catch (error) {
         this.appLogger.error('Header validation error', { error });
-        next(); // Continuar sin fallar
+        next();
       }
     });
 
     this.appLogger.info('Validation middlewares initialized successfully');
   }
 
-  // ==============================================
   // MIDDLEWARE DE CONTEXTO DE REQUEST
-  // ==============================================
   private requestContextMiddleware(req: AppRequest, res: Response, next: NextFunction): void {
     const startTime = Date.now();
-    
-    // Generar IDs de correlación y request
-    req.correlationId = req.get(REQUEST_HEADERS.CORRELATION_ID) || 
-                       `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    req.requestId = req.get(REQUEST_HEADERS.REQUEST_ID) || 
-                   `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    req.startTime = startTime;
 
-    // Obtener IP real del cliente
+    req.correlationId = req.get(REQUEST_HEADERS.CORRELATION_ID) ||
+      `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    req.requestId = req.get(REQUEST_HEADERS.REQUEST_ID) ||
+      `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    req.startTime = startTime;
     req.clientIp = this.getClientIP(req);
 
-    // Información del dispositivo
     const userAgent = req.get('User-Agent') || '';
     req.deviceInfo = {
       userAgent,
@@ -540,12 +578,9 @@ class App {
       browser: this.extractBrowser(userAgent)
     };
 
-    // Establecer headers de respuesta
     res.setHeader(REQUEST_HEADERS.CORRELATION_ID, req.correlationId);
     res.setHeader(REQUEST_HEADERS.REQUEST_ID, req.requestId);
-    res.setHeader('X-Response-Time', `${Date.now() - startTime}ms`);
 
-    // Manejar timeout de request
     req.on('timeout', () => {
       securityLogger.warn('Request timeout detected', {
         correlationId: req.correlationId,
@@ -561,13 +596,10 @@ class App {
     next();
   }
 
-  // ==============================================
   // MIDDLEWARE DE LOGGING DE REQUESTS
-  // ==============================================
   private requestLoggingMiddleware(req: AppRequest, res: Response, next: NextFunction): void {
     const startTime = req.startTime || Date.now();
-    
-    // Log de request entrante (solo en desarrollo)
+
     if (environment.app.isDevelopment) {
       this.appLogger.debug('Incoming request', {
         correlationId: req.correlationId,
@@ -577,7 +609,7 @@ class App {
         userAgent: req.deviceInfo?.userAgent
       });
     }
-    
+
     res.on('finish', () => {
       const duration = Date.now() - startTime;
       const logData = {
@@ -594,10 +626,8 @@ class App {
         responseSize: res.get('content-length') || '0'
       };
 
-      // Actualizar header de tiempo de respuesta
       res.setHeader('X-Response-Time', `${duration}ms`);
 
-      // Log según el status code
       if (res.statusCode >= 500) {
         httpLogger.error('HTTP Request Error', logData);
       } else if (res.statusCode >= 400) {
@@ -606,8 +636,7 @@ class App {
         httpLogger.info('HTTP Request Completed', logData);
       }
 
-      // Métricas de performance
-      if (duration > 5000) { // Más de 5 segundos
+      if (duration > 5000) {
         securityLogger.warn('Slow request detected', {
           ...logData,
           threshold: '5000ms'
@@ -632,47 +661,60 @@ class App {
     next();
   }
 
-  // ==============================================
   // INICIALIZACIÓN DE RUTAS
-  // ==============================================
-  private initializeRoutes(): void {
+  private async initializeRoutes(): Promise<void> {
     this.appLogger.info('Initializing routes...');
 
     const apiVersion = `/api/${environment.app.apiVersion}`;
     
-    // Health check routes (primero, sin autenticación)
+    // Health routes (no requieren servicios)
     this.app.use('/health', HealthRoutes.routes);
-
-    // Root endpoint con información del servicio
     this.app.get('/', this.createRootHandler());
 
-    // API routes con prefijo de versión
-    this.app.use(`${apiVersion}/auth`, AuthRoutes.routes);
-    this.app.use(`${apiVersion}/users`, UserRoutes.routes);
+    try {
+      // Auth routes - usar los servicios inicializados
+      const authRoutes = AuthRoutes.create({
+        authService: this.services.authService,
+        userService: this.services.userService,
+        tokenService: this.services.tokenService
+      });
+      this.app.use(`${apiVersion}/auth`, authRoutes);
+
+      // User routes - crear controlador con servicios inyectados
+      const userController = new UserController(
+        this.services.userService,
+        this.services.authService
+      );
+
+      const userRoutesInstance = UserRoutes.create({ userController });
+      this.app.use(`${apiVersion}/users`, userRoutesInstance.routes);
+
+      this.appLogger.info('Routes initialized successfully', {
+        apiVersion,
+        routes: ['auth', 'users', 'health'],
+        totalEndpoints: this.getRoutesCount()
+      });
+    } catch (error) {
+      this.appLogger.error('Failed to initialize routes', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    }
 
     // API info endpoint
     this.app.get(`${apiVersion}`, this.createApiInfoHandler(apiVersion));
 
-    // Endpoint de métricas (solo en desarrollo)
+    // Development metrics endpoint
     if (environment.app.isDevelopment) {
       this.app.get('/metrics', this.createMetricsHandler());
     }
-
-    this.appLogger.info('Routes initialized successfully', {
-      apiVersion,
-      routes: ['auth', 'users', 'health', 'metrics'],
-      totalEndpoints: this.getRoutesCount()
-    });
   }
 
-  // ==============================================
   // HANDLERS DE ENDPOINTS
-  // ==============================================
   private createRootHandler() {
     return (req: Request, res: Response) => {
       const uptime = process.uptime();
       const memUsage = process.memoryUsage();
-      
       res.json({
         success: true,
         message: 'Task Manager Auth Service API',
@@ -736,7 +778,7 @@ class App {
     return (req: Request, res: Response) => {
       const memUsage = process.memoryUsage();
       const cpuUsage = process.cpuUsage();
-      
+
       res.json({
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
@@ -760,9 +802,7 @@ class App {
     };
   }
 
-  // ==============================================
   // INICIALIZACIÓN DE SWAGGER
-  // ==============================================
   private initializeSwagger(): void {
     if (environment.app.isProduction || !environment.features?.swaggerEnabled) {
       this.appLogger.info('Swagger disabled in production environment');
@@ -770,18 +810,15 @@ class App {
     }
 
     try {
-      // Configurar Swagger UI con opciones personalizadas
       this.app.use('/api-docs', swaggerUi.serve);
       this.app.get('/api-docs', swaggerUi.setup(swaggerSpec, swaggerUiOptions));
 
-      // Endpoint para obtener la especificación JSON
       this.app.get('/api-docs.json', (req: Request, res: Response) => {
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.json(swaggerSpec);
       });
 
-      // Endpoint alternativo para la especificación
       this.app.get('/swagger.json', (req: Request, res: Response) => {
         res.redirect('/api-docs.json');
       });
@@ -802,29 +839,19 @@ class App {
     }
   }
 
-  // ==============================================
   // MANEJO DE ERRORES
-  // ==============================================
   private initializeErrorHandling(): void {
     this.appLogger.info('Initializing error handling...');
 
-    // 404 handler para rutas no encontradas
     this.app.use('*', notFoundHandler);
-
-    // Global error handler (debe ser el último)
     this.app.use(errorHandler);
-
-    // Configurar handlers de shutdown graceful
     this.setupGracefulShutdown();
 
     this.appLogger.info('Error handling initialized successfully');
   }
 
-  // ==============================================
   // GRACEFUL SHUTDOWN
-  // ==============================================
   private setupGracefulShutdown(): void {
-    // Unhandled promise rejections
     process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
       this.appLogger.fatal('Unhandled Promise Rejection detected', {
         reason: reason instanceof Error ? {
@@ -834,12 +861,9 @@ class App {
         } : reason,
         promise: promise.toString()
       });
-      
-      // Dar tiempo para logging luego salir
       setTimeout(() => process.exit(1), 1000);
     });
 
-    // Uncaught exceptions
     process.on('uncaughtException', (error: Error) => {
       this.appLogger.fatal('Uncaught Exception detected', {
         error: {
@@ -848,24 +872,19 @@ class App {
           name: error.name
         }
       });
-      
-      // Salir inmediatamente en uncaught exception
       process.exit(1);
     });
 
-    // Graceful shutdown en SIGTERM
     process.on('SIGTERM', () => {
       this.appLogger.info('SIGTERM received, starting graceful shutdown...');
       this.gracefulShutdown('SIGTERM');
     });
 
-    // Graceful shutdown en SIGINT (Ctrl+C)
     process.on('SIGINT', () => {
       this.appLogger.info('SIGINT received, starting graceful shutdown...');
       this.gracefulShutdown('SIGINT');
     });
 
-    // Warning para eventos que podrían indicar problemas
     process.on('warning', (warning) => {
       this.appLogger.warn('Process warning detected', {
         name: warning.name,
@@ -876,9 +895,9 @@ class App {
   }
 
   private async gracefulShutdown(signal: string): Promise<void> {
-    const shutdownLogger = createContextLogger({ 
+    const shutdownLogger = createContextLogger({
       component: 'shutdown',
-      signal 
+      signal
     });
 
     try {
@@ -888,18 +907,12 @@ class App {
         memoryUsage: process.memoryUsage()
       });
 
-      // Detener aceptación de nuevas conexiones
-      // (esto sería manejado por la instancia del servidor)
+      // Cerrar conexiones de servicios si tienen métodos de cleanup
+      if (this.services.cacheService && typeof (this.services.cacheService as any).close === 'function') {
+        await (this.services.cacheService as any).close();
+      }
 
-      // Cerrar conexiones de base de datos
-      // await this.closeDatabaseConnections();
-
-      // Cerrar conexiones de Redis
-      // await this.closeRedisConnections();
-
-      // Limpiar timers y recursos
-      // clearInterval/clearTimeout para cualquier timer activo
-
+      // Aquí iría la lógica para cerrar conexiones a DB, Redis, etc.
       shutdownLogger.info('Graceful shutdown completed successfully');
       process.exit(0);
     } catch (error) {
@@ -913,52 +926,20 @@ class App {
     }
   }
 
-  // ==============================================
   // UTILIDADES HELPER
-  // ==============================================
   private getCorsOrigins(): string | string[] | boolean {
     if (environment.app.isDevelopment) {
-      // En desarrollo permitir todos los orígenes
       return true;
     }
-
-    // En producción usar orígenes configurados
     const allowedOrigins = environment.cors?.origin;
-
     if (!allowedOrigins) {
       this.appLogger.warn('No CORS origins configured for production');
       return false;
     }
-
-    // Validar formato de orígenes
-    if (Array.isArray(allowedOrigins)) {
-      const validOrigins = allowedOrigins.filter(origin => {
-        try {
-          new URL(origin);
-          return true;
-        } catch {
-          this.appLogger.warn('Invalid CORS origin detected', { origin });
-          return false;
-        }
-      });
-      return validOrigins;
-    }
-
-    if (typeof allowedOrigins === 'string' && allowedOrigins !== '*') {
-      try {
-        new URL(allowedOrigins);
-        return allowedOrigins;
-      } catch {
-        this.appLogger.warn('Invalid CORS origin format', { origin: allowedOrigins });
-        return false;
-      }
-    }
-
     return allowedOrigins;
   }
 
   private getClientIP(req: Request): string {
-    // Prioridad de headers para obtener IP real
     const ipHeaders = [
       'x-forwarded-for',
       'x-real-ip',
@@ -968,92 +949,50 @@ class App {
       'forwarded-for',
       'forwarded'
     ];
-
     for (const header of ipHeaders) {
       const value = req.get(header);
       if (value) {
-        // Tomar la primera IP si hay múltiples
         const ip = value.split(',')[0].trim();
         if (this.isValidIP(ip)) {
           return ip;
         }
       }
     }
-
-    // Fallback a req.ip
     return req.ip || req.connection?.remoteAddress || 'unknown';
   }
 
   private isValidIP(ip: string): boolean {
     const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
     const ipv6Regex = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/;
-    
     if (ipv4Regex.test(ip)) {
-      return ip.split('.').every(octet => {
-        const num = parseInt(octet, 10);
-        return num >= 0 && num <= 255;
-      });
+      return ip.split('.').every(octet => parseInt(octet, 10) <= 255);
     }
-    
     return ipv6Regex.test(ip);
   }
 
   private extractPlatform(userAgent: string): string {
-    const platforms = {
-      'Windows NT 10.0': 'Windows 10',
-      'Windows NT 6.3': 'Windows 8.1',
-      'Windows NT 6.2': 'Windows 8',
-      'Windows NT 6.1': 'Windows 7',
-      'Mac OS X': 'macOS',
-      'X11': 'Linux',
-      'Linux': 'Linux',
-      'Android': 'Android',
-      'iPhone': 'iOS',
-      'iPad': 'iPadOS'
-    };
-
-    for (const [key, value] of Object.entries(platforms)) {
-      if (userAgent.includes(key)) {
-        return value;
-      }
-    }
-
+    if (/Windows/i.test(userAgent)) return 'Windows';
+    if (/Mac OS X/i.test(userAgent)) return 'macOS';
+    if (/Linux/i.test(userAgent)) return 'Linux';
+    if (/Android/i.test(userAgent)) return 'Android';
+    if (/iPhone|iPad|iPod/i.test(userAgent)) return 'iOS';
     return 'Unknown';
   }
 
   private extractBrowser(userAgent: string): string {
-    const browsers = {
-      'Chrome/': 'Chrome',
-      'Firefox/': 'Firefox',
-      'Safari/': 'Safari',
-      'Edge/': 'Edge',
-      'Opera/': 'Opera',
-      'Brave/': 'Brave'
-    };
-
-    for (const [key, value] of Object.entries(browsers)) {
-      if (userAgent.includes(key)) {
-        // Extraer versión si es posible
-        const versionMatch = userAgent.match(new RegExp(`${key}([\\d.]+)`));
-        if (versionMatch) {
-          return `${value} ${versionMatch[1].split('.')[0]}`;
-        }
-        return value;
-      }
+    const browserMatches = userAgent.match(/(Chrome|Firefox|Safari|Edge|Opera|Brave)\/([\d.]+)/);
+    if (browserMatches) {
+        return `${browserMatches[1]} ${browserMatches[2].split('.')[0]}`;
     }
-
     return 'Unknown';
   }
 
   private getRoutesCount(): number {
-    // Contar rutas registradas (aproximado)
     const stack = this.app._router?.stack || [];
     return stack.filter((layer: any) => layer.route).length;
   }
 
-  // ==============================================
   // MÉTODOS PÚBLICOS
-  // ==============================================
   public getApp(): Express {
     return this.app;
   }
@@ -1063,7 +1002,6 @@ class App {
     await this.gracefulShutdown('MANUAL_CLOSE');
   }
 
-  // Método para obtener información del estado de la app
   public getAppInfo() {
     const memUsage = process.memoryUsage();
     return {
@@ -1082,39 +1020,43 @@ class App {
         compression: true,
         security: environment.app.isProduction
       },
-      routes: this.getRoutesCount()
+      routes: this.getRoutesCount(),
+      services: {
+        userService: !!this.services.userService,
+        authService: !!this.services.authService,
+        tokenService: !!this.services.tokenService,
+        cacheService: !!this.services.cacheService,
+        userRepository: !!this.services.userRepository
+      }
     };
   }
 
-  // Método para configuración de pruebas
   public configureForTesting(): void {
     if (!environment.app.isTest) {
       this.appLogger.warn('configureForTesting called in non-test environment');
       return;
     }
-
-    // Configuraciones específicas para testing
     this.app.set('trust proxy', true);
-    
-    // Endpoint adicional para testing
     this.app.get('/test/info', (req: Request, res: Response) => {
       res.json(this.getAppInfo());
     });
-
     this.appLogger.info('Application configured for testing');
+  }
+
+  // MÉTODO PARA OBTENER SERVICIOS (útil para testing)
+  public getServices(): ServiceDependencies {
+    return this.services;
   }
 }
 
-// ==============================================
 // EXTENSIÓN DE INTERFACES GLOBALES
-// ==============================================
 declare global {
   namespace Express {
     interface Request {
       correlationId?: string;
       requestId?: string;
       startTime?: number;
-      clientIp?: string;
+      clientIP?: string;
       deviceInfo?: {
         userAgent: string;
         platform?: string;
@@ -1127,10 +1069,7 @@ declare global {
         sessionId: string;
         iat?: number;
         exp?: number;
-        isActive?: boolean;
-        isVerified?: boolean;
       };
-      // Para middlewares de validación
       validatedData?: {
         body?: any;
         query?: any;
@@ -1141,15 +1080,10 @@ declare global {
   }
 }
 
-// ==============================================
 // VALIDADORES ZOD ADICIONALES PARA EXPORT
-// ==============================================
 export const AppValidators = {
   RequestHeaders: RequestHeadersSchema,
   CorsOrigin: CorsOriginSchema,
-  // Agregar más validadores según sea necesario
-  
-  // Validador para configuración de ambiente
   EnvironmentConfig: z.object({
     NODE_ENV: z.enum(['development', 'production', 'test']),
     PORT: z.string().transform(Number).refine(n => n > 0 && n < 65536),
@@ -1158,8 +1092,6 @@ export const AppValidators = {
     REDIS_URL: z.string().url().optional(),
     CORS_ORIGIN: z.union([z.string(), z.array(z.string())]).optional()
   }),
-
-  // Validador para request básico
   BasicRequest: z.object({
     correlationId: z.string().optional(),
     requestId: z.string().optional(),
@@ -1168,15 +1100,12 @@ export const AppValidators = {
   })
 };
 
-// ==============================================
 // TIPOS TYPESCRIPT PARA EXPORT
-// ==============================================
 export type AppRequestExtended = AppRequest;
 export type SecurityConfigType = SecurityConfig;
+export type ServiceDependenciesType = ServiceDependencies;
 
-// ==============================================
 // CONSTANTES DE CONFIGURACIÓN
-// ==============================================
 export const APP_CONSTANTS = {
   DEFAULT_TIMEOUT: '30s',
   MAX_REQUEST_SIZE: '10mb',
@@ -1185,10 +1114,8 @@ export const APP_CONSTANTS = {
   RATE_LIMIT_MAX: 100,
   COOKIE_MAX_AGE: 7 * 24 * 60 * 60 * 1000, // 7 días
   SLOW_REQUEST_THRESHOLD: 5000, // 5 segundos
-  
   CORS_MAX_AGE: 86400, // 24 horas
   HSTS_MAX_AGE: 31536000, // 1 año
-  
   SKIP_LOGGING_PATHS: ['/health', '/metrics', '/favicon.ico'],
   SKIP_RATE_LIMIT_PATHS: ['/health']
 } as const;

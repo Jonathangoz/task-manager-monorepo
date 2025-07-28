@@ -1,6 +1,6 @@
 // src/presentation/middlewares/validation.middleware.ts
 import { Request, Response, NextFunction } from 'express';
-import { validationResult, ValidationChain } from 'express-validator';
+import { z } from 'zod';
 import { logger } from '@/utils/logger';
 import { 
   HTTP_STATUS, 
@@ -15,78 +15,81 @@ interface ValidationRequest extends Request {
   correlationId?: string;
 }
 
+// ============================================================================
+// Base Schemas para validaciones comunes
+// ============================================================================
+
+const PaginationQuerySchema = z.object({
+  page: z.coerce.number().int().min(1, 'La página debe ser un número entero mayor a 0').default(1),
+  limit: z.coerce.number().int().min(1).max(DEFAULT_VALUES.PAGINATION_MAX_LIMIT, `El límite debe estar entre 1 y ${DEFAULT_VALUES.PAGINATION_MAX_LIMIT}`).default(DEFAULT_VALUES.PAGINATION_LIMIT),
+  sortBy: z.string().regex(/^[a-zA-Z0-9_]+$/, 'El campo de ordenamiento contiene caracteres no válidos').optional(),
+  sortOrder: z.enum(['asc', 'desc'], { errorMap: () => ({ message: 'El orden debe ser "asc" o "desc"' }) }).default('asc')
+});
+
+const CUIDSchema = z.string().regex(VALIDATION_PATTERNS.CUID, 'Debe ser un CUID válido');
+const UUIDSchema = z.string().uuid('Debe ser un UUID válido');
+const EmailSchema = z.string().email('Formato de email inválido').regex(VALIDATION_PATTERNS.EMAIL, 'Formato de email inválido');
+const UsernameSchema = z.string().regex(VALIDATION_PATTERNS.USERNAME, 'El username solo puede contener letras, números y guiones bajos');
+
+// ============================================================================
+// Core Validation Middleware Class
+// ============================================================================
+
 export class ValidationMiddleware {
   /**
-   * Middleware para manejar errores de validación de express-validator
+   * Genera un correlation ID único para la request
    */
-  static handleValidationErrors(
-    req: ValidationRequest,
-    res: Response,
-    next: NextFunction
-  ): void {
-    const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    req.correlationId = correlationId;
-    
-    const errors = validationResult(req);
-
-    if (!errors.isEmpty()) {
-      const formattedErrors = errors.array().map(error => ({
-        field: error.type === 'field' ? error.path : error.type,
-        message: error.msg,
-        value: error.type === 'field' ? error.value : undefined
-      }));
-
-      logger.warn('Errores de validación encontrados', {
-        correlationId,
-        errors: formattedErrors,
-        path: req.path,
-        method: req.method
-      });
-
-      res.status(HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        error: {
-          code: ERROR_CODES.VALIDATION_ERROR,
-          message: ERROR_MESSAGES.VALIDATION_ERROR,
-          details: formattedErrors
-        },
-        meta: {
-          correlationId,
-          timestamp: new Date().toISOString(),
-          path: req.path,
-          method: req.method
-        }
-      });
-      return;
-    }
-
-    next();
+  private static generateCorrelationId(): string {
+    return `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   }
 
   /**
-   * Crea un middleware de validación con manejo automático de errores
+   * Asegura que la request tenga un correlation ID
    */
-  static validate(validations: ValidationChain[]) {
-    return async (req: ValidationRequest, res: Response, next: NextFunction): Promise<void> => {
-      const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      req.correlationId = correlationId;
+  private static ensureCorrelationId(req: ValidationRequest): string {
+    if (!req.correlationId) {
+      req.correlationId = ValidationMiddleware.generateCorrelationId();
+    }
+    return req.correlationId;
+  }
+
+  /**
+   * Crea un middleware de validación genérico para cualquier schema de Zod
+   */
+  static createValidator<T extends z.ZodSchema>(
+    schema: T,
+    target: 'body' | 'query' | 'params' = 'body'
+  ) {
+    return (req: ValidationRequest, res: Response, next: NextFunction): void => {
+      const correlationId = ValidationMiddleware.ensureCorrelationId(req);
 
       try {
-        // Ejecutar todas las validaciones en paralelo
-        await Promise.all(validations.map(validation => validation.run(req)));
-
-        // Verificar si hay errores
-        const errors = validationResult(req);
+        const dataToValidate = req[target];
+        const validatedData = schema.parse(dataToValidate);
         
-        if (!errors.isEmpty()) {
-          const formattedErrors = errors.array().map(error => ({
-            field: error.type === 'field' ? error.path : error.type,
-            message: error.msg,
-            value: error.type === 'field' ? error.value : undefined
+        // Reemplazar los datos originales con los validados y transformados
+        (req as any)[target] = validatedData;
+
+        logger.debug('Validación exitosa', {
+          correlationId,
+          target,
+          path: req.path,
+          method: req.method
+        });
+
+        next();
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          const formattedErrors = error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message,
+            code: err.code,
+            value: err.code !== 'invalid_type' ? err.path.reduce((obj, key) => obj?.[key], req[target]) : undefined
           }));
 
           logger.warn('Errores de validación encontrados', {
             correlationId,
+            target,
             errors: formattedErrors,
             path: req.path,
             method: req.method
@@ -109,14 +112,7 @@ export class ValidationMiddleware {
           return;
         }
 
-        logger.debug('Validación exitosa', {
-          correlationId,
-          path: req.path,
-          method: req.method
-        });
-
-        next();
-      } catch (error) {
+        // Error no esperado durante validación
         logger.error('Error durante validación', {
           correlationId,
           error: error instanceof Error ? error.message : 'Error desconocido',
@@ -142,115 +138,9 @@ export class ValidationMiddleware {
   }
 
   /**
-   * Sanitiza y valida parámetros de paginación
+   * Validador específico para paginación con lógica adicional
    */
-  static validatePagination(
-    req: ValidationRequest,
-    res: Response,
-    next: NextFunction
-  ): void {
-    const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    req.correlationId = correlationId;
-
-    try {
-      const { 
-        page = '1', 
-        limit = DEFAULT_VALUES.PAGINATION_LIMIT.toString(), 
-        sortBy, 
-        sortOrder = 'asc' 
-      } = req.query;
-
-      // Validar y sanitizar página
-      const pageNum = parseInt(page as string, 10);
-      if (isNaN(pageNum) || pageNum < 1) {
-        throw new AppError(
-          'El parámetro "page" debe ser un número entero mayor a 0', 
-          HTTP_STATUS.BAD_REQUEST,
-          ERROR_CODES.VALIDATION_ERROR
-        );
-      }
-
-      // Validar y sanitizar límite
-      const limitNum = parseInt(limit as string, 10);
-      if (isNaN(limitNum) || limitNum < 1 || limitNum > DEFAULT_VALUES.PAGINATION_MAX_LIMIT) {
-        throw new AppError(
-          `El parámetro "limit" debe ser un número entre 1 y ${DEFAULT_VALUES.PAGINATION_MAX_LIMIT}`, 
-          HTTP_STATUS.BAD_REQUEST,
-          ERROR_CODES.VALIDATION_ERROR
-        );
-      }
-
-      // Validar orden de clasificación
-      const validSortOrders = ['asc', 'desc'];
-      if (sortOrder && !validSortOrders.includes(sortOrder as string)) {
-        throw new AppError(
-          'El parámetro "sortOrder" debe ser "asc" o "desc"', 
-          HTTP_STATUS.BAD_REQUEST,
-          ERROR_CODES.VALIDATION_ERROR
-        );
-      }
-
-      // Adjuntar parámetros sanitizados a la request
-      req.query.page = pageNum.toString();
-      req.query.limit = limitNum.toString();
-      req.query.sortOrder = sortOrder as string;
-      
-      if (sortBy) {
-        // Sanitizar campo de ordenamiento (remover caracteres peligrosos)
-        const sanitizedSortBy = (sortBy as string).replace(/[^a-zA-Z0-9_]/g, '');
-        if (sanitizedSortBy !== sortBy) {
-          throw new AppError(
-            'El parámetro "sortBy" contiene caracteres no válidos', 
-            HTTP_STATUS.BAD_REQUEST,
-            ERROR_CODES.VALIDATION_ERROR
-          );
-        }
-        req.query.sortBy = sanitizedSortBy;
-      }
-
-      logger.debug('Parámetros de paginación validados', {
-        correlationId,
-        pagination: {
-          page: pageNum,
-          limit: limitNum,
-          sortBy: req.query.sortBy,
-          sortOrder
-        }
-      });
-
-      next();
-    } catch (error) {
-      if (error instanceof AppError) {
-        res.status(error.statusCode).json({
-          success: false,
-          error: {
-            code: error.code,
-            message: error.message
-          },
-          meta: {
-            correlationId,
-            timestamp: new Date().toISOString(),
-            path: req.path,
-            method: req.method
-          }
-        });
-      } else {
-        res.status(HTTP_STATUS.BAD_REQUEST).json({
-          success: false,
-          error: {
-            code: ERROR_CODES.VALIDATION_ERROR,
-            message: 'Error en parámetros de paginación'
-          },
-          meta: {
-            correlationId,
-            timestamp: new Date().toISOString(),
-            path: req.path,
-            method: req.method
-          }
-        });
-      }
-    }
-  }
+  static validatePagination = ValidationMiddleware.createValidator(PaginationQuerySchema, 'query');
 
   /**
    * Valida que el cuerpo de la petición no esté vacío
@@ -260,8 +150,7 @@ export class ValidationMiddleware {
     res: Response,
     next: NextFunction
   ): void {
-    const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    req.correlationId = correlationId;
+    const correlationId = ValidationMiddleware.ensureCorrelationId(req);
 
     if (!req.body || Object.keys(req.body).length === 0) {
       logger.warn('Cuerpo de petición vacío', {
@@ -290,80 +179,25 @@ export class ValidationMiddleware {
   }
 
   /**
-   * Valida formato de CUID en parámetros (usado por Prisma)
+   * Valida formato de CUID en parámetros
    */
   static validateCUID(paramName: string) {
-    return (req: ValidationRequest, res: Response, next: NextFunction): void => {
-      const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      req.correlationId = correlationId;
+    const paramSchema = z.object({
+      [paramName]: CUIDSchema
+    });
 
-      const paramValue = req.params[paramName];
-      
-      if (!paramValue || !VALIDATION_PATTERNS.CUID.test(paramValue)) {
-        logger.warn('CUID inválido en parámetro', {
-          correlationId,
-          paramName,
-          paramValue,
-          path: req.path
-        });
-
-        res.status(HTTP_STATUS.BAD_REQUEST).json({
-          success: false,
-          error: {
-            code: ERROR_CODES.VALIDATION_ERROR,
-            message: `El parámetro "${paramName}" debe ser un CUID válido`
-          },
-          meta: {
-            correlationId,
-            timestamp: new Date().toISOString(),
-            path: req.path,
-            method: req.method
-          }
-        });
-        return;
-      }
-
-      next();
-    };
+    return ValidationMiddleware.createValidator(paramSchema, 'params');
   }
 
   /**
-   * Valida formato de UUID en parámetros (para compatibilidad)
+   * Valida formato de UUID en parámetros
    */
   static validateUUID(paramName: string) {
-    return (req: ValidationRequest, res: Response, next: NextFunction): void => {
-      const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      req.correlationId = correlationId;
+    const paramSchema = z.object({
+      [paramName]: UUIDSchema
+    });
 
-      const paramValue = req.params[paramName];
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-      if (!paramValue || !uuidRegex.test(paramValue)) {
-        logger.warn('UUID inválido en parámetro', {
-          correlationId,
-          paramName,
-          paramValue,
-          path: req.path
-        });
-
-        res.status(HTTP_STATUS.BAD_REQUEST).json({
-          success: false,
-          error: {
-            code: ERROR_CODES.VALIDATION_ERROR,
-            message: `El parámetro "${paramName}" debe ser un UUID válido`
-          },
-          meta: {
-            correlationId,
-            timestamp: new Date().toISOString(),
-            path: req.path,
-            method: req.method
-          }
-        });
-        return;
-      }
-
-      next();
-    };
+    return ValidationMiddleware.createValidator(paramSchema, 'params');
   }
 
   /**
@@ -374,8 +208,7 @@ export class ValidationMiddleware {
     res: Response,
     next: NextFunction
   ): void {
-    const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    req.correlationId = correlationId;
+    const correlationId = ValidationMiddleware.ensureCorrelationId(req);
 
     try {
       // Sanitizar body
@@ -387,6 +220,12 @@ export class ValidationMiddleware {
       if (req.query && typeof req.query === 'object') {
         req.query = ValidationMiddleware.sanitizeObject(req.query);
       }
+
+      logger.debug('Sanitización completada', {
+        correlationId,
+        path: req.path,
+        method: req.method
+      });
 
       next();
     } catch (error) {
@@ -412,82 +251,20 @@ export class ValidationMiddleware {
   }
 
   /**
-   * Valida formato de email
+   * Valida formato de email en el body
    */
-  static validateEmail(
-    req: ValidationRequest,
-    res: Response,
-    next: NextFunction
-  ): void {
-    const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    req.correlationId = correlationId;
-
-    const { email } = req.body;
-
-    if (email && !VALIDATION_PATTERNS.EMAIL.test(email)) {
-      logger.warn('Formato de email inválido', {
-        correlationId,
-        email: email.substring(0, 3) + '***', // Log parcial por privacidad
-        path: req.path
-      });
-
-      res.status(HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        error: {
-          code: ERROR_CODES.INVALID_EMAIL,
-          message: 'Formato de email inválido'
-        },
-        meta: {
-          correlationId,
-          timestamp: new Date().toISOString(),
-          path: req.path,
-          method: req.method
-        }
-      });
-      return;
-    }
-
-    next();
-  }
+  static validateEmail = ValidationMiddleware.createValidator(
+    z.object({ email: EmailSchema }),
+    'body'
+  );
 
   /**
-   * Valida formato de username
+   * Valida formato de username en el body
    */
-  static validateUsername(
-    req: ValidationRequest,
-    res: Response,
-    next: NextFunction
-  ): void {
-    const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    req.correlationId = correlationId;
-
-    const { username } = req.body;
-
-    if (username && !VALIDATION_PATTERNS.USERNAME.test(username)) {
-      logger.warn('Formato de username inválido', {
-        correlationId,
-        username: username.substring(0, 3) + '***',
-        path: req.path
-      });
-
-      res.status(HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        error: {
-          code: ERROR_CODES.INVALID_USERNAME,
-          message: 'El username solo puede contener letras, números y guiones bajos'
-        },
-        meta: {
-          correlationId,
-          timestamp: new Date().toISOString(),
-          path: req.path,
-          method: req.method
-        }
-      });
-      return;
-    }
-
-    next();
-  }
+  static validateUsername = ValidationMiddleware.createValidator(
+    z.object({ username: UsernameSchema }),
+    'body'
+  );
 
   /**
    * Sanitiza recursivamente un objeto
@@ -526,9 +303,7 @@ export class ValidationMiddleware {
    */
   static requireContentType(expectedType: string = 'application/json') {
     return (req: ValidationRequest, res: Response, next: NextFunction): void => {
-      const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      req.correlationId = correlationId;
-
+      const correlationId = ValidationMiddleware.ensureCorrelationId(req);
       const contentType = req.get('Content-Type');
 
       if (!contentType || !contentType.includes(expectedType)) {
@@ -560,9 +335,182 @@ export class ValidationMiddleware {
   }
 }
 
-// Exportar métodos estáticos para uso directo
-export const handleValidationErrors = ValidationMiddleware.handleValidationErrors;
-export const validate = ValidationMiddleware.validate;
+// ============================================================================
+// Advanced Validation Utilities
+// ============================================================================
+
+export class AdvancedValidationUtils {
+  /**
+   * Crea un validador condicional basado en condiciones
+   */
+  static createConditionalValidator<T extends z.ZodSchema>(
+    schema: T,
+    condition: (req: ValidationRequest) => boolean,
+    target: 'body' | 'query' | 'params' = 'body'
+  ) {
+    return (req: ValidationRequest, res: Response, next: NextFunction): void => {
+      if (!condition(req)) {
+        return next(); // Saltar validación si no se cumple la condición
+      }
+
+      return ValidationMiddleware.createValidator(schema, target)(req, res, next);
+    };
+  }
+
+  /**
+   * Combina múltiples validadores en uno solo
+   */
+  static combineValidators(...validators: Array<(req: any, res: any, next: any) => void>) {
+    return (req: ValidationRequest, res: Response, next: NextFunction): void => {
+      let currentIndex = 0;
+
+      const runNext = (error?: any) => {
+        if (error) return next(error);
+
+        if (currentIndex >= validators.length) {
+          return next();
+        }
+
+        const validator = validators[currentIndex++];
+        validator(req, res, runNext);
+      };
+
+      runNext();
+    };
+  }
+
+  /**
+   * Crea un validador que permite campos opcionales en el cuerpo
+   */
+  static createOptionalBodyValidator<T extends z.ZodSchema>(schema: T) {
+    return (req: ValidationRequest, res: Response, next: NextFunction): void => {
+      // Si no hay body, continúa sin validar
+      if (!req.body || Object.keys(req.body).length === 0) {
+        return next();
+      }
+
+      return ValidationMiddleware.createValidator(schema, 'body')(req, res, next);
+    };
+  }
+
+  /**
+   * Validador para múltiples parámetros CUID
+   */
+  static validateMultipleCUIDs(...paramNames: string[]) {
+    const schemaObj: Record<string, z.ZodString> = {};
+    paramNames.forEach(param => {
+      schemaObj[param] = CUIDSchema;
+    });
+
+    return ValidationMiddleware.createValidator(z.object(schemaObj), 'params');
+  }
+
+  /**
+   * Validador para rangos de fechas en query parameters
+   */
+  static validateDateRange() {
+    const dateRangeSchema = z.object({
+      dateFrom: z.coerce.date().optional(),
+      dateTo: z.coerce.date().optional()
+    }).refine(data => {
+      if (data.dateFrom && data.dateTo) {
+        return data.dateTo >= data.dateFrom;
+      }
+      return true;
+    }, {
+      message: 'La fecha de fin debe ser posterior a la fecha de inicio',
+      path: ['dateTo']
+    });
+
+    return ValidationMiddleware.createValidator(dateRangeSchema, 'query');
+  }
+}
+
+// ============================================================================
+// Validation Presets - Validadores predefinidos comunes
+// ============================================================================
+
+export const ValidationPresets = {
+  // Validaciones básicas
+  pagination: ValidationMiddleware.validatePagination,
+  requireBody: ValidationMiddleware.requireBody,
+  requireJSON: ValidationMiddleware.requireContentType('application/json'),
+  sanitizeInput: ValidationMiddleware.sanitizeInput,
+
+  // Validaciones de parámetros
+  userIdParam: ValidationMiddleware.validateCUID('id'),
+  sessionIdParam: ValidationMiddleware.validateCUID('sessionId'),
+  uuidParam: (paramName: string) => ValidationMiddleware.validateUUID(paramName),
+
+  // Validaciones de campos específicos
+  emailField: ValidationMiddleware.validateEmail,
+  usernameField: ValidationMiddleware.validateUsername,
+
+  // Validaciones avanzadas
+  dateRange: AdvancedValidationUtils.validateDateRange(),
+
+  // Combinaciones comunes
+  paginationAndSanitize: AdvancedValidationUtils.combineValidators(
+    ValidationMiddleware.validatePagination,
+    ValidationMiddleware.sanitizeInput
+  ),
+
+  userResourceAccess: AdvancedValidationUtils.combineValidators(
+    ValidationMiddleware.validateCUID('id'),
+    ValidationMiddleware.requireBody,
+    ValidationMiddleware.sanitizeInput
+  )
+} as const;
+
+// ============================================================================
+// Schema Factory - Para crear schemas dinámicamente
+// ============================================================================
+
+export class SchemaFactory {
+  /**
+   * Crea un schema de paginación con campos de ordenamiento específicos
+   */
+  static createPaginationSchema(allowedSortFields: string[]) {
+    return z.object({
+      page: z.coerce.number().int().min(1).default(1),
+      limit: z.coerce.number().int().min(1).max(DEFAULT_VALUES.PAGINATION_MAX_LIMIT).default(DEFAULT_VALUES.PAGINATION_LIMIT),
+      sortBy: z.enum(allowedSortFields as [string, ...string[]]).optional(),
+      sortOrder: z.enum(['asc', 'desc']).default('asc')
+    });
+  }
+
+  /**
+   * Crea un schema de búsqueda con validaciones específicas
+   */
+  static createSearchSchema(minLength: number = 1, maxLength: number = 100) {
+    return z.object({
+      q: z.string()
+        .min(minLength, `El término de búsqueda debe tener al menos ${minLength} caracteres`)
+        .max(maxLength, `El término de búsqueda no puede exceder ${maxLength} caracteres`)
+        .transform(q => q.trim()),
+      exactMatch: z.coerce.boolean().default(false),
+      caseSensitive: z.coerce.boolean().default(false)
+    });
+  }
+
+  /**
+   * Crea un schema para validar IDs múltiples
+   */
+  static createMultipleIdsSchema(fieldName: string, idType: 'cuid' | 'uuid' = 'cuid') {
+    const idSchema = idType === 'cuid' ? CUIDSchema : UUIDSchema;
+    
+    return z.object({
+      [fieldName]: z.array(idSchema).min(1, `Debe proporcionar al menos un ${fieldName}`)
+    });
+  }
+}
+
+// ============================================================================
+// Exports - Compatibilidad con la API anterior
+// ============================================================================
+
+// Métodos principales
+export const createValidator = ValidationMiddleware.createValidator;
 export const validatePagination = ValidationMiddleware.validatePagination;
 export const requireBody = ValidationMiddleware.requireBody;
 export const validateCUID = ValidationMiddleware.validateCUID;
@@ -571,3 +519,33 @@ export const sanitizeInput = ValidationMiddleware.sanitizeInput;
 export const validateEmail = ValidationMiddleware.validateEmail;
 export const validateUsername = ValidationMiddleware.validateUsername;
 export const requireContentType = ValidationMiddleware.requireContentType;
+
+// Legacy exports para compatibilidad
+export const handleValidationErrors = (req: ValidationRequest, res: Response, next: NextFunction) => {
+  // Esta función ya no es necesaria con Zod, pero se mantiene para compatibilidad
+  logger.warn('handleValidationErrors is deprecated with Zod implementation');
+  next();
+};
+
+export const validate = (validations: any[]) => {
+  // Esta función es reemplazada por createValidator
+  logger.warn('validate function is deprecated, use createValidator instead');
+  return (req: ValidationRequest, res: Response, next: NextFunction) => next();
+};
+
+// Export default para compatibilidad
+export default {
+  ValidationMiddleware,
+  AdvancedValidationUtils,
+  ValidationPresets,
+  SchemaFactory,
+  createValidator,
+  validatePagination,
+  requireBody,
+  validateCUID,
+  validateUUID,
+  sanitizeInput,
+  validateEmail,
+  validateUsername,
+  requireContentType
+};

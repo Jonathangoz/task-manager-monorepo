@@ -1,8 +1,5 @@
-// ==============================================
 // src/infrastructure/cache/RedisCache.ts
 // Implementación Redis del servicio de cache con validación Zod
-// ==============================================
-
 import Redis from 'ioredis';
 import { z } from 'zod';
 import { ICacheService, CacheOptions, RateLimitResult } from '@/core/interfaces/ICacheService';
@@ -16,9 +13,7 @@ import {
   TIMEOUT_CONFIG 
 } from '@/utils/constants';
 
-// ==============================================
 // SCHEMAS DE VALIDACIÓN ZOD
-// ==============================================
 const CacheKeySchema = z.string().min(1).max(250);
 const SessionIdSchema = z.string().regex(/^[a-zA-Z0-9-_]{8,}$/);
 const TokenIdSchema = z.string().regex(/^[a-zA-Z0-9-_]{8,}$/);
@@ -30,9 +25,7 @@ const CacheOptionsSchema = z.object({
   nx: z.boolean().optional(),
 }).optional();
 
-// ==============================================
 // CLASE REDISCACHE
-// ==============================================
 export class RedisCache implements ICacheService {
   private client: Redis;
   private readonly prefix: string;
@@ -44,22 +37,18 @@ export class RedisCache implements ICacheService {
     this.setupEventHandlers();
   }
 
-  // ==============================================
+
   // CONFIGURACIÓN DEL CLIENTE REDIS
-  // ==============================================
+
   private createRedisClient(): Redis {
     return new Redis(environment.redis.url, {
       maxRetriesPerRequest: 3,
-      retryDelayOnFailover: 1000,
       enableReadyCheck: true,
       lazyConnect: true,
       keepAlive: 30000,
       keyPrefix: this.prefix,
       connectTimeout: TIMEOUT_CONFIG.REDIS_OPERATION,
       commandTimeout: TIMEOUT_CONFIG.REDIS_OPERATION,
-      // Configuración de reconexión
-      retryDelayOnClusterDown: 300,
-      maxRetriesPerRequest: 3,
       // Pool de conexiones
       family: 4,
       // Configuración de memoria
@@ -88,7 +77,7 @@ export class RedisCache implements ICacheService {
       redisLogger.warn('Redis client connection closed');
     });
 
-    this.client.on('reconnecting', (delayMs) => {
+    this.client.on('reconnecting', (delayMs: number) => {
       redisLogger.info({ delayMs }, 'Redis client attempting to reconnect');
     });
 
@@ -98,9 +87,9 @@ export class RedisCache implements ICacheService {
     });
   }
 
-  // ==============================================
+
   // OPERACIONES BÁSICAS
-  // ==============================================
+
   async get<T>(key: string): Promise<T | null> {
     try {
       const validatedKey = CacheKeySchema.parse(key);
@@ -223,9 +212,9 @@ export class RedisCache implements ICacheService {
     }
   }
 
-  // ==============================================
+
   // OPERACIONES CON TTL
-  // ==============================================
+
   async expire(key: string, seconds: number): Promise<boolean> {
     try {
       const validatedKey = CacheKeySchema.parse(key);
@@ -269,9 +258,9 @@ export class RedisCache implements ICacheService {
     }
   }
 
-  // ==============================================
+
   // OPERACIONES DE CONJUNTOS
-  // ==============================================
+
   async sadd(key: string, members: string[]): Promise<number> {
     try {
       const validatedKey = CacheKeySchema.parse(key);
@@ -346,9 +335,9 @@ export class RedisCache implements ICacheService {
     }
   }
 
-  // ==============================================
+
   // OPERACIONES DE HASH
-  // ==============================================
+
   async hset(key: string, field: string, value: string): Promise<number> {
     try {
       const validatedKey = CacheKeySchema.parse(key);
@@ -420,9 +409,9 @@ export class RedisCache implements ICacheService {
     }
   }
 
-  // ==============================================
+
   // UTILIDADES ESPECÍFICAS DEL DOMINIO
-  // ==============================================
+
   async storeSession(sessionId: string, sessionData: any, ttl: number): Promise<void> {
     try {
       const validatedSessionId = SessionIdSchema.parse(sessionId);
@@ -569,9 +558,9 @@ export class RedisCache implements ICacheService {
     }
   }
 
-  // ==============================================
+
   // RATE LIMITING
-  // ==============================================
+
   async incrementRateLimit(key: string, windowSeconds: number): Promise<RateLimitResult> {
     try {
       const validatedKey = CacheKeySchema.parse(key);
@@ -630,9 +619,9 @@ export class RedisCache implements ICacheService {
     }
   }
 
-  // ==============================================
+
   // LOGIN ATTEMPTS TRACKING
-  // ==============================================
+
   async recordLoginAttempt(email: string): Promise<number> {
     try {
       const validatedEmail = EmailSchema.parse(email.toLowerCase());
@@ -714,9 +703,9 @@ export class RedisCache implements ICacheService {
     }
   }
 
-  // ==============================================
+
   // HEALTH CHECK
-  // ==============================================
+
   async ping(): Promise<string> {
     try {
       const response = await this.client.ping();
@@ -731,9 +720,9 @@ export class RedisCache implements ICacheService {
     }
   }
 
-  // ==============================================
+
   // UTILIDADES Y MANTENIMIENTO
-  // ==============================================
+
   async isHealthy(): Promise<boolean> {
     try {
       if (!this.isConnected) return false;
@@ -795,9 +784,9 @@ export class RedisCache implements ICacheService {
     }
   }
 
-  // ==============================================
+
   // MÉTODOS AUXILIARES PRIVADOS
-  // ==============================================
+
   private validateConnection(): void {
     if (!this.isConnected) {
       throw new Error(`${ERROR_CODES.REDIS_ERROR}: Redis client is not connected`);
@@ -825,9 +814,9 @@ export class RedisCache implements ICacheService {
     }
   }
 
-  // ==============================================
+
   // MÉTODOS ADICIONALES PARA COMPATIBILIDAD CON LA IMPLEMENTACIÓN ANTERIOR
-  // ==============================================
+
   
   // Métodos legacy para mantener compatibilidad (marcados como deprecated)
   
@@ -875,9 +864,9 @@ export class RedisCache implements ICacheService {
     return await this.clearLoginAttempts(email);
   }
 
-  // ==============================================
+
   // MÉTODOS ESPECÍFICOS DE GESTIÓN DE USUARIOS
-  // ==============================================
+
 
   async setUserSessions(userId: string, sessionIds: string[], ttlSeconds?: number): Promise<void> {
     try {
@@ -998,9 +987,9 @@ export class RedisCache implements ICacheService {
     }
   }
 
-  // ==============================================
+
   // GESTIÓN DE DATOS DE USUARIO COMPLETA
-  // ==============================================
+
 
   async deleteUserData(userId: string): Promise<void> {
     try {
@@ -1040,9 +1029,9 @@ export class RedisCache implements ICacheService {
     }
   }
 
-  // ==============================================
+
   // OPERACIONES DE MANTENIMIENTO Y LIMPIEZA
-  // ==============================================
+
 
   async cleanupExpiredSessions(): Promise<number> {
     try {
@@ -1127,9 +1116,9 @@ export class RedisCache implements ICacheService {
     }
   }
 
-  // ==============================================
+
   // MÉTODOS DE RATE LIMITING ESPECÍFICOS
-  // ==============================================
+
 
   async getRateLimit(identifier: string): Promise<number> {
     try {
@@ -1175,9 +1164,9 @@ export class RedisCache implements ICacheService {
     }
   }
 
-  // ==============================================
+
   // MÉTODOS DE UTILIDAD PARA JSON
-  // ==============================================
+
 
   /**
    * @deprecated Use set with generic type instead
@@ -1193,9 +1182,9 @@ export class RedisCache implements ICacheService {
     return await this.get<T>(key);
   }
 
-  // ==============================================
+
   // HEALTH CHECK MEJORADO
-  // ==============================================
+
 
   async healthCheck(): Promise<{
     status: 'healthy' | 'unhealthy' | 'degraded';

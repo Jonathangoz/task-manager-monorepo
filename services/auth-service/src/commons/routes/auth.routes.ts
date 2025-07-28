@@ -1,6 +1,9 @@
 // src/commons/routes/auth.routes.ts
 import { Router } from 'express';
 import { AuthController } from '@/commons/controllers/AuthController';
+import { IAuthService } from '@/core/interfaces/IAuthService';
+import { IUserService } from '@/core/interfaces/IUserService';
+import { ITokenService } from '@/core/interfaces/ITokenService';
 import { verifyToken, extractSessionInfo, checkConcurrentSessions } from '@/commons/middlewares/auth.middleware';
 import { validate, requireBody, sanitizeInput, validateEmail } from '@/commons/middlewares/validation.middleware';
 import { 
@@ -10,21 +13,33 @@ import {
   rateLimitPasswordReset 
 } from '@/commons/middlewares/rateLimit.middleware';
 import { 
-  registerValidation, 
-  loginValidation, 
-  refreshTokenValidation,
-  verifyTokenValidation,
-  updateProfileValidation,
-  changePasswordValidation,
-  forgotPasswordValidation,
-  resetPasswordValidation
+  validateRegisterBody,
+  validateLoginBody,
+  validateRefreshTokenBody,
+  validateVerifyTokenBody,
+  validateUpdateProfileBody,
+  validateChangePasswordBody,
+  validateForgotPasswordBody,
+  validateResetPasswordBody
 } from '@/commons/validators/auth.validator';
 import { asyncHandler } from '@/commons/middlewares/error.middleware';
 
+interface AuthRoutesConfig {
+  authService: IAuthService;
+  userService: IUserService;
+  tokenService: ITokenService;
+}
+
 export class AuthRoutes {
-  static get routes(): Router {
+  static create(config: AuthRoutesConfig): Router {
     const router = Router();
-    const authController = new AuthController();
+    const { authService, userService, tokenService } = config;
+    
+    const authController = new AuthController(
+      authService,
+      userService,
+      tokenService
+    );
 
     // Middleware global para todas las rutas
     router.use(extractSessionInfo);
@@ -40,7 +55,7 @@ export class AuthRoutes {
       '/register',
       rateLimitRegistration,
       requireBody,
-      validate(registerValidation),
+      validateRegisterBody,
       asyncHandler(authController.register.bind(authController))
     );
 
@@ -52,7 +67,7 @@ export class AuthRoutes {
       '/login',
       rateLimitAuth,
       requireBody,
-      validate(loginValidation),
+      validateLoginBody,
       asyncHandler(authController.login.bind(authController))
     );
 
@@ -64,7 +79,7 @@ export class AuthRoutes {
       '/refresh',
       rateLimitRefreshToken,
       requireBody,
-      validate(refreshTokenValidation),
+      validateRefreshTokenBody,
       asyncHandler(authController.refreshToken.bind(authController))
     );
 
@@ -75,7 +90,7 @@ export class AuthRoutes {
     router.post(
       '/verify-token',
       requireBody,
-      validate(verifyTokenValidation),
+      validateVerifyTokenBody,
       asyncHandler(authController.verifyToken.bind(authController))
     );
 
@@ -88,7 +103,7 @@ export class AuthRoutes {
       rateLimitPasswordReset,
       requireBody,
       validateEmail,
-      validate(forgotPasswordValidation),
+      validateForgotPasswordBody,
       asyncHandler(authController.forgotPassword.bind(authController))
     );
 
@@ -100,7 +115,7 @@ export class AuthRoutes {
       '/reset-password',
       rateLimitPasswordReset,
       requireBody,
-      validate(resetPasswordValidation),
+      validateResetPasswordBody,
       asyncHandler(authController.resetPassword.bind(authController))
     );
 
@@ -144,7 +159,7 @@ export class AuthRoutes {
       '/me',
       verifyToken,
       requireBody,
-      validate(updateProfileValidation),
+      validateUpdateProfileBody,
       asyncHandler(authController.updateProfile.bind(authController))
     );
 
@@ -156,7 +171,7 @@ export class AuthRoutes {
       '/change-password',
       verifyToken,
       requireBody,
-      validate(changePasswordValidation),
+      validateChangePasswordBody,
       asyncHandler(authController.changePassword.bind(authController))
     );
 
@@ -181,5 +196,16 @@ export class AuthRoutes {
     );
 
     return router;
+  }
+
+  // Método backward compatible (deprecated)
+  static get routes(): Router {
+    console.warn('AuthRoutes.routes is deprecated. Use AuthRoutes.create(config) instead.');
+    
+    // Este método necesitará las implementaciones reales de los servicios
+    // Por ahora lanza un error para forzar el uso del nuevo método
+    throw new Error(
+      'AuthRoutes.routes requires service implementations. Use AuthRoutes.create() with proper service instances.'
+    );
   }
 }

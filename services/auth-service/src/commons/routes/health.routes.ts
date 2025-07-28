@@ -1,7 +1,7 @@
 // src/commons/routes/health.routes.ts
 import { Router } from 'express';
 import { HealthController } from '@/commons/controllers/HealthController';
-import { rateLimitGeneral } from '@/commons/middlewares/rateLimit.middleware';
+import { RateLimitMiddleware } from '@/commons/middlewares/rateLimit.middleware';
 import { extractSessionInfo } from '@/commons/middlewares/auth.middleware';
 import { asyncHandler } from '@/commons/middlewares/error.middleware';
 import { environment } from '@/config/environment';
@@ -12,7 +12,7 @@ export class HealthRoutes {
     const healthController = new HealthController();
 
     // Rate limiting más permisivo para health checks
-    const healthRateLimit = rateLimitGeneral({
+    const healthRateLimit = RateLimitMiddleware.general({
       windowMs: 1 * 60 * 1000, // 1 minuto
       maxRequests: 100, // máximo 100 requests por IP por minuto
       message: 'Demasiadas peticiones de health check'

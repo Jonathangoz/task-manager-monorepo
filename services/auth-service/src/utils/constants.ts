@@ -89,6 +89,7 @@ export const ERROR_MESSAGES = {
   SERVICE_UNAVAILABLE: 'Servicio temporalmente no disponible',
   DATABASE_CONNECTION_ERROR: 'Error de conexión con la base de datos',
   REDIS_CONNECTION_ERROR: 'Error de conexión con el servicio de caché',
+  TOO_MANY_LOGIN_ATTEMPTS: 'Intentos de login',
 } as const;
 
 // Token Configuration
@@ -129,14 +130,18 @@ export const CACHE_KEYS = {
 
 // Cache TTL (Time To Live) in seconds
 export const CACHE_TTL = {
-  USER_TASKS: 180,
-  USER_CATEGORIES: 600,
-  USER_STATS: 300,
-  TASK_DETAIL: 300,
-  CATEGORY_DETAIL: 600,
-  CATEGORY_TASKS: 180,
-  SEARCH_RESULTS: 120,
-  RATE_LIMIT: 900,
+  USER_TASKS: 180, // 3 minutos
+  USER_CATEGORIES: 600, // 10 minutos
+  USER_STATS: 300, // 5 minutos
+  TASK_DETAIL: 300, // 5 minutos
+  CATEGORY_DETAIL: 600, // 10 minutos
+  CATEGORY_TASKS: 180, // 3 minutos
+  SEARCH_RESULTS: 120, // 2 minutos
+  RATE_LIMIT: 900, // 15 minutos (900s)
+  LOGIN_ATTEMPTS: 900, // 15 minutos (900s)
+  USER_SESSION: 900, // 15 minutos (900s)
+  REFRESH_TOKEN: 604800, // 7 días (604800s)
+  USER_PROFILE: 600, // 10 minutos (600s)
 } as const;
 
 // Validation Patterns
@@ -382,8 +387,8 @@ declare global {
         email: string;
         username: string;
         sessionId: string;
-        iat: number;
-        exp: number;
+        iat?: number;
+        exp?: number;
       };
     }
   }

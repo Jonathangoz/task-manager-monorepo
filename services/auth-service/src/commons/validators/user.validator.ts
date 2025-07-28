@@ -1,5 +1,5 @@
 // src/commons/validators/user.validator.ts
-import { body, query, param, ValidationChain } from 'express-validator';
+import { z } from 'zod';
 import { 
   VALIDATION_PATTERNS, 
   SECURITY_CONFIG,
@@ -7,382 +7,377 @@ import {
   PASSWORD_VALIDATION 
 } from '@/utils/constants';
 
-/**
- * Validaciones para consulta de usuarios con paginación y filtros
- */
-export const getUsersQueryValidation: ValidationChain[] = [
-  query('page')
+// ============================================================================
+// Base Schemas - Principio DRY y reutilización
+// ============================================================================
+
+const CUIDSchema = z.string().regex(
+  VALIDATION_PATTERNS.CUID,
+  'El ID debe ser un CUID válido'
+);
+
+const EmailSchema = z.string()
+  .min(1, 'El email es requerido')
+  .max(SECURITY_CONFIG.EMAIL_MAX_LENGTH, `El email no puede exceder ${SECURITY_CONFIG.EMAIL_MAX_LENGTH} caracteres`)
+  .email('El email debe tener un formato válido')
+  .regex(VALIDATION_PATTERNS.EMAIL, 'Formato de email inválido')
+  .transform(email => email.toLowerCase().trim());
+
+const UsernameSchema = z.string()
+  .min(SECURITY_CONFIG.USERNAME_MIN_LENGTH, `El username debe tener al menos ${SECURITY_CONFIG.USERNAME_MIN_LENGTH} caracteres`)
+  .max(SECURITY_CONFIG.USERNAME_MAX_LENGTH, `El username no puede exceder ${SECURITY_CONFIG.USERNAME_MAX_LENGTH} caracteres`)
+  .regex(VALIDATION_PATTERNS.USERNAME, 'El username solo puede contener letras, números y guiones bajos')
+  .transform(username => username.trim());
+
+const PasswordSchema = z.string()
+  .min(SECURITY_CONFIG.PASSWORD_MIN_LENGTH, `La contraseña debe tener al menos ${SECURITY_CONFIG.PASSWORD_MIN_LENGTH} caracteres`)
+  .max(SECURITY_CONFIG.PASSWORD_MAX_LENGTH, `La contraseña no puede exceder ${SECURITY_CONFIG.PASSWORD_MAX_LENGTH} caracteres`)
+  .regex(VALIDATION_PATTERNS.PASSWORD_STRONG, 'La contraseña debe contener al menos: 1 mayúscula, 1 minúscula, 1 número y 1 carácter especial')
+  .refine(password => {
+    return !PASSWORD_VALIDATION.FORBIDDEN_PATTERNS.some(pattern => pattern.test(password));
+  }, 'La contraseña contiene un patrón no permitido');
+
+const NameSchema = z.string()
+  .min(1, 'Este campo es requerido')
+  .max(50, 'No puede exceder 50 caracteres')
+  .regex(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/, 'Solo puede contener letras y espacios')
+  .transform(name => name.trim());
+
+const AvatarSchema = z.string()
+  .url('El avatar debe ser una URL válida')
+  .max(500, 'La URL del avatar no puede exceder 500 caracteres');
+
+const PaginationSchema = z.object({
+  page: z.coerce.number().int().min(1, 'La página debe ser un número entero mayor a 0').default(1),
+  limit: z.coerce.number().int().min(1).max(DEFAULT_VALUES.PAGINATION_MAX_LIMIT, `El límite debe estar entre 1 y ${DEFAULT_VALUES.PAGINATION_MAX_LIMIT}`).default(DEFAULT_VALUES.PAGINATION_LIMIT)
+});
+
+const SortSchema = z.object({
+  sortBy: z.enum(['createdAt', 'updatedAt', 'email', 'username', 'firstName', 'lastName']).optional(),
+  sortOrder: z.enum(['asc', 'desc']).optional()
+});
+
+const BaseDateRangeSchema = z.object({
+  dateFrom: z.coerce.date().optional(),
+  dateTo: z.coerce.date().optional()
+});
+
+// ============================================================================
+// Query Validation Schemas - Alta cohesión por funcionalidad
+// ============================================================================
+
+export const GetUsersQuerySchema = PaginationSchema
+  .merge(SortSchema)
+  .merge(BaseDateRangeSchema)
+  .extend({
+    search: z.string()
+      .min(1)
+      .max(100, 'El término de búsqueda debe tener entre 1 y 100 caracteres')
+      .transform(search => search.trim())
+      .optional(),
+    isActive: z.coerce.boolean().optional(),
+    isVerified: z.coerce.boolean().optional()
+  })
+  .refine(data => {
+    if (data.dateFrom && data.dateTo) {
+      return data.dateTo >= data.dateFrom;
+    }
+    return true;
+  }, {
+    message: 'La fecha de fin debe ser posterior a la fecha de inicio',
+    path: ['dateTo']
+  });
+
+export const SearchUsersQuerySchema = z.object({
+  q: z.string()
+    .min(1, 'El término de búsqueda es requerido')
+    .max(100, 'El término de búsqueda debe tener entre 1 y 100 caracteres')
+    .transform(q => q.trim()),
+  fields: z.string()
     .optional()
-    .isInt({ min: 1 })
-    .withMessage('La página debe ser un número entero mayor a 0')
-    .toInt(),
+    .transform(fields => fields?.split(',').map(f => f.trim()))
+    .pipe(z.array(z.enum(['email', 'username', 'firstName', 'lastName'])).optional()),
+  exactMatch: z.coerce.boolean().optional(),
+  caseSensitive: z.coerce.boolean().optional()
+});
 
-  query('limit')
+export const ExportUserDataQuerySchema = z.object({
+  format: z.enum(['json', 'csv']).default('json'),
+  includeHistory: z.coerce.boolean().default(false)
+});
+
+// ============================================================================
+// Parameter Validation Schemas
+// ============================================================================
+
+export const UserParamsSchema = z.object({
+  id: CUIDSchema
+});
+
+export const VerifyEmailTokenParamsSchema = z.object({
+  token: z.string()
+    .min(10, 'El token debe tener al menos 10 caracteres')
+    .nonempty('El token de verificación es requerido')
+});
+
+export const SessionParamsSchema = z.object({
+  sessionId: CUIDSchema
+});
+
+// ============================================================================
+// Body Validation Schemas - Separación de responsabilidades
+// ============================================================================
+
+export const CreateUserBodySchema = z.object({
+  email: EmailSchema,
+  username: UsernameSchema,
+  password: PasswordSchema,
+  firstName: NameSchema,
+  lastName: NameSchema,
+  avatar: AvatarSchema.optional()
+});
+
+export const UpdateUserBodySchema = z.object({
+  email: EmailSchema.optional(),
+  username: UsernameSchema.optional(),
+  firstName: NameSchema.optional(),
+  lastName: NameSchema.optional(),
+  avatar: AvatarSchema.optional()
+}).refine(data => {
+  // Al menos un campo debe estar presente
+  return Object.values(data).some(value => value !== undefined);
+}, {
+  message: 'Debe proporcionar al menos un campo para actualizar'
+});
+
+export const UpdateAvatarBodySchema = z.object({
+  avatar: AvatarSchema
+});
+
+export const DeactivateUserBodySchema = z.object({
+  reason: z.string()
+    .min(1)
+    .max(500, 'La razón debe tener entre 1 y 500 caracteres')
+    .transform(reason => reason.trim())
     .optional()
-    .isInt({ min: 1, max: DEFAULT_VALUES.PAGINATION_MAX_LIMIT })
-    .withMessage(`El límite debe estar entre 1 y ${DEFAULT_VALUES.PAGINATION_MAX_LIMIT}`)
-    .toInt(),
+});
 
-  query('search')
-    .optional()
-    .isLength({ min: 1, max: 100 })
-    .withMessage('El término de búsqueda debe tener entre 1 y 100 caracteres')
-    .trim()
-    .escape(), // Escapar caracteres HTML
+// ============================================================================
+// Validation Factory - Patrón Factory para crear validadores
+// ============================================================================
 
-  query('sortBy')
-    .optional()
-    .isIn(['createdAt', 'updatedAt', 'email', 'username', 'firstName', 'lastName'])
-    .withMessage('Campo de ordenamiento inválido'),
-
-  query('sortOrder')
-    .optional()
-    .isIn(['asc', 'desc'])
-    .withMessage('El orden debe ser "asc" o "desc"'),
-
-  query('isActive')
-    .optional()
-    .isBoolean()
-    .withMessage('isActive debe ser un valor booleano')
-    .toBoolean(),
-
-  query('isVerified')
-    .optional()
-    .isBoolean()
-    .withMessage('isVerified debe ser un valor booleano')
-    .toBoolean(),
-
-  query('dateFrom')
-    .optional()
-    .isISO8601()
-    .withMessage('La fecha de inicio debe estar en formato ISO 8601')
-    .toDate(),
-
-  query('dateTo')
-    .optional()
-    .isISO8601()
-    .withMessage('La fecha de fin debe estar en formato ISO 8601')
-    .toDate()
-    .custom((value, { req }) => {
-      if (req.query.dateFrom && value < new Date(req.query.dateFrom as string)) {
-        throw new Error('La fecha de fin debe ser posterior a la fecha de inicio');
-      }
-      return true;
-    }),
-];
-
-/**
- * Validaciones para parámetros de usuario por ID (CUID)
- */
-export const userParamsValidation: ValidationChain[] = [
-  param('id')
-    .matches(VALIDATION_PATTERNS.CUID)
-    .withMessage('El ID del usuario debe ser un CUID válido'),
-];
-
-/**
- * Validaciones para actualización de usuario
- */
-export const updateUserValidation: ValidationChain[] = [
-  body('email')
-    .optional()
-    .isEmail()
-    .withMessage('El email debe tener un formato válido')
-    .isLength({ max: SECURITY_CONFIG.EMAIL_MAX_LENGTH })
-    .withMessage(`El email no puede exceder ${SECURITY_CONFIG.EMAIL_MAX_LENGTH} caracteres`)
-    .normalizeEmail()
-    .matches(VALIDATION_PATTERNS.EMAIL)
-    .withMessage('Formato de email inválido'),
-
-  body('username')
-    .optional()
-    .isLength({ 
-      min: SECURITY_CONFIG.USERNAME_MIN_LENGTH, 
-      max: SECURITY_CONFIG.USERNAME_MAX_LENGTH 
-    })
-    .withMessage(`El username debe tener entre ${SECURITY_CONFIG.USERNAME_MIN_LENGTH} y ${SECURITY_CONFIG.USERNAME_MAX_LENGTH} caracteres`)
-    .matches(VALIDATION_PATTERNS.USERNAME)
-    .withMessage('El username solo puede contener letras, números y guiones bajos')
-    .trim(),
-
-  body('firstName')
-    .optional()
-    .isLength({ min: 1, max: 50 })
-    .withMessage('El nombre debe tener entre 1 y 50 caracteres')
-    .matches(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/)
-    .withMessage('El nombre solo puede contener letras y espacios')
-    .trim(),
-
-  body('lastName')
-    .optional()
-    .isLength({ min: 1, max: 50 })
-    .withMessage('El apellido debe tener entre 1 y 50 caracteres')
-    .matches(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/)
-    .withMessage('El apellido solo puede contener letras y espacios')
-    .trim(),
-
-  body('avatar')
-    .optional()
-    .isURL()
-    .withMessage('El avatar debe ser una URL válida')
-    .isLength({ max: 500 })
-    .withMessage('La URL del avatar no puede exceder 500 caracteres'),
-
-  // Validación personalizada para asegurar que al menos un campo esté presente
-  body()
-    .custom((value, { req }) => {
-      const allowedFields = ['email', 'username', 'firstName', 'lastName', 'avatar'];
-      const providedFields = Object.keys(req.body).filter(key => 
-        allowedFields.includes(key) && req.body[key] !== undefined && req.body[key] !== ''
-      );
-      
-      if (providedFields.length === 0) {
-        throw new Error('Debe proporcionar al menos un campo para actualizar');
-      }
-      return true;
-    }),
-];
-
-/**
- * Validaciones para crear usuario (admin/system use)
- */
-export const createUserValidation: ValidationChain[] = [
-  body('email')
-    .isEmail()
-    .withMessage('El email debe tener un formato válido')
-    .isLength({ max: SECURITY_CONFIG.EMAIL_MAX_LENGTH })
-    .withMessage(`El email no puede exceder ${SECURITY_CONFIG.EMAIL_MAX_LENGTH} caracteres`)
-    .normalizeEmail()
-    .matches(VALIDATION_PATTERNS.EMAIL)
-    .withMessage('Formato de email inválido'),
-
-  body('username')
-    .isLength({ 
-      min: SECURITY_CONFIG.USERNAME_MIN_LENGTH, 
-      max: SECURITY_CONFIG.USERNAME_MAX_LENGTH 
-    })
-    .withMessage(`El username debe tener entre ${SECURITY_CONFIG.USERNAME_MIN_LENGTH} y ${SECURITY_CONFIG.USERNAME_MAX_LENGTH} caracteres`)
-    .matches(VALIDATION_PATTERNS.USERNAME)
-    .withMessage('El username solo puede contener letras, números y guiones bajos')
-    .trim(),
-
-  body('password')
-    .isLength({ 
-      min: SECURITY_CONFIG.PASSWORD_MIN_LENGTH, 
-      max: SECURITY_CONFIG.PASSWORD_MAX_LENGTH 
-    })
-    .withMessage(`La contraseña debe tener entre ${SECURITY_CONFIG.PASSWORD_MIN_LENGTH} y ${SECURITY_CONFIG.PASSWORD_MAX_LENGTH} caracteres`)
-    .matches(VALIDATION_PATTERNS.PASSWORD_STRONG)
-    .withMessage('La contraseña debe contener al menos: 1 mayúscula, 1 minúscula, 1 número y 1 carácter especial')
-    .custom((value) => {
-      // Verificar patrones prohibidos
-      for (const pattern of PASSWORD_VALIDATION.FORBIDDEN_PATTERNS) {
-        if (pattern.test(value)) {
-          throw new Error('La contraseña contiene un patrón no permitido');
+class ValidationFactory {
+  static createQueryValidator<T extends z.ZodSchema>(schema: T) {
+    return (req: any, res: any, next: any) => {
+      try {
+        req.query = schema.parse(req.query);
+        next();
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({
+            success: false,
+            message: 'Errores de validación en query parameters',
+            errors: error.errors.map(err => ({
+              field: err.path.join('.'),
+              message: err.message,
+              code: err.code
+            }))
+          });
         }
+        next(error);
       }
-      return true;
-    }),
+    };
+  }
 
-  body('firstName')
-    .isLength({ min: 1, max: 50 })
-    .withMessage('El nombre debe tener entre 1 y 50 caracteres')
-    .matches(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/)
-    .withMessage('El nombre solo puede contener letras y espacios')
-    .trim(),
-
-  body('lastName')
-    .isLength({ min: 1, max: 50 })
-    .withMessage('El apellido debe tener entre 1 y 50 caracteres')
-    .matches(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/)
-    .withMessage('El apellido solo puede contener letras y espacios')
-    .trim(),
-
-  body('avatar')
-    .optional()
-    .isURL()
-    .withMessage('El avatar debe ser una URL válida')
-    .isLength({ max: 500 })
-    .withMessage('La URL del avatar no puede exceder 500 caracteres'),
-];
-
-/**
- * Validaciones para desactivar usuario
- */
-export const deactivateUserValidation: ValidationChain[] = [
-  body('reason')
-    .optional()
-    .isLength({ min: 1, max: 500 })
-    .withMessage('La razón debe tener entre 1 y 500 caracteres')
-    .trim()
-    .escape(),
-];
-
-/**
- * Validaciones para actualizar avatar
- */
-export const updateAvatarValidation: ValidationChain[] = [
-  body('avatar')
-    .isURL()
-    .withMessage('El avatar debe ser una URL válida')
-    .isLength({ max: 500 })
-    .withMessage('La URL del avatar no puede exceder 500 caracteres'),
-];
-
-/**
- * Validaciones para búsqueda avanzada de usuarios
- */
-export const searchUsersValidation: ValidationChain[] = [
-  query('q')
-    .isLength({ min: 1, max: 100 })
-    .withMessage('El término de búsqueda debe tener entre 1 y 100 caracteres')
-    .trim()
-    .escape(),
-
-  query('fields')
-    .optional()
-    .isString()
-    .withMessage('Los campos deben ser una cadena separada por comas')
-    .custom((value) => {
-      const allowedFields = ['email', 'username', 'firstName', 'lastName'];
-      const fields = value.split(',').map((f: string) => f.trim());
-      const invalidFields = fields.filter((f: string) => !allowedFields.includes(f));
-      
-      if (invalidFields.length > 0) {
-        throw new Error(`Campos inválidos: ${invalidFields.join(', ')}`);
+  static createParamsValidator<T extends z.ZodSchema>(schema: T) {
+    return (req: any, res: any, next: any) => {
+      try {
+        req.params = schema.parse(req.params);
+        next();
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({
+            success: false,
+            message: 'Errores de validación en parámetros',
+            errors: error.errors.map(err => ({
+              field: err.path.join('.'),
+              message: err.message,
+              code: err.code
+            }))
+          });
+        }
+        next(error);
       }
-      return true;
-    }),
+    };
+  }
 
-  query('exactMatch')
-    .optional()
-    .isBoolean()
-    .withMessage('exactMatch debe ser un valor booleano')
-    .toBoolean(),
-
-  query('caseSensitive')
-    .optional()
-    .isBoolean()
-    .withMessage('caseSensitive debe ser un valor booleano')
-    .toBoolean(),
-];
-
-/**
- * Validaciones for token de verificación de email
- */
-export const verifyEmailTokenValidation: ValidationChain[] = [
-  param('token')
-    .notEmpty()
-    .withMessage('El token de verificación es requerido')
-    .isString()
-    .withMessage('El token debe ser una cadena válida')
-    .isLength({ min: 10 })
-    .withMessage('El token debe tener al menos 10 caracteres'),
-];
-
-/**
- * Validaciones para parámetro de sesión
- */
-export const sessionParamsValidation: ValidationChain[] = [
-  param('sessionId')
-    .matches(VALIDATION_PATTERNS.CUID)
-    .withMessage('El ID de sesión debe ser un CUID válido'),
-];
-
-/**
- * Validaciones para exportación de datos de usuario
- */
-export const exportUserDataValidation: ValidationChain[] = [
-  query('format')
-    .optional()
-    .isIn(['json', 'csv'])
-    .withMessage('El formato debe ser "json" o "csv"'),
-
-  query('includeHistory')
-    .optional()
-    .isBoolean()
-    .withMessage('includeHistory debe ser un valor booleano')
-    .toBoolean(),
-];
-
-// Tipos TypeScript para las requests
-export interface GetUsersQuery {
-  page?: number;
-  limit?: number;
-  search?: string;
-  sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
-  isActive?: boolean;
-  isVerified?: boolean;
-  dateFrom?: Date;
-  dateTo?: Date;
+  static createBodyValidator<T extends z.ZodSchema>(schema: T) {
+    return (req: any, res: any, next: any) => {
+      try {
+        req.body = schema.parse(req.body);
+        next();
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({
+            success: false,
+            message: 'Errores de validación en el cuerpo de la petición',
+            errors: error.errors.map(err => ({
+              field: err.path.join('.'),
+              message: err.message,
+              code: err.code
+            }))
+          });
+        }
+        next(error);
+      }
+    };
+  }
 }
 
-export interface UserParams {
-  id: string;
+// ============================================================================
+// Middleware Validators - Interfaz simple para uso en rutas
+// ============================================================================
+
+export const validateGetUsersQuery = ValidationFactory.createQueryValidator(GetUsersQuerySchema);
+export const validateSearchUsersQuery = ValidationFactory.createQueryValidator(SearchUsersQuerySchema);
+export const validateExportUserDataQuery = ValidationFactory.createQueryValidator(ExportUserDataQuerySchema);
+
+export const validateUserParams = ValidationFactory.createParamsValidator(UserParamsSchema);
+export const validateVerifyEmailTokenParams = ValidationFactory.createParamsValidator(VerifyEmailTokenParamsSchema);
+export const validateSessionParams = ValidationFactory.createParamsValidator(SessionParamsSchema);
+
+export const validateCreateUserBody = ValidationFactory.createBodyValidator(CreateUserBodySchema);
+export const validateUpdateUserBody = ValidationFactory.createBodyValidator(UpdateUserBodySchema);
+export const validateUpdateAvatarBody = ValidationFactory.createBodyValidator(UpdateAvatarBodySchema);
+export const validateDeactivateUserBody = ValidationFactory.createBodyValidator(DeactivateUserBodySchema);
+
+// ============================================================================
+// Type Inference - Tipos automáticos desde los schemas
+// ============================================================================
+
+export type GetUsersQuery = z.infer<typeof GetUsersQuerySchema>;
+export type SearchUsersQuery = z.infer<typeof SearchUsersQuerySchema>;
+export type ExportUserDataQuery = z.infer<typeof ExportUserDataQuerySchema>;
+
+export type UserParams = z.infer<typeof UserParamsSchema>;
+export type VerifyEmailTokenParams = z.infer<typeof VerifyEmailTokenParamsSchema>;
+export type SessionParams = z.infer<typeof SessionParamsSchema>;
+
+export type CreateUserRequest = z.infer<typeof CreateUserBodySchema>;
+export type UpdateUserRequest = z.infer<typeof UpdateUserBodySchema>;
+export type UpdateAvatarRequest = z.infer<typeof UpdateAvatarBodySchema>;
+export type DeactivateUserRequest = z.infer<typeof DeactivateUserBodySchema>;
+
+// ============================================================================
+// Utility Functions - Funciones helper reutilizables
+// ============================================================================
+
+export class UserValidationUtils {
+  static validateCUID(id: string): boolean {
+    return CUIDSchema.safeParse(id).success;
+  }
+
+  static sanitizeSearchQuery(query: string): string {
+    return query
+      .trim()
+      .replace(/[<>"'%;()&+]/g, '') // Remover caracteres peligrosos
+      .substring(0, 100); // Limitar longitud
+  }
+
+  static validateEmail(email: string): boolean {
+    return EmailSchema.safeParse(email).success;
+  }
+
+  static validateUsername(username: string): boolean {
+    return UsernameSchema.safeParse(username).success;
+  }
+
+  static validatePassword(password: string): { isValid: boolean; errors: string[] } {
+    const result = PasswordSchema.safeParse(password);
+    return {
+      isValid: result.success,
+      errors: result.success ? [] : result.error.errors.map(err => err.message)
+    };
+  }
+
+  /**
+   * Valida datos de forma segura sin lanzar excepciones
+   */
+  static safeValidate<T extends z.ZodSchema>(schema: T, data: unknown): {
+    success: boolean;
+    data?: z.infer<T>;
+    errors?: Array<{ field: string; message: string; code: string }>;
+  } {
+    const result = schema.safeParse(data);
+    
+    if (result.success) {
+      return { success: true, data: result.data };
+    }
+
+    return {
+      success: false,
+      errors: result.error.errors.map(err => ({
+        field: err.path.join('.'),
+        message: err.message,
+        code: err.code
+      }))
+    };
+  }
 }
 
-export interface UpdateUserRequest {
-  email?: string;
-  username?: string;
-  firstName?: string;
-  lastName?: string;
-  avatar?: string;
-}
+// ============================================================================
+// Validation Presets - Conjuntos predefinidos para casos comunes
+// ============================================================================
 
-export interface CreateUserRequest {
-  email: string;
-  username: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-  avatar?: string;
-}
+export const ValidationPresets = {
+  // Para operaciones CRUD básicas
+  userCRUD: {
+    create: validateCreateUserBody,
+    update: validateUpdateUserBody,
+    params: validateUserParams
+  },
 
-export interface DeactivateUserRequest {
-  reason?: string;
-}
+  // Para operaciones de consulta
+  userQuery: {
+    list: validateGetUsersQuery,
+    search: validateSearchUsersQuery,
+    export: validateExportUserDataQuery
+  },
 
-export interface UpdateAvatarRequest {
-  avatar: string;
-}
+  // Para operaciones de autenticación
+  userAuth: {
+    verifyEmail: validateVerifyEmailTokenParams,
+    session: validateSessionParams
+  }
+} as const;
 
-export interface SearchUsersQuery {
-  q: string;
-  fields?: string;
-  exactMatch?: boolean;
-  caseSensitive?: boolean;
-}
+export default {
+  // Schemas
+  GetUsersQuerySchema,
+  SearchUsersQuerySchema,
+  ExportUserDataQuerySchema,
+  UserParamsSchema,
+  VerifyEmailTokenParamsSchema,
+  SessionParamsSchema,
+  CreateUserBodySchema,
+  UpdateUserBodySchema,
+  UpdateAvatarBodySchema,
+  DeactivateUserBodySchema,
 
-export interface VerifyEmailTokenParams {
-  token: string;
-}
+  // Validators
+  validateGetUsersQuery,
+  validateSearchUsersQuery,
+  validateExportUserDataQuery,
+  validateUserParams,
+  validateVerifyEmailTokenParams,
+  validateSessionParams,
+  validateCreateUserBody,
+  validateUpdateUserBody,
+  validateUpdateAvatarBody,
+  validateDeactivateUserBody,
 
-export interface SessionParams {
-  sessionId: string;
-}
-
-export interface ExportUserDataQuery {
-  format?: 'json' | 'csv';
-  includeHistory?: boolean;
-}
-
-// Funciones helper para validación
-export const validateCUID = (id: string): boolean => {
-  return VALIDATION_PATTERNS.CUID.test(id);
-};
-
-export const sanitizeSearchQuery = (query: string): string => {
-  return query
-    .trim()
-    .replace(/[<>\"'%;()&+]/g, '') // Remover caracteres peligrosos
-    .substring(0, 100); // Limitar longitud
-};
-
-export const validateEmail = (email: string): boolean => {
-  return VALIDATION_PATTERNS.EMAIL.test(email);
-};
-
-export const validateUsername = (username: string): boolean => {
-  return VALIDATION_PATTERNS.USERNAME.test(username);
+  // Utils
+  UserValidationUtils,
+  ValidationPresets,
+  ValidationFactory
 };

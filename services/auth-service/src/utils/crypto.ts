@@ -521,5 +521,15 @@ export class CryptoUtils {
 // ==============================================
 // EXPORTACIONES ADICIONALES
 // ==============================================
-export { ARGON2_CONFIG };
+export const hashPassword = CryptoUtils.hashPassword.bind(CryptoUtils);
+export const verifyPassword = CryptoUtils.verifyPassword.bind(CryptoUtils);
+export const validatePasswordStrength = CryptoUtils.validatePasswordStrength.bind(CryptoUtils);
+export const generateSecureToken = CryptoUtils.generateSecureToken.bind(CryptoUtils);
+export const generateSalt = CryptoUtils.generateSalt.bind(CryptoUtils);
+export const generateSessionId = CryptoUtils.generateSessionId.bind(CryptoUtils);
+export const generateCSRFToken = CryptoUtils.generateCSRFToken.bind(CryptoUtils);
+export const generatePasswordResetToken = CryptoUtils.generatePasswordResetToken.bind(CryptoUtils);
+export const generateEmailVerificationToken = CryptoUtils.generateEmailVerificationToken.bind(CryptoUtils);
+export const createSHA256Hash = CryptoUtils.createSHA256Hash.bind(CryptoUtils);
+export const createSHA512Hash = CryptoUtils.createSHA512Hash.bind(CryptoUtils);
 export default CryptoUtils;

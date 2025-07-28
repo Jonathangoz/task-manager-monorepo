@@ -1,26 +1,26 @@
 // src/core/application/AuthService.ts
-import { 
-  IAuthService, 
-  LoginCredentials, 
-  RegisterData, 
-  AuthResult, 
-  AuthTokens, 
+import {
+  IAuthService,
+  LoginCredentials,
+  RegisterData,
+  AuthResult,
+  AuthTokens,
   TokenPayload,
-  SessionInfo 
+  SessionInfo,
+  LoginAttemptData,
 } from '@/core/domain/interfaces/IAuthService';
 import { IUserRepository } from '@/core/interfaces/IUserRepository';
 import { ITokenService } from '@/core/interfaces/ITokenService';
 import { ICacheService } from '@/core/interfaces/ICacheService';
 import { User } from '@/core/entities/User';
-import { verifyPassword, hashPassword, validatePasswordStrength } from '@/utils/crypto';
+import { hashPassword, verifyPassword, validatePasswordStrength } from '@/utils/crypto';
 import { logger, authLogger } from '@/utils/logger';
-import { 
-  ERROR_CODES, 
-  ERROR_MESSAGES, 
-  SUCCESS_MESSAGES,
+import {
+  ERROR_CODES,
+  ERROR_MESSAGES,
   SECURITY_CONFIG,
-  EVENT_TYPES,
-  CACHE_TTL 
+  CACHE_TTL,
+  CACHE_KEYS
 } from '@/utils/constants';
 import { db } from '@/config/database';
 
@@ -34,73 +34,87 @@ export class AuthService implements IAuthService {
   /**
    * Autentica un usuario con email y contraseña
    */
-  async login(credentials: LoginCredentials, sessionInfo: SessionInfo): Promise<AuthResult> {
+  public async login(credentials: LoginCredentials, sessionInfo: SessionInfo): Promise<AuthResult> {
     const { email, password } = credentials;
-    
+
     try {
       authLogger.info({ email, ip: sessionInfo.ipAddress }, 'Login attempt started');
 
-      // Verificar intentos de login fallidos
-      await this.checkLoginAttempts(email, sessionInfo.ipAddress || 'unknown');
+      const ipAddress = sessionInfo.ipAddress || 'unknown';
+      await this.checkLoginAttempts(email, ipAddress);
 
-      // Buscar usuario por email
-      const user = await this.userRepository.findByEmail(email);
+      // Buscar usuario con password incluido para verificación
+      const user = await db.user.findUnique({
+        where: { email: email.toLowerCase() },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          password: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+          isActive: true,
+          isVerified: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
+        }
+      });
+
       if (!user) {
-        await this.recordLoginAttempt(email, sessionInfo.ipAddress || 'unknown', false);
+        await this.recordLoginAttempt({ email, ipAddress, success: false, reason: ERROR_MESSAGES.INVALID_CREDENTIALS });
         throw new Error(ERROR_CODES.INVALID_CREDENTIALS);
       }
 
-      // Verificar que el usuario esté activo
-      if (!user.isActive) {
-        await this.recordLoginAttempt(email, sessionInfo.ipAddress || 'unknown', false);
+      // Crear instancia User usando fromPrisma
+      const userInstance = User.fromPrisma(user);
+
+      if (!userInstance.isActive) {
+        await this.recordLoginAttempt({ email, userId: userInstance.id, ipAddress, success: false, reason: ERROR_MESSAGES.USER_INACTIVE });
         throw new Error(ERROR_CODES.USER_INACTIVE);
       }
 
-      // Verificar contraseña
-      const isPasswordValid = await verifyPassword(user.password, password);
+      // Verificar password usando el método toPrisma() para acceder al password
+      const isPasswordValid = await verifyPassword(userInstance.toPrisma().password, password);
       if (!isPasswordValid) {
-        await this.recordLoginAttempt(email, sessionInfo.ipAddress || 'unknown', false);
+        await this.recordLoginAttempt({ email, userId: userInstance.id, ipAddress, success: false, reason: ERROR_MESSAGES.INVALID_CREDENTIALS });
         throw new Error(ERROR_CODES.INVALID_CREDENTIALS);
       }
 
-      // Crear sesión
-      const sessionId = await this.createSession(user.id, sessionInfo);
+      const sessionId = await this.createSession(userInstance.id, sessionInfo);
 
-      // Generar tokens
-      const tokens = await this.generateAuthTokens(user, sessionId);
+      const tokens = await this.generateAuthTokens(userInstance, sessionId);
 
-      // Actualizar último login
-      await this.userRepository.updateLastLogin(user.id);
+      await this.userRepository.updateLastLogin(userInstance.id);
 
-      // Limpiar intentos de login fallidos
       await this.clearLoginAttempts(email);
 
-      // Registrar login exitoso
-      await this.recordLoginAttempt(email, sessionInfo.ipAddress || 'unknown', true);
+      await this.recordLoginAttempt({ email, userId: userInstance.id, ipAddress, success: true });
 
       authLogger.info(
-        { 
-          userId: user.id, 
-          email: user.email, 
+        {
+          userId: userInstance.id,
+          email: userInstance.email,
           sessionId,
-          ip: sessionInfo.ipAddress 
-        }, 
+          ip: ipAddress
+        },
         'Login successful'
       );
 
       return {
-        user: this.sanitizeUser(user),
+        user: userInstance,
         tokens,
         sessionId
       };
 
     } catch (error) {
       authLogger.error(
-        { 
-          email, 
+        {
+          email,
           error: error instanceof Error ? error.message : 'Unknown error',
-          ip: sessionInfo.ipAddress 
-        }, 
+          ip: sessionInfo.ipAddress
+        },
         'Login failed'
       );
       throw error;
@@ -116,48 +130,61 @@ export class AuthService implements IAuthService {
     try {
       authLogger.info({ email, username }, 'User registration started');
 
-      // Verificar si el usuario ya existe
       const existingUser = await this.userRepository.exists(email, username);
       if (existingUser) {
         throw new Error(ERROR_CODES.USER_ALREADY_EXISTS);
       }
 
-      // Validar fortaleza de la contraseña
       const passwordValidation = validatePasswordStrength(password);
       if (!passwordValidation.isValid) {
         throw new Error(ERROR_CODES.PASSWORD_TOO_WEAK);
       }
 
-      // Hashear contraseña
       const hashedPassword = await hashPassword(password);
 
-      // Crear usuario
-      const user = await this.userRepository.create({
-        email,
-        username,
-        password: hashedPassword,
-        firstName,
-        lastName
+      // Crear usuario directamente en la base de datos para tener acceso completo
+      const user = await db.user.create({
+        data: {
+          email: email.toLowerCase(),
+          username,
+          password: hashedPassword,
+          firstName,
+          lastName
+        },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          password: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+          isActive: true,
+          isVerified: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
+        }
       });
 
       authLogger.info(
-        { 
-          userId: user.id, 
-          email: user.email, 
-          username: user.username 
-        }, 
+        {
+          userId: user.id,
+          email: user.email,
+          username: user.username
+        },
         'User registered successfully'
       );
 
-      return this.sanitizeUser(user);
+      return User.fromPrisma(user);
 
     } catch (error) {
       authLogger.error(
-        { 
-          email, 
-          username, 
-          error: error instanceof Error ? error.message : 'Unknown error' 
-        }, 
+        {
+          email,
+          username,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        },
         'User registration failed'
       );
       throw error;
@@ -170,31 +197,36 @@ export class AuthService implements IAuthService {
   async logout(userId: string, sessionId: string): Promise<void> {
     try {
       authLogger.info({ userId, sessionId }, 'Logout started');
-
-      // Terminar sesión
       await this.terminateSession(sessionId);
-
-      // Revocar todos los refresh tokens de la sesión
-      await db.refreshToken.updateMany({
-        where: {
-          userId,
-          userAgent: { contains: sessionId } // Asumiendo que guardamos sessionId en userAgent
-        },
-        data: {
-          isRevoked: true
-        }
-      });
-
       authLogger.info({ userId, sessionId }, 'Logout successful');
-
     } catch (error) {
       authLogger.error(
-        { 
-          userId, 
-          sessionId, 
-          error: error instanceof Error ? error.message : 'Unknown error' 
-        }, 
+        {
+          userId,
+          sessionId,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        },
         'Logout failed'
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Cierra todas las sesiones de un usuario
+   */
+  async logoutAll(userId: string): Promise<void> {
+    try {
+      authLogger.info({ userId }, 'Logout all sessions started');
+      await this.terminateAllSessions(userId);
+      authLogger.info({ userId }, 'All sessions terminated successfully');
+    } catch (error) {
+      authLogger.error(
+        {
+          userId,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        },
+        'Failed to terminate all sessions'
       );
       throw error;
     }
@@ -207,38 +239,51 @@ export class AuthService implements IAuthService {
     try {
       authLogger.info({ ip: sessionInfo.ipAddress }, 'Token refresh started');
 
-      // Validar refresh token
       const tokenPayload = await this.tokenService.validateRefreshToken(refreshToken);
 
-      // Buscar el refresh token en la base de datos
       const storedToken = await db.refreshToken.findUnique({
         where: { token: refreshToken },
-        include: { user: true }
+        include: { 
+          user: {
+            select: {
+              id: true,
+              email: true,
+              username: true,
+              password: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+              isActive: true,
+              isVerified: true,
+              lastLoginAt: true,
+              createdAt: true,
+              updatedAt: true,
+            }
+          }
+        }
       });
 
       if (!storedToken || storedToken.isRevoked || storedToken.expiresAt < new Date()) {
         throw new Error(ERROR_CODES.REFRESH_TOKEN_INVALID);
       }
 
-      // Verificar que el usuario esté activo
-      if (!storedToken.user.isActive) {
+      const userInstance = User.fromPrisma(storedToken.user);
+      if (!userInstance.isActive) {
         throw new Error(ERROR_CODES.USER_INACTIVE);
       }
 
-      // Revocar el refresh token usado
       await db.refreshToken.update({
         where: { id: storedToken.id },
         data: { isRevoked: true }
       });
 
-      // Generar nuevos tokens
-      const tokens = await this.generateAuthTokens(storedToken.user, tokenPayload.sessionId);
+      const tokens = await this.generateAuthTokens(userInstance, tokenPayload.sessionId);
 
       authLogger.info(
-        { 
-          userId: storedToken.user.id, 
-          sessionId: tokenPayload.sessionId 
-        }, 
+        {
+          userId: userInstance.id,
+          sessionId: tokenPayload.sessionId
+        },
         'Token refresh successful'
       );
 
@@ -246,10 +291,10 @@ export class AuthService implements IAuthService {
 
     } catch (error) {
       authLogger.error(
-        { 
+        {
           error: error instanceof Error ? error.message : 'Unknown error',
-          ip: sessionInfo.ipAddress 
-        }, 
+          ip: sessionInfo.ipAddress
+        },
         'Token refresh failed'
       );
       throw error;
@@ -262,8 +307,7 @@ export class AuthService implements IAuthService {
   async validateAccessToken(token: string): Promise<TokenPayload> {
     try {
       const payload = await this.tokenService.validateAccessToken(token);
-      
-      // Verificar que la sesión esté activa
+
       const isSessionValid = await this.validateSession(payload.sessionId);
       if (!isSessionValid) {
         throw new Error(ERROR_CODES.SESSION_INVALID);
@@ -273,9 +317,9 @@ export class AuthService implements IAuthService {
 
     } catch (error) {
       authLogger.debug(
-        { 
-          error: error instanceof Error ? error.message : 'Unknown error' 
-        }, 
+        {
+          error: error instanceof Error ? error.message : 'Unknown error'
+        },
         'Token validation failed'
       );
       throw error;
@@ -296,10 +340,10 @@ export class AuthService implements IAuthService {
 
     } catch (error) {
       authLogger.error(
-        { 
-          tokenId, 
-          error: error instanceof Error ? error.message : 'Unknown error' 
-        }, 
+        {
+          tokenId,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        },
         'Failed to revoke refresh token'
       );
       throw error;
@@ -317,20 +361,169 @@ export class AuthService implements IAuthService {
       });
 
       authLogger.info(
-        { 
-          userId, 
-          revokedCount: result.count 
-        }, 
+        {
+          userId,
+          revokedCount: result.count
+        },
         'All refresh tokens revoked'
       );
 
     } catch (error) {
       authLogger.error(
-        { 
-          userId, 
-          error: error instanceof Error ? error.message : 'Unknown error' 
-        }, 
+        {
+          userId,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        },
         'Failed to revoke all tokens'
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Cambia la contraseña de un usuario
+   * Implementa la interfaz correcta de IAuthService
+   */
+  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+    try {
+      authLogger.info({ userId }, 'Password update started');
+
+      // Buscar usuario con password para verificación
+      const user = await db.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          password: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+          isActive: true,
+          isVerified: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
+        }
+      });
+
+      if (!user) {
+        throw new Error(ERROR_CODES.USER_NOT_FOUND);
+      }
+
+      const userInstance = User.fromPrisma(user);
+
+      const isCurrentPasswordValid = await verifyPassword(userInstance.toPrisma().password, currentPassword);
+      if (!isCurrentPasswordValid) {
+        throw new Error(ERROR_CODES.INVALID_CREDENTIALS);
+      }
+
+      const passwordValidation = validatePasswordStrength(newPassword);
+      if (!passwordValidation.isValid) {
+        throw new Error(ERROR_CODES.PASSWORD_TOO_WEAK);
+      }
+
+      const newHashedPassword = await hashPassword(newPassword);
+
+      await this.userRepository.updatePassword(userId, newHashedPassword);
+
+      await this.terminateAllSessions(userId);
+
+      authLogger.info({ userId }, 'Password updated successfully and all sessions terminated');
+
+    } catch (error) {
+      authLogger.error(
+        { userId, error: error instanceof Error ? error.message : 'Unknown error' },
+        'Password update failed'
+      );
+      throw error;
+    }
+  }
+  
+  /**
+   * Registra un intento de login (implementación de la interfaz)
+   */
+  async recordLoginAttempt(data: LoginAttemptData): Promise<void> {
+    return this.recordLoginAttemptInternal(data);
+  }
+
+/**
+ * Implementa terminateAllSessions con parámetro opcional excludeSessionId
+ */
+async terminateAllSessions(userId: string, excludeSessionId?: string): Promise<void> {
+  try {
+    let whereCondition: any = { userId, isActive: true };
+    
+    // Si se proporciona excludeSessionId, excluir esa sesión
+    if (excludeSessionId) {
+      whereCondition.sessionId = { not: excludeSessionId };
+    }
+
+    const sessions = await db.userSession.findMany({
+      where: whereCondition,
+      select: { sessionId: true }
+    });
+
+    await db.userSession.updateMany({
+      where: whereCondition,
+      data: { isActive: false }
+    });
+
+    // CORRECCIÓN: Llamar a la función CACHE_KEYS.USER_SESSION con cada sessionId
+    if (sessions.length > 0) {
+      for (const session of sessions) {
+        const cacheKey = CACHE_KEYS.USER_SESSION(session.sessionId);
+        await this.cacheService.del(cacheKey);
+      }
+    }
+
+    await this.revokeAllTokens(userId);
+
+    authLogger.info({ userId, count: sessions.length, excludedSession: excludeSessionId }, 'Sessions terminated');
+
+  } catch (error) {
+    authLogger.error(
+      { userId, error: error instanceof Error ? error.message : 'Unknown error' },
+      'Failed to terminate sessions'
+    );
+    throw error;
+  }
+}
+
+  /**
+   * Métodos de forgot/reset password - implementación básica
+   */
+  async forgotPassword(email: string): Promise<void> {
+    try {
+      const user = await this.userRepository.findByEmail(email);
+      if (!user) {
+        // Por seguridad, no revelar si el email existe o no
+        authLogger.info({ email }, 'Password reset requested for non-existent email');
+        return;
+      }
+
+      // TODO: Implementar lógica de envío de email
+      authLogger.info({ email, userId: user.id }, 'Password reset email would be sent');
+      
+    } catch (error) {
+      authLogger.error(
+        { email, error: error instanceof Error ? error.message : 'Unknown error' },
+        'Forgot password failed'
+      );
+      throw error;
+    }
+  }
+
+  async resetPassword(token: string, newPassword: string, email: string): Promise<void> {
+    try {
+      // TODO: Implementar validación de token y reset de password
+      authLogger.info({ email }, 'Password reset attempted');
+      throw new Error('Not implemented');
+      
+    } catch (error) {
+      authLogger.error(
+        { token, email, error: error instanceof Error ? error.message : 'Unknown error' },
+        'Password reset failed'
       );
       throw error;
     }
@@ -341,19 +534,17 @@ export class AuthService implements IAuthService {
    */
   async createSession(userId: string, sessionInfo: SessionInfo): Promise<string> {
     try {
-      // Generar ID de sesión único
       const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const expiresAt = new Date(Date.now() + CACHE_TTL.USER_SESSION * 1000); // Convertir a milisegundos
+      const ipAddress = sessionInfo.ipAddress || 'unknown';
+      const userAgent = sessionInfo.userAgent || 'unknown';
 
-      // Calcular fecha de expiración (24 horas)
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-      // Crear sesión en la base de datos
       await db.userSession.create({
         data: {
           userId,
           sessionId,
-          ipAddress: sessionInfo.ipAddress,
-          userAgent: sessionInfo.userAgent,
+          ipAddress,
+          userAgent,
           device: sessionInfo.device,
           location: sessionInfo.location,
           expiresAt,
@@ -361,26 +552,14 @@ export class AuthService implements IAuthService {
         }
       });
 
-      // Guardar sesión en cache para acceso rápido
       await this.cacheService.setJson(
-        `session:${sessionId}`,
-        {
-          userId,
-          sessionId,
-          ipAddress: sessionInfo.ipAddress,
-          userAgent: sessionInfo.userAgent,
-          isActive: true,
-          expiresAt: expiresAt.toISOString()
-        },
+        CACHE_KEYS.USER_SESSION(sessionId),
+        { userId, sessionId, ipAddress, userAgent, isActive: true, expiresAt: expiresAt.toISOString() },
         CACHE_TTL.USER_SESSION
       );
 
       authLogger.info(
-        { 
-          userId, 
-          sessionId, 
-          ip: sessionInfo.ipAddress 
-        }, 
+        { userId, sessionId, ip: ipAddress },
         'Session created'
       );
 
@@ -388,10 +567,7 @@ export class AuthService implements IAuthService {
 
     } catch (error) {
       authLogger.error(
-        { 
-          userId, 
-          error: error instanceof Error ? error.message : 'Unknown error' 
-        }, 
+        { userId, error: error instanceof Error ? error.message : 'Unknown error' },
         'Failed to create session'
       );
       throw error;
@@ -403,44 +579,28 @@ export class AuthService implements IAuthService {
    */
   async validateSession(sessionId: string): Promise<boolean> {
     try {
-      // Buscar en cache primero
-      const cachedSession = await this.cacheService.getJson(`session:${sessionId}`);
+      const cachedSession = await this.cacheService.getJson<{ expiresAt: string, isActive: boolean }>(CACHE_KEYS.USER_SESSION(sessionId));
       if (cachedSession) {
         const expiresAt = new Date(cachedSession.expiresAt);
         return cachedSession.isActive && expiresAt > new Date();
       }
 
-      // Si no está en cache, buscar en base de datos
       const session = await db.userSession.findUnique({
         where: { sessionId }
       });
-
       if (!session || !session.isActive || session.expiresAt < new Date()) {
         return false;
       }
 
-      // Actualizar cache
       await this.cacheService.setJson(
-        `session:${sessionId}`,
-        {
-          userId: session.userId,
-          sessionId: session.sessionId,
-          ipAddress: session.ipAddress,
-          userAgent: session.userAgent,
-          isActive: session.isActive,
-          expiresAt: session.expiresAt.toISOString()
-        },
+        CACHE_KEYS.USER_SESSION(sessionId),
+        { userId: session.userId, sessionId: session.sessionId, ipAddress: session.ipAddress, userAgent: session.userAgent, isActive: session.isActive, expiresAt: session.expiresAt.toISOString() },
         CACHE_TTL.USER_SESSION
       );
-
       return true;
-
     } catch (error) {
       authLogger.error(
-        { 
-          sessionId, 
-          error: error instanceof Error ? error.message : 'Unknown error' 
-        }, 
+        { sessionId, error: error instanceof Error ? error.message : 'Unknown error' },
         'Session validation failed'
       );
       return false;
@@ -452,23 +612,18 @@ export class AuthService implements IAuthService {
    */
   async terminateSession(sessionId: string): Promise<void> {
     try {
-      // Desactivar sesión en base de datos
       await db.userSession.update({
         where: { sessionId },
         data: { isActive: false }
       });
 
-      // Eliminar de cache
-      await this.cacheService.del(`session:${sessionId}`);
+      await this.cacheService.del(CACHE_KEYS.USER_SESSION(sessionId));
 
       authLogger.info({ sessionId }, 'Session terminated');
 
     } catch (error) {
       authLogger.error(
-        { 
-          sessionId, 
-          error: error instanceof Error ? error.message : 'Unknown error' 
-        }, 
+        { sessionId, error: error instanceof Error ? error.message : 'Unknown error' },
         'Failed to terminate session'
       );
       throw error;
@@ -476,187 +631,80 @@ export class AuthService implements IAuthService {
   }
 
   /**
-   * Termina todas las sesiones de un usuario
-   */
-  async terminateAllSessions(userId: string): Promise<void> {
-    try {
-      // Obtener todas las sesiones activas del usuario
-      const sessions = await db.userSession.findMany({
-        where: { userId, isActive: true },
-        select: { sessionId: true }
-      });
-
-      // Desactivar todas las sesiones
-      await db.userSession.updateMany({
-        where: { userId },
-        data: { isActive: false }
-      });
-
-      // Eliminar de cache
-      for (const session of sessions) {
-        await this.cacheService.del(`session:${session.sessionId}`);
-      }
-
-      authLogger.info(
-        { 
-          userId, 
-          terminatedCount: sessions.length 
-        }, 
-        'All sessions terminated'
-      );
-
-    } catch (error) {
-      authLogger.error(
-        { 
-          userId, 
-          error: error instanceof Error ? error.message : 'Unknown error' 
-        }, 
-        'Failed to terminate all sessions'
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Cambia la contraseña de un usuario
-   */
-  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
-    try {
-      authLogger.info({ userId }, 'Password change started');
-
-      // Buscar usuario
-      const user = await this.userRepository.findById(userId);
-      if (!user) {
-        throw new Error(ERROR_CODES.USER_NOT_FOUND);
-      }
-
-      // Verificar contraseña actual
-      const isCurrentPasswordValid = await verifyPassword(user.password, currentPassword);
-      if (!isCurrentPasswordValid) {
-        throw new Error(ERROR_CODES.INVALID_CREDENTIALS);
-      }
-
-      // Validar nueva contraseña
-      const passwordValidation = validatePasswordStrength(newPassword);
-      if (!passwordValidation.isValid) {
-        throw new Error(ERROR_CODES.PASSWORD_TOO_WEAK);
-      }
-
-      // Hashear nueva contraseña
-      const hashedNewPassword = await hashPassword(newPassword);
-
-      // Actualizar contraseña
-      await this.userRepository.updatePassword(userId, hashedNewPassword);
-
-      // Revocar todos los tokens existentes por seguridad
-      await this.revokeAllTokens(userId);
-      await this.terminateAllSessions(userId);
-
-      authLogger.info({ userId }, 'Password changed successfully');
-
-    } catch (error) {
-      authLogger.error(
-        { 
-          userId, 
-          error: error instanceof Error ? error.message : 'Unknown error' 
-        }, 
-        'Password change failed'
-      );
-      throw error;
-    }
-  }
-
-  // Métodos privados de utilidad
-
-  /**
    * Genera tokens de autenticación para un usuario
    */
   private async generateAuthTokens(user: User, sessionId: string): Promise<AuthTokens> {
-    // Generar access token
-    const accessToken = await this.tokenService.generateAccessToken({
+    const accessTokenPayload: Omit<TokenPayload, 'iat' | 'exp' | 'iss'> = {
       sub: user.id,
       email: user.email,
       username: user.username,
       sessionId
-    });
+    };
 
-    // Generar refresh token
-    const refreshTokenData = await this.tokenService.generateRefreshToken(user.id, sessionId);
+    const accessToken = await this.tokenService.generateAccessToken(accessTokenPayload);
+    const refreshToken = await this.tokenService.generateRefreshToken(user.id, sessionId);
 
-    // Guardar refresh token en base de datos
-    await db.refreshToken.create({
-      data: {
-        id: refreshTokenData.tokenId,
-        token: refreshTokenData.token,
-        userId: user.id,
-        expiresAt: refreshTokenData.expiresAt,
-        userAgent: sessionId, // Usamos sessionId como identificador
-        ipAddress: 'unknown' // Se puede mejorar pasando esta info
-      }
-    });
+    // Obtener tiempo de expiración con el parámetro requerido
+    const expirationTime = this.tokenService.getTokenExpirationTime('15m'); // 15 minutos por defecto
 
     return {
       accessToken,
-      refreshToken: refreshTokenData.token,
-      expiresIn: this.tokenService.getTokenExpirationTime('15m')
+      refreshToken: refreshToken.token,
+      expiresIn: expirationTime
     };
   }
 
   /**
-   * Verifica intentos de login fallidos
+   * Verifica el número de intentos de login fallidos
    */
   private async checkLoginAttempts(email: string, ipAddress: string): Promise<void> {
-    const cacheKey = `login_attempts:${email}:${ipAddress}`;
-    const attempts = await this.cacheService.get(cacheKey);
-    
-    if (attempts && parseInt(attempts) >= SECURITY_CONFIG.MAX_LOGIN_ATTEMPTS) {
+    const attempts = await this.cacheService.getLoginAttempts(email);
+    if (attempts && attempts >= SECURITY_CONFIG.MAX_LOGIN_ATTEMPTS) {
+      authLogger.warn({ email, ipAddress, attempts }, 'Too many login attempts, user is rate-limited');
+      await this.recordLoginAttemptInternal({ email, ipAddress, success: false, reason: ERROR_MESSAGES.TOO_MANY_LOGIN_ATTEMPTS });
       throw new Error(ERROR_CODES.TOO_MANY_LOGIN_ATTEMPTS);
     }
   }
 
   /**
-   * Registra un intento de login
+   * Registra un intento de login (método interno)
    */
-  private async recordLoginAttempt(email: string, ipAddress: string, success: boolean): Promise<void> {
-    // Registrar en base de datos para auditoria
-    await db.loginAttempt.create({
-      data: {
-        email,
-        ipAddress,
-        success,
-        userAgent: 'unknown' // Se puede mejorar
+  private async recordLoginAttemptInternal(data: LoginAttemptData): Promise<void> {
+    const { email, success, ipAddress, reason } = data;
+    try {
+      if (success) {
+        await this.cacheService.clearLoginAttempts(email);
+        return;
       }
-    });
 
-    // Si falló, incrementar contador en cache
-    if (!success) {
-      const cacheKey = `login_attempts:${email}:${ipAddress}`;
-      const currentAttempts = await this.cacheService.get(cacheKey);
-      const newAttempts = currentAttempts ? parseInt(currentAttempts) + 1 : 1;
-      
-      await this.cacheService.set(
-        cacheKey, 
-        newAttempts.toString(), 
-        SECURITY_CONFIG.LOGIN_ATTEMPT_WINDOW / 1000
-      );
+      const currentAttempts = await this.cacheService.recordLoginAttempt(email);
+
+      // Crear el objeto sin attemptCount ya que no está en el schema
+      await db.loginAttempt.create({
+        data: {
+          email,
+          ipAddress: ipAddress || 'unknown',
+          userAgent: data.userAgent,
+          success,
+          reason
+        }
+      });
+
+      authLogger.info({ email, ipAddress, success, reason, attemptCount: currentAttempts }, 'Login attempt recorded');
+
+    } catch (error) {
+      authLogger.error({ email, error: error instanceof Error ? error.message : 'Unknown error' }, 'Failed to record login attempt');
     }
   }
 
   /**
-   * Limpia intentos de login fallidos
+   * Limpia el contador de intentos de login fallidos
    */
   private async clearLoginAttempts(email: string): Promise<void> {
-    // Obtener todas las claves que coincidan con el patrón
-    // Nota: Esta es una implementación simplificada
-    const pattern = `login_attempts:${email}:*`;
-    await this.cacheService.del(pattern);
-  }
-
-  /**
-   * Sanitiza un objeto User removiendo información sensible
-   */
-  private sanitizeUser(user: User): User {
-    const { password, ...sanitizedUser } = user;
-    return sanitizedUser as User;
+    try {
+      await this.cacheService.clearLoginAttempts(email);
+    } catch (error) {
+      authLogger.error({ email, error: error instanceof Error ? error.message : 'Unknown error' }, 'Failed to clear login attempts');
+    }
   }
 }

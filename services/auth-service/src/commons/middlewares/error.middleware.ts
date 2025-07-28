@@ -69,9 +69,9 @@ export class ErrorMiddleware {
       return next(error);
     }
 
-    let statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR;
-    let errorCode = ERROR_CODES.INTERNAL_ERROR;
-    let message = ERROR_MESSAGES.INTERNAL_ERROR;
+    let statusCode: number = HTTP_STATUS.INTERNAL_SERVER_ERROR;
+    let errorCode: string = ERROR_CODES.INTERNAL_ERROR;
+    let message: string = ERROR_MESSAGES.INTERNAL_ERROR;
     let details: any = undefined;
 
     // Determinar el tipo de error y configurar la respuesta
