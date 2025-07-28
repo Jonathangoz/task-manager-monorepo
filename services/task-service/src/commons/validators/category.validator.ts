@@ -148,8 +148,8 @@ export const createCategorySchema = z.object({
   body: z.object({
     name: categoryNameSchema,
     description: categoryDescriptionSchema,
-    color: categoryColorSchema.default(getDefaultCategoryColor()),
-    icon: categoryIconSchema.default(getDefaultCategoryIcon()),
+    color: categoryColorSchema.optional().transform((val) => val === undefined ? getDefaultCategoryColor() : val),
+    icon: categoryIconSchema.optional().transform((val) => val === undefined ? getDefaultCategoryIcon() : val),
     isActive: isActiveSchema
   }),
   params: z.object({}),
