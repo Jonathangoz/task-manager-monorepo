@@ -1,270 +1,383 @@
+// src/commons/validators/user.validator.ts
 import { z } from 'zod';
+import { 
+  VALIDATION_PATTERNS, 
+  SECURITY_CONFIG,
+  DEFAULT_VALUES,
+  PASSWORD_VALIDATION 
+} from '@/utils/constants';
 
-// Schema para consulta de usuarios con paginación y filtros
-export const getUsersQuerySchema = z.object({
-  page: z
-    .string()
-    .transform((val) => parseInt(val, 10))
-    .refine((val) => val > 0, 'La página debe ser mayor a 0')
-    .default('1'),
-  
-  limit: z
-    .string()
-    .transform((val) => parseInt(val, 10))
-    .refine((val) => val > 0 && val <= 100, 'El límite debe estar entre 1 y 100')
-    .default('10'),
-  
-  search: z
-    .string()
-    .min(1, 'El término de búsqueda debe tener al menos 1 carácter')
-    .max(100, 'El término de búsqueda no puede exceder 100 caracteres')
-    .optional(),
-  
-  status: z
-    .enum(['active', 'inactive', 'pending', 'suspended'])
-    .optional(),
-  
-  role: z
-    .enum(['admin', 'user', 'moderator'])
-    .optional(),
-  
-  sortBy: z
-    .enum(['createdAt', 'updatedAt', 'email', 'firstName', 'lastName'])
-    .default('createdAt'),
-  
-  sortOrder: z
-    .enum(['asc', 'desc'])
-    .default('desc'),
-  
-  dateFrom: z
-    .string()
-    .datetime('La fecha debe tener formato ISO 8601')
-    .optional(),
-  
-  dateTo: z
-    .string()
-    .datetime('La fecha debe tener formato ISO 8601')
-    .optional(),
-}).refine(
-  (data) => {
+// ============================================================================
+// Base Schemas - Principio DRY y reutilización
+// ============================================================================
+
+const CUIDSchema = z.string().regex(
+  VALIDATION_PATTERNS.CUID,
+  'El ID debe ser un CUID válido'
+);
+
+const EmailSchema = z.string()
+  .min(1, 'El email es requerido')
+  .max(SECURITY_CONFIG.EMAIL_MAX_LENGTH, `El email no puede exceder ${SECURITY_CONFIG.EMAIL_MAX_LENGTH} caracteres`)
+  .email('El email debe tener un formato válido')
+  .regex(VALIDATION_PATTERNS.EMAIL, 'Formato de email inválido')
+  .transform(email => email.toLowerCase().trim());
+
+const UsernameSchema = z.string()
+  .min(SECURITY_CONFIG.USERNAME_MIN_LENGTH, `El username debe tener al menos ${SECURITY_CONFIG.USERNAME_MIN_LENGTH} caracteres`)
+  .max(SECURITY_CONFIG.USERNAME_MAX_LENGTH, `El username no puede exceder ${SECURITY_CONFIG.USERNAME_MAX_LENGTH} caracteres`)
+  .regex(VALIDATION_PATTERNS.USERNAME, 'El username solo puede contener letras, números y guiones bajos')
+  .transform(username => username.trim());
+
+const PasswordSchema = z.string()
+  .min(SECURITY_CONFIG.PASSWORD_MIN_LENGTH, `La contraseña debe tener al menos ${SECURITY_CONFIG.PASSWORD_MIN_LENGTH} caracteres`)
+  .max(SECURITY_CONFIG.PASSWORD_MAX_LENGTH, `La contraseña no puede exceder ${SECURITY_CONFIG.PASSWORD_MAX_LENGTH} caracteres`)
+  .regex(VALIDATION_PATTERNS.PASSWORD_STRONG, 'La contraseña debe contener al menos: 1 mayúscula, 1 minúscula, 1 número y 1 carácter especial')
+  .refine(password => {
+    return !PASSWORD_VALIDATION.FORBIDDEN_PATTERNS.some(pattern => pattern.test(password));
+  }, 'La contraseña contiene un patrón no permitido');
+
+const NameSchema = z.string()
+  .min(1, 'Este campo es requerido')
+  .max(50, 'No puede exceder 50 caracteres')
+  .regex(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/, 'Solo puede contener letras y espacios')
+  .transform(name => name.trim());
+
+const AvatarSchema = z.string()
+  .url('El avatar debe ser una URL válida')
+  .max(500, 'La URL del avatar no puede exceder 500 caracteres');
+
+const PaginationSchema = z.object({
+  page: z.coerce.number().int().min(1, 'La página debe ser un número entero mayor a 0').default(1),
+  limit: z.coerce.number().int().min(1).max(DEFAULT_VALUES.PAGINATION_MAX_LIMIT, `El límite debe estar entre 1 y ${DEFAULT_VALUES.PAGINATION_MAX_LIMIT}`).default(DEFAULT_VALUES.PAGINATION_LIMIT)
+});
+
+const SortSchema = z.object({
+  sortBy: z.enum(['createdAt', 'updatedAt', 'email', 'username', 'firstName', 'lastName']).optional(),
+  sortOrder: z.enum(['asc', 'desc']).optional()
+});
+
+const BaseDateRangeSchema = z.object({
+  dateFrom: z.coerce.date().optional(),
+  dateTo: z.coerce.date().optional()
+});
+
+// ============================================================================
+// Query Validation Schemas - Alta cohesión por funcionalidad
+// ============================================================================
+
+export const GetUsersQuerySchema = PaginationSchema
+  .merge(SortSchema)
+  .merge(BaseDateRangeSchema)
+  .extend({
+    search: z.string()
+      .min(1)
+      .max(100, 'El término de búsqueda debe tener entre 1 y 100 caracteres')
+      .transform(search => search.trim())
+      .optional(),
+    isActive: z.coerce.boolean().optional(),
+    isVerified: z.coerce.boolean().optional()
+  })
+  .refine(data => {
     if (data.dateFrom && data.dateTo) {
-      return new Date(data.dateFrom) <= new Date(data.dateTo);
+      return data.dateTo >= data.dateFrom;
     }
     return true;
-  },
-  {
-    message: 'La fecha de inicio debe ser anterior a la fecha de fin',
-    path: ['dateTo'],
-  }
-);
+  }, {
+    message: 'La fecha de fin debe ser posterior a la fecha de inicio',
+    path: ['dateTo']
+  });
 
-// Schema para parámetros de usuario por ID
-export const userParamsSchema = z.object({
-  userId: z
-    .string()
-    .uuid('El ID del usuario debe ser un UUID válido'),
-});
-
-// Schema para actualización de usuario (admin)
-export const updateUserSchema = z.object({
-  firstName: z
-    .string()
-    .min(1, 'El nombre es requerido')
-    .max(50, 'El nombre no puede exceder 50 caracteres')
-    .regex(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/, 'El nombre solo puede contener letras y espacios')
-    .optional(),
-  
-  lastName: z
-    .string()
-    .min(1, 'El apellido es requerido')
-    .max(50, 'El apellido no puede exceder 50 caracteres')
-    .regex(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/, 'El apellido solo puede contener letras y espacios')
-    .optional(),
-  
-  email: z
-    .string()
-    .email('El email debe tener un formato válido')
-    .max(255, 'El email no puede exceder 255 caracteres')
-    .optional(),
-  
-  phone: z
-    .string()
-    .regex(/^[+]?[\d\s\-()]+$/, 'El teléfono debe tener un formato válido')
-    .min(10, 'El teléfono debe tener al menos 10 dígitos')
-    .max(20, 'El teléfono no puede exceder 20 caracteres')
-    .optional(),
-  
-  role: z
-    .enum(['admin', 'user', 'moderator'])
-    .optional(),
-  
-  status: z
-    .enum(['active', 'inactive', 'pending', 'suspended'])
-    .optional(),
-  
-  avatar: z
-    .string()
-    .url('La URL del avatar debe ser válida')
-    .optional(),
-  
-  metadata: z
-    .record(z.any())
-    .optional(),
-}).refine(
-  (data) => Object.keys(data).length > 0,
-  {
-    message: 'Debe proporcionar al menos un campo para actualizar',
-  }
-);
-
-// Schema para crear usuario (admin)
-export const createUserSchema = z.object({
-  email: z
-    .string()
-    .email('El email debe tener un formato válido')
-    .min(1, 'El email es requerido')
-    .max(255, 'El email no puede exceder 255 caracteres'),
-  
-  password: z
-    .string()
-    .min(8, 'La contraseña debe tener al menos 8 caracteres')
-    .max(128, 'La contraseña no puede exceder 128 caracteres')
-    .regex(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
-      'La contraseña debe contener al menos: 1 mayúscula, 1 minúscula, 1 número y 1 carácter especial'
-    ),
-  
-  firstName: z
-    .string()
-    .min(1, 'El nombre es requerido')
-    .max(50, 'El nombre no puede exceder 50 caracteres')
-    .regex(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/, 'El nombre solo puede contener letras y espacios'),
-  
-  lastName: z
-    .string()
-    .min(1, 'El apellido es requerido')
-    .max(50, 'El apellido no puede exceder 50 caracteres')
-    .regex(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/, 'El apellido solo puede contener letras y espacios'),
-  
-  role: z
-    .enum(['admin', 'user', 'moderator'])
-    .default('user'),
-  
-  phone: z
-    .string()
-    .regex(/^[+]?[\d\s\-()]+$/, 'El teléfono debe tener un formato válido')
-    .min(10, 'El teléfono debe tener al menos 10 dígitos')
-    .max(20, 'El teléfono no puede exceder 20 caracteres')
-    .optional(),
-  
-  avatar: z
-    .string()
-    .url('La URL del avatar debe ser válida')
-    .optional(),
-  
-  metadata: z
-    .record(z.any())
-    .optional(),
-});
-
-// Schema para cambio de estado de usuario
-export const changeUserStatusSchema = z.object({
-  status: z
-    .enum(['active', 'inactive', 'suspended']),
-  
-  reason: z
-    .string()
-    .min(1, 'La razón del cambio de estado es requerida')
-    .max(500, 'La razón no puede exceder 500 caracteres')
-    .optional(),
-});
-
-// Schema para asignación de rol
-export const assignRoleSchema = z.object({
-  role: z
-    .enum(['admin', 'user', 'moderator']),
-  
-  assignedBy: z
-    .string()
-    .uuid('El ID del usuario asignador debe ser un UUID válido')
-    .optional(),
-});
-
-// Schema para búsqueda avanzada de usuarios
-export const searchUsersSchema = z.object({
-  query: z
-    .string()
+export const SearchUsersQuerySchema = z.object({
+  q: z.string()
     .min(1, 'El término de búsqueda es requerido')
-    .max(100, 'El término de búsqueda no puede exceder 100 caracteres'),
-  
-  fields: z
-    .array(z.enum(['email', 'firstName', 'lastName', 'phone']))
-    .min(1, 'Debe especificar al menos un campo para buscar')
-    .default(['email', 'firstName', 'lastName']),
-  
-  exactMatch: z
-    .boolean()
-    .default(false),
-  
-  caseSensitive: z
-    .boolean()
-    .default(false),
+    .max(100, 'El término de búsqueda debe tener entre 1 y 100 caracteres')
+    .transform(q => q.trim()),
+  fields: z.string()
+    .optional()
+    .transform(fields => fields?.split(',').map(f => f.trim()))
+    .pipe(z.array(z.enum(['email', 'username', 'firstName', 'lastName'])).optional()),
+  exactMatch: z.coerce.boolean().optional(),
+  caseSensitive: z.coerce.boolean().optional()
 });
 
-// Schema para exportación de usuarios
-export const exportUsersSchema = z.object({
-  format: z
-    .enum(['csv', 'excel', 'json'])
-    .default('csv'),
-  
-  fields: z
-    .array(z.enum(['id', 'email', 'firstName', 'lastName', 'role', 'status', 'createdAt', 'updatedAt', 'phone']))
-    .min(1, 'Debe especificar al menos un campo para exportar')
-    .optional(),
-  
-  filters: getUsersQuerySchema.omit({ page: true, limit: true }).optional(),
+export const ExportUserDataQuerySchema = z.object({
+  format: z.enum(['json', 'csv']).default('json'),
+  includeHistory: z.coerce.boolean().default(false)
 });
 
-// Schema para importación masiva de usuarios
-export const bulkCreateUsersSchema = z.object({
-  users: z
-    .array(createUserSchema.omit({ password: true }).extend({
-      password: z.string().optional(), // Password opcional para bulk import
-      sendInvite: z.boolean().default(true),
-    }))
-    .min(1, 'Debe proporcionar al menos un usuario')
-    .max(1000, 'No se pueden importar más de 1000 usuarios a la vez'),
-  
-  skipDuplicates: z
-    .boolean()
-    .default(true),
-  
-  notifyUsers: z
-    .boolean()
-    .default(false),
+// ============================================================================
+// Parameter Validation Schemas
+// ============================================================================
+
+export const UserParamsSchema = z.object({
+  id: CUIDSchema
 });
 
-// Tipos TypeScript derivados de los schemas
-export type GetUsersQuery = z.infer<typeof getUsersQuerySchema>;
-export type UserParams = z.infer<typeof userParamsSchema>;
-export type UpdateUserRequest = z.infer<typeof updateUserSchema>;
-export type CreateUserRequest = z.infer<typeof createUserSchema>;
-export type ChangeUserStatusRequest = z.infer<typeof changeUserStatusSchema>;
-export type AssignRoleRequest = z.infer<typeof assignRoleSchema>;
-export type SearchUsersRequest = z.infer<typeof searchUsersSchema>;
-export type ExportUsersRequest = z.infer<typeof exportUsersSchema>;
-export type BulkCreateUsersRequest = z.infer<typeof bulkCreateUsersSchema>;
+export const VerifyEmailTokenParamsSchema = z.object({
+  token: z.string()
+    .min(10, 'El token debe tener al menos 10 caracteres')
+    .nonempty('El token de verificación es requerido')
+});
 
-// Función helper para validar UUID
-export const validateUUID = (id: string): boolean => {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(id);
-};
+export const SessionParamsSchema = z.object({
+  sessionId: CUIDSchema
+});
 
-// Función helper para sanitizar query de búsqueda
-export const sanitizeSearchQuery = (query: string): string => {
-  return query
-    .trim()
-    .replace(/[<>\"'%;()&+]/g, '') // Remover caracteres peligrosos
-    .substring(0, 100); // Limitar longitud
+// ============================================================================
+// Body Validation Schemas - Separación de responsabilidades
+// ============================================================================
+
+export const CreateUserBodySchema = z.object({
+  email: EmailSchema,
+  username: UsernameSchema,
+  password: PasswordSchema,
+  firstName: NameSchema,
+  lastName: NameSchema,
+  avatar: AvatarSchema.optional()
+});
+
+export const UpdateUserBodySchema = z.object({
+  email: EmailSchema.optional(),
+  username: UsernameSchema.optional(),
+  firstName: NameSchema.optional(),
+  lastName: NameSchema.optional(),
+  avatar: AvatarSchema.optional()
+}).refine(data => {
+  // Al menos un campo debe estar presente
+  return Object.values(data).some(value => value !== undefined);
+}, {
+  message: 'Debe proporcionar al menos un campo para actualizar'
+});
+
+export const UpdateAvatarBodySchema = z.object({
+  avatar: AvatarSchema
+});
+
+export const DeactivateUserBodySchema = z.object({
+  reason: z.string()
+    .min(1)
+    .max(500, 'La razón debe tener entre 1 y 500 caracteres')
+    .transform(reason => reason.trim())
+    .optional()
+});
+
+// ============================================================================
+// Validation Factory - Patrón Factory para crear validadores
+// ============================================================================
+
+class ValidationFactory {
+  static createQueryValidator<T extends z.ZodSchema>(schema: T) {
+    return (req: any, res: any, next: any) => {
+      try {
+        req.query = schema.parse(req.query);
+        next();
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({
+            success: false,
+            message: 'Errores de validación en query parameters',
+            errors: error.errors.map(err => ({
+              field: err.path.join('.'),
+              message: err.message,
+              code: err.code
+            }))
+          });
+        }
+        next(error);
+      }
+    };
+  }
+
+  static createParamsValidator<T extends z.ZodSchema>(schema: T) {
+    return (req: any, res: any, next: any) => {
+      try {
+        req.params = schema.parse(req.params);
+        next();
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({
+            success: false,
+            message: 'Errores de validación en parámetros',
+            errors: error.errors.map(err => ({
+              field: err.path.join('.'),
+              message: err.message,
+              code: err.code
+            }))
+          });
+        }
+        next(error);
+      }
+    };
+  }
+
+  static createBodyValidator<T extends z.ZodSchema>(schema: T) {
+    return (req: any, res: any, next: any) => {
+      try {
+        req.body = schema.parse(req.body);
+        next();
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({
+            success: false,
+            message: 'Errores de validación en el cuerpo de la petición',
+            errors: error.errors.map(err => ({
+              field: err.path.join('.'),
+              message: err.message,
+              code: err.code
+            }))
+          });
+        }
+        next(error);
+      }
+    };
+  }
+}
+
+// ============================================================================
+// Middleware Validators - Interfaz simple para uso en rutas
+// ============================================================================
+
+export const validateGetUsersQuery = ValidationFactory.createQueryValidator(GetUsersQuerySchema);
+export const validateSearchUsersQuery = ValidationFactory.createQueryValidator(SearchUsersQuerySchema);
+export const validateExportUserDataQuery = ValidationFactory.createQueryValidator(ExportUserDataQuerySchema);
+
+export const validateUserParams = ValidationFactory.createParamsValidator(UserParamsSchema);
+export const validateVerifyEmailTokenParams = ValidationFactory.createParamsValidator(VerifyEmailTokenParamsSchema);
+export const validateSessionParams = ValidationFactory.createParamsValidator(SessionParamsSchema);
+
+export const validateCreateUserBody = ValidationFactory.createBodyValidator(CreateUserBodySchema);
+export const validateUpdateUserBody = ValidationFactory.createBodyValidator(UpdateUserBodySchema);
+export const validateUpdateAvatarBody = ValidationFactory.createBodyValidator(UpdateAvatarBodySchema);
+export const validateDeactivateUserBody = ValidationFactory.createBodyValidator(DeactivateUserBodySchema);
+
+// ============================================================================
+// Type Inference - Tipos automáticos desde los schemas
+// ============================================================================
+
+export type GetUsersQuery = z.infer<typeof GetUsersQuerySchema>;
+export type SearchUsersQuery = z.infer<typeof SearchUsersQuerySchema>;
+export type ExportUserDataQuery = z.infer<typeof ExportUserDataQuerySchema>;
+
+export type UserParams = z.infer<typeof UserParamsSchema>;
+export type VerifyEmailTokenParams = z.infer<typeof VerifyEmailTokenParamsSchema>;
+export type SessionParams = z.infer<typeof SessionParamsSchema>;
+
+export type CreateUserRequest = z.infer<typeof CreateUserBodySchema>;
+export type UpdateUserRequest = z.infer<typeof UpdateUserBodySchema>;
+export type UpdateAvatarRequest = z.infer<typeof UpdateAvatarBodySchema>;
+export type DeactivateUserRequest = z.infer<typeof DeactivateUserBodySchema>;
+
+// ============================================================================
+// Utility Functions - Funciones helper reutilizables
+// ============================================================================
+
+export class UserValidationUtils {
+  static validateCUID(id: string): boolean {
+    return CUIDSchema.safeParse(id).success;
+  }
+
+  static sanitizeSearchQuery(query: string): string {
+    return query
+      .trim()
+      .replace(/[<>"'%;()&+]/g, '') // Remover caracteres peligrosos
+      .substring(0, 100); // Limitar longitud
+  }
+
+  static validateEmail(email: string): boolean {
+    return EmailSchema.safeParse(email).success;
+  }
+
+  static validateUsername(username: string): boolean {
+    return UsernameSchema.safeParse(username).success;
+  }
+
+  static validatePassword(password: string): { isValid: boolean; errors: string[] } {
+    const result = PasswordSchema.safeParse(password);
+    return {
+      isValid: result.success,
+      errors: result.success ? [] : result.error.errors.map(err => err.message)
+    };
+  }
+
+  /**
+   * Valida datos de forma segura sin lanzar excepciones
+   */
+  static safeValidate<T extends z.ZodSchema>(schema: T, data: unknown): {
+    success: boolean;
+    data?: z.infer<T>;
+    errors?: Array<{ field: string; message: string; code: string }>;
+  } {
+    const result = schema.safeParse(data);
+    
+    if (result.success) {
+      return { success: true, data: result.data };
+    }
+
+    return {
+      success: false,
+      errors: result.error.errors.map(err => ({
+        field: err.path.join('.'),
+        message: err.message,
+        code: err.code
+      }))
+    };
+  }
+}
+
+// ============================================================================
+// Validation Presets - Conjuntos predefinidos para casos comunes
+// ============================================================================
+
+export const ValidationPresets = {
+  // Para operaciones CRUD básicas
+  userCRUD: {
+    create: validateCreateUserBody,
+    update: validateUpdateUserBody,
+    params: validateUserParams
+  },
+
+  // Para operaciones de consulta
+  userQuery: {
+    list: validateGetUsersQuery,
+    search: validateSearchUsersQuery,
+    export: validateExportUserDataQuery
+  },
+
+  // Para operaciones de autenticación
+  userAuth: {
+    verifyEmail: validateVerifyEmailTokenParams,
+    session: validateSessionParams
+  }
+} as const;
+
+export default {
+  // Schemas
+  GetUsersQuerySchema,
+  SearchUsersQuerySchema,
+  ExportUserDataQuerySchema,
+  UserParamsSchema,
+  VerifyEmailTokenParamsSchema,
+  SessionParamsSchema,
+  CreateUserBodySchema,
+  UpdateUserBodySchema,
+  UpdateAvatarBodySchema,
+  DeactivateUserBodySchema,
+
+  // Validators
+  validateGetUsersQuery,
+  validateSearchUsersQuery,
+  validateExportUserDataQuery,
+  validateUserParams,
+  validateVerifyEmailTokenParams,
+  validateSessionParams,
+  validateCreateUserBody,
+  validateUpdateUserBody,
+  validateUpdateAvatarBody,
+  validateDeactivateUserBody,
+
+  // Utils
+  UserValidationUtils,
+  ValidationPresets,
+  ValidationFactory
 };

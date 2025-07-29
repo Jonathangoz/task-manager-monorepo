@@ -1,5 +1,5 @@
 // prisma/seed.ts - Task Service Database Seeder
-
+/*
 import { PrismaClient, TaskStatus, Priority } from '@prisma/client';
 import { logger } from '../src/utils/logger';
 
@@ -341,4 +341,4 @@ if (require.main === module) {
     });
 }
 
-export default main;
+export default main; */

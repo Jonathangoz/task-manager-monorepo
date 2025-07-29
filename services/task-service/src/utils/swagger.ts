@@ -1,17 +1,46 @@
-// src/utils/swagger.ts
+// src/utils/swagger.ts - Task Service
 import swaggerJsdoc from 'swagger-jsdoc';
 import { SwaggerUiOptions } from 'swagger-ui-express';
+import { OpenAPIV3 } from 'openapi-types';
+import { ValidationResult, SwaggerInfo } from '@/types/swaggerTypes';
 import { config } from '@/config/environment';
 
-const swaggerDefinition = {
+// ==============================================
+// CONFIGURACIÓN PRINCIPAL DE SWAGGER
+// ==============================================
+const swaggerDefinition: OpenAPIV3.Document = {
   openapi: '3.0.0',
   info: {
     title: 'Task Manager - Task Service API',
-    version: '1.0.0',
-    description: 'Microservicio independiente para gestión de tareas y categorías',
+    version: process.env.npm_package_version || '1.0.0',
+    description: `
+# 📋 Task Service API
+
+Microservicio para la gestión completa de tareas y categorías.
+
+## Características principales
+- ✅ CRUD completo de tareas
+- 📁 Gestión de categorías
+- 🔍 Filtros y búsqueda avanzada  
+- 📊 Estadísticas de productividad
+- 🔐 Autenticación JWT integrada
+
+## Estados de tareas
+- **PENDING**: Pendiente
+- **IN_PROGRESS**: En progreso
+- **COMPLETED**: Completada
+- **CANCELLED**: Cancelada
+- **ON_HOLD**: En pausa
+
+## Prioridades
+- **LOW**: Baja
+- **MEDIUM**: Media (por defecto)
+- **HIGH**: Alta
+- **URGENT**: Urgente
+    `,
     contact: {
       name: 'Task Manager Team',
-      email: 'support@taskmanager.com',
+      email: 'dev@taskmanager.com',
     },
     license: {
       name: 'MIT',
@@ -21,69 +50,187 @@ const swaggerDefinition = {
   servers: [
     {
       url: config.app.env === 'production' 
-        ? 'https://task-manager-task-service.onrender.com' 
-        : `http://localhost:${config.app.port}`,
-      description: config.app.env === 'production' ? 'Production Server' : 'Development Server',
+        ? 'https://task-manager-task-service.onrender.com/api/v1' 
+        : `http://localhost:${config.app.port}/api/v1`,
+      description: config.app.env === 'production' ? '🚀 Producción' : '🔧 Desarrollo',
     },
   ],
+  
+  paths: {}, // Propiedad 'paths' requerida añadida
+
+  // ==============================================
+  // COMPONENTES
+  // ==============================================
   components: {
     securitySchemes: {
       BearerAuth: {
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
-        description: 'JWT token obtenido del Auth Service',
+        description: 'Token JWT del servicio de autenticación',
       },
     },
+    
     schemas: {
+      // ==============================================
+      // ESQUEMAS PRINCIPALES
+      // ==============================================
       Task: {
         type: 'object',
         required: ['id', 'title', 'status', 'priority', 'userId', 'createdAt', 'updatedAt'],
         properties: {
-          id: { type: 'string', example: 'clp123abc456def789' },
-          title: { type: 'string', maxLength: 200, example: 'Completar documentación API' },
-          description: { type: 'string', maxLength: 2000, example: 'Finalizar la documentación de la API REST' },
+          id: { 
+            type: 'string', 
+            description: 'ID único de la tarea',
+            example: 'clp123abc456def789' 
+          },
+          title: { 
+            type: 'string', 
+            maxLength: 200, 
+            description: 'Título de la tarea',
+            example: 'Completar documentación API' 
+          },
+          description: { 
+            type: 'string', 
+            maxLength: 2000, 
+            nullable: true,
+            description: 'Descripción detallada',
+            example: 'Finalizar documentación con ejemplos' 
+          },
           status: { 
             type: 'string', 
             enum: ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'ON_HOLD'],
+            description: 'Estado actual',
             example: 'PENDING'
           },
           priority: { 
             type: 'string', 
             enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
+            description: 'Nivel de prioridad',
             example: 'MEDIUM'
           },
-          dueDate: { type: 'string', format: 'date-time', example: '2024-12-31T23:59:59Z' },
-          completedAt: { type: 'string', format: 'date-time', nullable: true },
-          userId: { type: 'string', example: 'user123' },
-          categoryId: { type: 'string', nullable: true, example: 'cat456' },
-          tags: { type: 'array', items: { type: 'string' }, example: ['documentation', 'api'] },
-          estimatedHours: { type: 'integer', minimum: 1, maximum: 999, example: 8 },
-          actualHours: { type: 'integer', minimum: 1, maximum: 999, example: 6 },
-          attachments: { type: 'array', items: { type: 'string' }, example: [] },
-          createdAt: { type: 'string', format: 'date-time' },
-          updatedAt: { type: 'string', format: 'date-time' },
-          category: { $ref: '#/components/schemas/Category' },
+          dueDate: { 
+            type: 'string', 
+            format: 'date-time', 
+            nullable: true,
+            description: 'Fecha límite',
+            example: '2024-12-31T23:59:59Z' 
+          },
+          completedAt: { 
+            type: 'string', 
+            format: 'date-time', 
+            nullable: true,
+            description: 'Fecha de finalización'
+          },
+          userId: { 
+            type: 'string', 
+            description: 'ID del usuario propietario',
+            example: 'user123' 
+          },
+          categoryId: { 
+            type: 'string', 
+            nullable: true, 
+            description: 'ID de categoría',
+            example: 'cat456' 
+          },
+          tags: { 
+            type: 'array', 
+            items: { type: 'string' }, 
+            description: 'Etiquetas',
+            example: ['documentación', 'api'] 
+          },
+          estimatedHours: { 
+            type: 'integer', 
+            minimum: 1, 
+            maximum: 999, 
+            nullable: true,
+            description: 'Horas estimadas',
+            example: 8 
+          },
+          actualHours: { 
+            type: 'integer', 
+            minimum: 1, 
+            maximum: 999, 
+            nullable: true,
+            description: 'Horas reales',
+            example: 6 
+          },
+          createdAt: { 
+            type: 'string', 
+            format: 'date-time',
+            description: 'Fecha de creación'
+          },
+          updatedAt: { 
+            type: 'string', 
+            format: 'date-time',
+            description: 'Última actualización'
+          },
+          category: { 
+            $ref: '#/components/schemas/Category',
+            description: 'Categoría asociada'
+          },
         },
       },
+
       Category: {
         type: 'object',
         required: ['id', 'name', 'userId', 'createdAt', 'updatedAt'],
         properties: {
-          id: { type: 'string', example: 'cat123abc456def789' },
-          name: { type: 'string', maxLength: 100, example: 'Desarrollo' },
-          description: { type: 'string', maxLength: 500, example: 'Tareas relacionadas con desarrollo de software' },
-          color: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$', example: '#6366f1' },
-          icon: { type: 'string', example: 'code' },
-          isActive: { type: 'boolean', example: true },
-          userId: { type: 'string', example: 'user123' },
-          createdAt: { type: 'string', format: 'date-time' },
-          updatedAt: { type: 'string', format: 'date-time' },
-          tasks: { type: 'array', items: { $ref: '#/components/schemas/Task' } },
+          id: { 
+            type: 'string', 
+            description: 'ID único de categoría',
+            example: 'cat123abc456def789' 
+          },
+          name: { 
+            type: 'string', 
+            maxLength: 100, 
+            description: 'Nombre de la categoría',
+            example: 'Desarrollo' 
+          },
+          description: { 
+            type: 'string', 
+            maxLength: 500, 
+            nullable: true,
+            description: 'Descripción',
+            example: 'Tareas de desarrollo' 
+          },
+          color: { 
+            type: 'string', 
+            pattern: '^#[0-9a-fA-F]{6}$', 
+            description: 'Color hexadecimal',
+            example: '#6366f1' 
+          },
+          icon: { 
+            type: 'string', 
+            description: 'Icono',
+            example: 'code' 
+          },
+          isActive: { 
+            type: 'boolean', 
+            description: 'Estado activo',
+            example: true 
+          },
+          userId: { 
+            type: 'string', 
+            description: 'ID del propietario',
+            example: 'user123' 
+          },
+          createdAt: { 
+            type: 'string', 
+            format: 'date-time',
+            description: 'Fecha creación'
+          },
+          updatedAt: { 
+            type: 'string', 
+            format: 'date-time',
+            description: 'Última actualización'
+          },
         },
       },
+
       TaskStats: {
         type: 'object',
+        description: 'Estadísticas de tareas',
         properties: {
           totalTasks: { type: 'integer', example: 25 },
           completedTasks: { type: 'integer', example: 15 },
@@ -94,33 +241,136 @@ const swaggerDefinition = {
           highTasks: { type: 'integer', example: 4 },
           mediumTasks: { type: 'integer', example: 15 },
           lowTasks: { type: 'integer', example: 5 },
-          lastUpdated: { type: 'string', format: 'date-time' },
+          lastUpdated: { 
+            type: 'string', 
+            format: 'date-time',
+            description: 'Última actualización'
+          },
         },
       },
+
+      // ==============================================
+      // DTOs DE ENTRADA
+      // ==============================================
+      CreateTaskRequest: {
+        type: 'object',
+        required: ['title'],
+        properties: {
+          title: { 
+            type: 'string', 
+            maxLength: 200,
+            description: 'Título de la tarea',
+            example: 'Nueva tarea importante'
+          },
+          description: { 
+            type: 'string', 
+            maxLength: 2000,
+            description: 'Descripción detallada',
+            example: 'Descripción completa de la tarea'
+          },
+          priority: { 
+            type: 'string', 
+            enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
+            default: 'MEDIUM',
+            example: 'HIGH'
+          },
+          dueDate: { 
+            type: 'string', 
+            format: 'date-time',
+            description: 'Fecha límite',
+            example: '2024-02-15T18:00:00Z'
+          },
+          categoryId: { 
+            type: 'string',
+            description: 'ID de categoría',
+            example: 'cat456'
+          },
+          tags: { 
+            type: 'array', 
+            items: { type: 'string' },
+            maxItems: 10,
+            example: ['desarrollo', 'api']
+          },
+          estimatedHours: { 
+            type: 'integer', 
+            minimum: 1, 
+            maximum: 999,
+            example: 8
+          }
+        }
+      },
+
+      UpdateTaskRequest: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', maxLength: 200 },
+          description: { type: 'string', maxLength: 2000 },
+          status: { 
+            type: 'string', 
+            enum: ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'ON_HOLD']
+          },
+          priority: { 
+            type: 'string', 
+            enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT']
+          },
+          dueDate: { type: 'string', format: 'date-time', nullable: true },
+          categoryId: { type: 'string', nullable: true },
+          tags: { type: 'array', items: { type: 'string' } },
+          estimatedHours: { type: 'integer', minimum: 1, maximum: 999, nullable: true },
+          actualHours: { type: 'integer', minimum: 1, maximum: 999, nullable: true }
+        }
+      },
+
+      CreateCategoryRequest: {
+        type: 'object',
+        required: ['name'],
+        properties: {
+          name: { 
+            type: 'string', 
+            maxLength: 100,
+            description: 'Nombre de categoría',
+            example: 'Nueva Categoría'
+          },
+          description: { 
+            type: 'string', 
+            maxLength: 500,
+            example: 'Descripción de la categoría'
+          },
+          color: { 
+            type: 'string', 
+            pattern: '^#[0-9a-fA-F]{6}$',
+            default: '#6366f1',
+            example: '#10b981'
+          },
+          icon: { 
+            type: 'string',
+            default: 'folder',
+            example: 'home'
+          }
+        }
+      },
+
+      // ==============================================
+      // RESPUESTAS ESTÁNDAR
+      // ==============================================
       ApiResponse: {
         type: 'object',
         required: ['success', 'message'],
         properties: {
           success: { type: 'boolean', example: true },
-          message: { type: 'string', example: 'Operation completed successfully' },
-          data: { type: 'object' },
-          error: {
-            type: 'object',
-            properties: {
-              code: { type: 'string', example: 'VALIDATION_ERROR' },
-              details: { type: 'object' },
-            },
-          },
+          message: { type: 'string', example: 'Operación exitosa' },
+          data: { type: 'object', description: 'Datos de respuesta' },
           meta: {
             type: 'object',
             properties: {
               timestamp: { type: 'string', format: 'date-time' },
-              requestId: { type: 'string', example: 'req_123abc456' },
+              requestId: { type: 'string', example: 'req_123abc' },
               pagination: { $ref: '#/components/schemas/PaginationMeta' },
             },
           },
         },
       },
+
       PaginationMeta: {
         type: 'object',
         properties: {
@@ -132,127 +382,105 @@ const swaggerDefinition = {
           hasPrev: { type: 'boolean', example: false },
         },
       },
-      ValidationError: {
-        type: 'object',
-        properties: {
-          success: { type: 'boolean', example: false },
-          message: { type: 'string', example: 'Validation failed' },
-          error: {
-            type: 'object',
-            properties: {
-              code: { type: 'string', example: 'VALIDATION_ERROR' },
-              details: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    field: { type: 'string', example: 'title' },
-                    message: { type: 'string', example: 'Title is required' },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
+
       ErrorResponse: {
         type: 'object',
         properties: {
           success: { type: 'boolean', example: false },
-          message: { type: 'string', example: 'An error occurred' },
+          message: { type: 'string', example: 'Error en la operación' },
           error: {
             type: 'object',
             properties: {
-              code: { type: 'string', example: 'INTERNAL_ERROR' },
-              details: { type: 'string', example: 'Additional error information' },
+              code: { type: 'string', example: 'VALIDATION_ERROR' },
+              details: { type: 'string', example: 'Detalles del error' },
             },
           },
           meta: {
             type: 'object',
             properties: {
               timestamp: { type: 'string', format: 'date-time' },
-              requestId: { type: 'string', example: 'req_123abc456' },
+              requestId: { type: 'string', example: 'req_123abc' },
             },
           },
         },
       },
     },
+
+    // ==============================================
+    // PARÁMETROS REUTILIZABLES
+    // ==============================================
     parameters: {
+      TaskIdParam: {
+        name: 'id',
+        in: 'path',
+        required: true,
+        schema: { type: 'string' },
+        description: 'ID único de la tarea',
+        example: 'clp123abc456def789'
+      },
+      CategoryIdParam: {
+        name: 'id',
+        in: 'path',
+        required: true,
+        schema: { type: 'string' },
+        description: 'ID único de la categoría',
+        example: 'cat123abc456def789'
+      },
       PageParam: {
         name: 'page',
         in: 'query',
-        description: 'Número de página',
         required: false,
         schema: { type: 'integer', minimum: 1, default: 1 },
+        description: 'Número de página'
       },
       LimitParam: {
         name: 'limit',
         in: 'query',
-        description: 'Número de elementos por página',
         required: false,
         schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
-      },
-      SortByParam: {
-        name: 'sortBy',
-        in: 'query',
-        description: 'Campo por el que ordenar',
-        required: false,
-        schema: { 
-          type: 'string', 
-          enum: ['createdAt', 'updatedAt', 'dueDate', 'priority', 'status', 'title'],
-          default: 'createdAt'
-        },
-      },
-      SortOrderParam: {
-        name: 'sortOrder',
-        in: 'query',
-        description: 'Orden de clasificación',
-        required: false,
-        schema: { type: 'string', enum: ['asc', 'desc'], default: 'desc' },
+        description: 'Elementos por página'
       },
       StatusFilterParam: {
         name: 'status',
         in: 'query',
-        description: 'Filtrar por estado',
         required: false,
         schema: { 
           type: 'string', 
           enum: ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'ON_HOLD']
         },
+        description: 'Filtrar por estado'
       },
       PriorityFilterParam: {
         name: 'priority',
         in: 'query',
-        description: 'Filtrar por prioridad',
         required: false,
         schema: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] },
-      },
-      CategoryFilterParam: {
-        name: 'categoryId',
-        in: 'query',
-        description: 'Filtrar por ID de categoría',
-        required: false,
-        schema: { type: 'string' },
+        description: 'Filtrar por prioridad'
       },
       SearchParam: {
         name: 'search',
         in: 'query',
-        description: 'Buscar en título y descripción',
         required: false,
-        schema: { type: 'string' },
+        schema: { type: 'string', minLength: 2 },
+        description: 'Buscar en título y descripción',
+        example: 'documentación'
       },
     },
+
+    // ==============================================
+    // RESPUESTAS REUTILIZABLES
+    // ==============================================
     responses: {
       BadRequest: {
         description: 'Solicitud inválida',
         content: {
           'application/json': {
-            schema: { $ref: '#/components/schemas/ValidationError' }
+            schema: { $ref: '#/components/schemas/ErrorResponse' }
           }
         }
       },
       Unauthorized: {
-        description: 'Token de autorización requerido o inválido',
+        description: 'No autorizado - Token requerido',
         content: {
           'application/json': {
             schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -285,150 +513,136 @@ const swaggerDefinition = {
       },
     },
   },
+
   security: [{ BearerAuth: [] }],
+
   tags: [
     {
-      name: 'Tasks',
-      description: 'Operaciones de gestión de tareas',
+      name: '📋 Tasks',
+      description: 'Gestión completa de tareas',
     },
     {
-      name: 'Categories',
-      description: 'Operaciones de gestión de categorías',
+      name: '📁 Categories',
+      description: 'Organización por categorías',
     },
     {
-      name: 'Statistics',
-      description: 'Estadísticas y análisis de productividad',
+      name: '📊 Statistics',
+      description: 'Métricas y estadísticas',
     },
     {
-      name: 'System',
-      description: 'Endpoints del sistema',
+      name: '❤️ Health',
+      description: 'Estado del servicio',
     },
   ],
-};
 
-const swaggerOptions: swaggerJsdoc.Options = {
-  definition: swaggerDefinition,
-  apis: [
-    './src/presentation/routes/*.ts',
-    './src/presentation/controllers/*.ts',
-  ],
-};
-
-export const swaggerSpec = swaggerJsdoc(swaggerOptions);
-
-export const swaggerUiOptions: SwaggerUiOptions = {
-  customCss: `
-    .swagger-ui .topbar { display: none }
-    .swagger-ui .info .title { color: #6366f1 }
-  `,
-  customSiteTitle: 'Task Service API Documentation',
-  customfavIcon: '/favicon.ico',
-  swaggerOptions: {
-    persistAuthorization: true,
-    displayRequestDuration: true,
-    docExpansion: 'none',
-    filter: true,
-    showExtensions: true,
-    showCommonExtensions: true,
-    tryItOutEnabled: true,
-  },
-};
-
-/**
- * Genera ejemplos de respuesta para endpoints específicos
- */
-export const generateSwaggerExamples = {
-  taskListResponse: {
-    success: true,
-    message: 'Tasks retrieved successfully',
-    data: [
-      {
-        id: 'clp123abc456def789',
-        title: 'Completar documentación API',
-        description: 'Finalizar la documentación de la API REST',
-        status: 'IN_PROGRESS',
-        priority: 'HIGH',
-        dueDate: '2024-12-31T23:59:59Z',
-        userId: 'user123',
-        categoryId: 'cat456',
-        tags: ['documentation', 'api'],
-        estimatedHours: 8,
-        actualHours: 6,
-        createdAt: '2024-01-15T10:00:00Z',
-        updatedAt: '2024-01-16T14:30:00Z',
-        category: {
-          id: 'cat456',
-          name: 'Desarrollo',
-          color: '#6366f1'
-        }
-      }
-    ],
-    meta: {
-      timestamp: '2024-01-16T15:00:00Z',
-      pagination: {
-        page: 1,
-        limit: 20,
-        total: 25,
-        pages: 2,
-        hasNext: true,
-        hasPrev: false
-      }
-    }
-  },
-  
-  taskCreateRequest: {
-    title: 'Implementar autenticación JWT',
-    description: 'Agregar middleware de autenticación JWT al sistema',
-    priority: 'HIGH',
-    dueDate: '2024-02-15T18:00:00Z',
-    categoryId: 'cat456',
-    tags: ['security', 'jwt'],
-    estimatedHours: 12
-  },
-  
-  categoryListResponse: {
-    success: true,
-    message: 'Categories retrieved successfully',
-    data: [
-      {
-        id: 'cat456',
-        name: 'Desarrollo',
-        description: 'Tareas relacionadas con desarrollo de software',
-        color: '#6366f1',
-        icon: 'code',
-        isActive: true,
-        userId: 'user123',
-        createdAt: '2024-01-10T09:00:00Z',
-        updatedAt: '2024-01-10T09:00:00Z'
-      }
-    ]
-  },
-  
-  statsResponse: {
-    success: true,
-    message: 'Statistics retrieved successfully',
-    data: {
-      totalTasks: 25,
-      completedTasks: 15,
-      pendingTasks: 8,
-      inProgressTasks: 2,
-      overdueTasks: 3,
-      urgentTasks: 1,
-      highTasks: 4,
-      mediumTasks: 15,
-      lowTasks: 5,
-      lastUpdated: '2024-01-16T15:00:00Z'
-    }
+  // ==============================================
+  // DOCUMENTACIÓN EXTERNA
+  // ==============================================
+  externalDocs: {
+    description: '📚 Documentación completa en GitHub',
+    url: 'https://github.com/Jonathangoz/task-manager-monorepo'
   }
 };
 
+// ==============================================
+// CONFIGURACIÓN SWAGGER-JSDOC
+// ==============================================
+const swaggerOptions: swaggerJsdoc.Options = {
+    swaggerDefinition,
+    apis: ['./src/routes/*.ts', './src/schemas/*.ts'],
+};
+
+export const swaggerSpec = swaggerJsdoc(swaggerOptions) as OpenAPIV3.Document;
+
+// ==============================================
+// OPCIONES DE SWAGGER UI
+// ==============================================
+export const swaggerUiOptions: SwaggerUiOptions = {
+  customCss: `
+    .swagger-ui .topbar { display: none; }
+    .swagger-ui .info .title { color: #6366f1; font-size: 2rem; }
+    .swagger-ui .info .description { font-size: 1rem; line-height: 1.6; }
+    .swagger-ui .opblock.opblock-post { border-color: #10b981; }
+    .swagger-ui .opblock.opblock-get { border-color: #3b82f6; }
+    .swagger-ui .opblock.opblock-put { border-color: #f59e0b; }
+    .swagger-ui .opblock.opblock-delete { border-color: #ef4444; }
+  `,
+  customSiteTitle: 'Task Service API - Docs',
+  swaggerOptions: {
+    docExpansion: 'none',
+    filter: true,
+    showExtensions: true,
+    tryItOutEnabled: true,
+    persistAuthorization: true,
+  },
+};
+
+// ==============================================
+// UTILIDADES
+// ==============================================
+
 /**
- * Middleware helper para documentar respuestas de error comunes
+ * Retrieves basic information from the Swagger definition.
+ * @returns {SwaggerInfo} An object with API title, version, etc.
  */
-export const commonErrorResponses = {
-  400: { $ref: '#/components/responses/BadRequest' },
-  401: { $ref: '#/components/responses/Unauthorized' },
-  403: { $ref: '#/components/responses/Forbidden' },
-  404: { $ref: '#/components/responses/NotFound' },
-  500: { $ref: '#/components/responses/InternalError' },
+export function getSwaggerInfo(): SwaggerInfo {
+  const { title, version, description } = swaggerSpec.info;
+  const { servers, paths, components, tags } = swaggerSpec;
+
+  return {
+    title,
+    version,
+    description,
+    servers: servers || [],
+    paths: paths || {},
+    schemas: components?.schemas || {}, 
+    tags: tags || [],
+  };
+}
+
+/**
+ * Generates the full URL for the Swagger documentation.
+ * @returns {string} The Swagger UI URL.
+ */
+export function getSwaggerUrl(): string {
+  const baseUrl = config.app.isProduction
+    ? `https://task-manager-task-service.onrender.com`
+    : `http://localhost:${config.app.port}`;
+  return `${baseUrl}/api/${config.app.apiVersion}/docs`;
+}
+
+export function validateSwaggerSpec(): ValidationResult {
+    const errors: string[] = [];
+    const spec = swaggerSpec;
+  
+  if (!spec?.openapi) errors.push('OpenAPI version missing');
+  if (!spec?.info?.title) errors.push('API title missing');
+  if (!spec?.info?.version) errors.push('API version missing');
+  
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
+};
+
+// ==============================================
+// VALIDACIÓN AL CARGAR
+// ==============================================
+if (config.app.isDevelopment) {
+  const validation = validateSwaggerSpec();
+  if (!validation.isValid) {
+    console.warn('⚠️ Swagger Documentation Issues:');
+    validation.errors.forEach(error => console.warn(`  - ${error}`));
+  } else {
+    console.log('✅ Swagger documentation is valid');
+    console.log(`📚 Swagger URL: ${getSwaggerUrl()}`);
+  }
+}
+
+export default {
+  swaggerSpec,
+  swaggerUiOptions,
+  validateSwaggerSpec,
+  getSwaggerInfo,
+  getSwaggerUrl
 };

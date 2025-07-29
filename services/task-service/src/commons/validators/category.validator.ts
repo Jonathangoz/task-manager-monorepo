@@ -1,650 +1,710 @@
-// src/presentation/validators/category.validator.ts
-import { body, param, query, ValidationChain } from 'express-validator';
+// src/commons/validators/category.validator.ts
+import { z } from 'zod';
+import { Request, Response, NextFunction } from 'express';
 import { 
-  CATEGORY_CONFIG, 
-  SORT_FIELDS, 
+  CATEGORY_CONFIG,
+  VALIDATION_CONFIG,
+  BUSINESS_RULES,
+  SORT_FIELDS,
   SORT_ORDERS,
   PAGINATION_CONFIG,
-  TASK_STATUSES,
-  TASK_PRIORITIES,
-  ERROR_MESSAGES 
+  ERROR_MESSAGES,
+  ERROR_CODES,
+  EXPORT_FORMATS,
+  VALIDATION_RULES
 } from '@/utils/constants';
 
-export class CategoryValidator {
-  /**
-   * Validation for creating a new category
-   * POST /api/v1/categories
-   */
-  static createCategory(): ValidationChain[] {
-    return [
-      body('name')
-        .trim()
-        .notEmpty()
-        .withMessage('Category name is required')
-        .isLength({ min: 1, max: CATEGORY_CONFIG.MAX_NAME_LENGTH })
-        .withMessage(`Category name must be between 1 and ${CATEGORY_CONFIG.MAX_NAME_LENGTH} characters`)
-        .matches(/^[a-zA-Z0-9\s\-_]+$/)
-        .withMessage('Category name can only contain letters, numbers, spaces, hyphens, and underscores'),
+// DOMAIN-SPECIFIC VALIDATION PRIMITIVES
+/**
+ * Base validation schemas for category domain
+ * These primitives ensure consistent validation across all category operations
+ */
 
-      body('description')
-        .optional()
-        .trim()
-        .isLength({ max: CATEGORY_CONFIG.MAX_DESCRIPTION_LENGTH })
-        .withMessage(`Description cannot exceed ${CATEGORY_CONFIG.MAX_DESCRIPTION_LENGTH} characters`),
+// CUID validation with enhanced error messaging
+const cuidSchema = z.string()
+  .regex(
+    new RegExp(`^c[a-z0-9]{${VALIDATION_CONFIG.CUID.MIN_LENGTH - 1},${VALIDATION_CONFIG.CUID.MAX_LENGTH - 1}}$`), 
+    'Invalid category ID format. Expected CUID format (e.g., "cl9e2q1kj0001js08abcdefgh")'
+  )
+  .describe('Valid CUID identifier for category operations');
 
-      body('color')
-        .optional()
-        .matches(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/)
-        .withMessage('Color must be a valid hex color (e.g., #ff0000 or #f00)')
-        .custom((value) => {
-          // Additional validation to ensure it's not just # followed by valid hex
-          if (value && value.length < 4) {
-            throw new Error('Color must be a valid hex color with at least 3 characters after #');
-          }
-          return true;
-        }),
+// Optional CUID for updates and associations
+const optionalCuidSchema = z.union([cuidSchema, z.null()]).optional();
 
-      body('icon')
-        .optional()
-        .trim()
-        .isLength({ min: 1, max: 50 })
-        .withMessage('Icon name must be between 1 and 50 characters')
-        .matches(/^[a-zA-Z0-9\-_]+$/)
-        .withMessage('Icon name can only contain letters, numbers, hyphens, and underscores'),
+// Category name validation with business rules
+const categoryNameSchema = z
+  .string()
+  .trim()
+  .min(VALIDATION_RULES.CATEGORY.NAME_MIN_LENGTH, 'Category name is required')
+  .max(VALIDATION_RULES.CATEGORY.NAME_MAX_LENGTH, 
+    `Category name must be at most ${VALIDATION_RULES.CATEGORY.NAME_MAX_LENGTH} characters`)
+  .regex(VALIDATION_CONFIG.NAME.PATTERN, 
+    'Category name can only contain letters, numbers, spaces, hyphens, underscores, and accented characters')
+  .refine((name) => !isReservedCategoryName(name), {
+    message: 'This category name is reserved and cannot be used'
+  })
+  .describe('Category name with business rule validation');
 
-      body('isActive')
-        .optional()
-        .isBoolean()
-        .withMessage('isActive must be a boolean value'),
-    ];
-  }
+// Category description validation
+const categoryDescriptionSchema = z
+  .string()
+  .trim()
+  .max(VALIDATION_RULES.CATEGORY.DESCRIPTION_MAX_LENGTH, 
+    `Description cannot exceed ${VALIDATION_RULES.CATEGORY.DESCRIPTION_MAX_LENGTH} characters`)
+  .optional()
+  .describe('Optional category description');
 
-  /**
-   * Validation for updating a category
-   * PUT /api/v1/categories/:id
-   */
-  static updateCategory(): ValidationChain[] {
-    return [
-      param('id')
-        .isString()
-        .notEmpty()
-        .withMessage('Category ID is required')
-        .matches(/^[a-zA-Z0-9_-]+$/)
-        .withMessage('Invalid category ID format'),
+// Color validation with palette enforcement
+const categoryColorSchema = z
+  .string()
+  .regex(VALIDATION_CONFIG.HEX_COLOR.PATTERN, 'Color must be a valid hex color (e.g., #6366f1 or #rgb)')
+  .transform((color) => normalizeHexColor(color))
+  .refine((color) => !isFeatureEnabled('CATEGORY_COLOR_PALETTE_STRICT') || isValidCategoryColor(color), {
+    message: `Color must be one of the allowed palette colors: ${CATEGORY_CONFIG.ALLOWED_COLORS.join(', ')}`
+  })
+  .describe('Hex color with optional palette restriction');
 
-      body('name')
-        .optional()
-        .trim()
-        .notEmpty()
-        .withMessage('Category name cannot be empty')
-        .isLength({ min: 1, max: CATEGORY_CONFIG.MAX_NAME_LENGTH })
-        .withMessage(`Category name must be between 1 and ${CATEGORY_CONFIG.MAX_NAME_LENGTH} characters`)
-        .matches(/^[a-zA-Z0-9\s\-_]+$/)
-        .withMessage('Category name can only contain letters, numbers, spaces, hyphens, and underscores'),
+// Icon validation with allowed list enforcement
+const categoryIconSchema = z
+  .string()
+  .trim()
+  .min(VALIDATION_CONFIG.ICON.MIN_LENGTH, 'Icon is required')
+  .max(VALIDATION_CONFIG.ICON.MAX_LENGTH, `Icon name too long`)
+  .regex(VALIDATION_CONFIG.ICON.PATTERN, 'Icon name contains invalid characters')
+  .refine((icon) => !isFeatureEnabled('CATEGORY_ICON_VALIDATION_STRICT') || isValidCategoryIcon(icon), {
+    message: `Icon must be one of the allowed icons. Allowed icons: ${CATEGORY_CONFIG.ALLOWED_ICONS.slice(0, 10).join(', ')}...`
+  })
+  .describe('Category icon with optional strict validation');
 
-      body('description')
-        .optional({ nullable: true })
-        .custom((value) => {
-          if (value === null) return true; // Allow null to clear description
-          if (value && (typeof value !== 'string' || value.length > CATEGORY_CONFIG.MAX_DESCRIPTION_LENGTH)) {
-            throw new Error(`Description cannot exceed ${CATEGORY_CONFIG.MAX_DESCRIPTION_LENGTH} characters`);
-          }
-          return true;
-        }),
+// Active status validation - Fixed default value
+const isActiveSchema = z
+  .boolean()
+  .default(BUSINESS_RULES.CATEGORY.AUTO_ACTIVATE_ON_CREATE)
+  .describe('Category active status');
 
-      body('color')
-        .optional()
-        .matches(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/)
-        .withMessage('Color must be a valid hex color (e.g., #ff0000 or #f00)')
-        .custom((value) => {
-          if (value && value.length < 4) {
-            throw new Error('Color must be a valid hex color with at least 3 characters after #');
-          }
-          return true;
-        }),
+// SHARED VALIDATION COMPONENTS
+// Pagination schema with category-specific defaults
+const categoryPaginationSchema = z.object({
+  page: z
+    .string()
+    .optional()
+    .transform((val) => val ? parseInt(val, 10) : PAGINATION_CONFIG.DEFAULT_PAGE)
+    .pipe(z.number().int().min(1, 'Page must be a positive integer')),
+  limit: z
+    .string()
+    .optional()
+    .transform((val) => val ? parseInt(val, 10) : PAGINATION_CONFIG.DEFAULT_LIMIT)
+    .pipe(
+      z.number()
+        .int()
+        .min(PAGINATION_CONFIG.MIN_LIMIT, `Limit must be at least ${PAGINATION_CONFIG.MIN_LIMIT}`)
+        .max(PAGINATION_CONFIG.MAX_LIMIT, `Limit cannot exceed ${PAGINATION_CONFIG.MAX_LIMIT}`)
+    )
+}).describe('Pagination parameters for category queries');
 
-      body('icon')
-        .optional({ nullable: true })
-        .custom((value) => {
-          if (value === null) return true; // Allow null to clear icon
-          if (value && (typeof value !== 'string' || value.length < 1 || value.length > 50)) {
-            throw new Error('Icon name must be between 1 and 50 characters');
-          }
-          if (value && !value.match(/^[a-zA-Z0-9\-_]+$/)) {
-            throw new Error('Icon name can only contain letters, numbers, hyphens, and underscores');
-          }
-          return true;
-        }),
+// Sorting schema with category-specific fields
+const categorySortingSchema = z.object({
+  sortBy: z.enum([
+    SORT_FIELDS.NAME,
+    SORT_FIELDS.CREATED_AT,
+    SORT_FIELDS.UPDATED_AT,
+    SORT_FIELDS.TASK_COUNT
+  ] as [string, ...string[]], {
+    errorMap: () => ({ 
+      message: `sortBy must be one of: ${[SORT_FIELDS.NAME, SORT_FIELDS.CREATED_AT, SORT_FIELDS.UPDATED_AT, SORT_FIELDS.TASK_COUNT].join(', ')}` 
+    })
+  }).default(SORT_FIELDS.CREATED_AT),
+  sortOrder: z.enum(Object.values(SORT_ORDERS) as [string, ...string[]], {
+    errorMap: () => ({ 
+      message: `sortOrder must be one of: ${Object.values(SORT_ORDERS).join(', ')}` 
+    })
+  }).default(SORT_ORDERS.DESC)
+}).describe('Sorting parameters for category queries');
 
-      body('isActive')
-        .optional()
-        .isBoolean()
-        .withMessage('isActive must be a boolean value'),
-    ];
-  }
+// Search validation
+const searchQuerySchema = z
+  .string()
+  .trim()
+  .min(VALIDATION_CONFIG.SEARCH.MIN_LENGTH, 
+    `Search query must be at least ${VALIDATION_CONFIG.SEARCH.MIN_LENGTH} characters`)
+  .max(VALIDATION_CONFIG.SEARCH.MAX_LENGTH, 
+    `Search query cannot exceed ${VALIDATION_CONFIG.SEARCH.MAX_LENGTH} characters`)
+  .regex(VALIDATION_CONFIG.SEARCH.PATTERN, 
+    'Search query contains invalid characters')
+  .optional()
+  .describe('Search query for category filtering');
 
-  /**
-   * Validation for getting categories
-   * GET /api/v1/categories
-   */
-  static getCategories(): ValidationChain[] {
-    return [
-      query('includeInactive')
-        .optional()
-        .isBoolean()
-        .withMessage('includeInactive must be a boolean'),
+// CATEGORY CRUD OPERATION SCHEMAS
+/**
+ * Schema for creating a new category
+ * POST /api/v1/categories
+ * 
+ * Enforces business rules:
+ * - Name uniqueness (handled at service layer)
+ * - Default values for color and icon
+ * - Category limit per user (handled at service layer)
+ */
+export const createCategorySchema = z.object({
+  body: z.object({
+    name: categoryNameSchema,
+    description: categoryDescriptionSchema,
+    color: categoryColorSchema.optional().transform((val) => val === undefined ? getDefaultCategoryColor() : val),
+    icon: categoryIconSchema.optional().transform((val) => val === undefined ? getDefaultCategoryIcon() : val),
+    isActive: isActiveSchema
+  }),
+  params: z.object({}),
+  query: z.object({})
+}).describe('Category creation validation schema');
 
-      query('includeTaskCount')
-        .optional()
-        .isBoolean()
-        .withMessage('includeTaskCount must be a boolean'),
-    ];
-  }
+/**
+ * Schema for updating an existing category
+ * PUT/PATCH /api/v1/categories/:id
+ * 
+ * All fields are optional for partial updates
+ * Maintains same validation rules as creation
+ */
+export const updateCategorySchema = z.object({
+  body: z.object({
+    name: categoryNameSchema.optional(),
+    description: z.union([categoryDescriptionSchema, z.null()]).optional(),
+    color: categoryColorSchema.optional(),
+    icon: categoryIconSchema.optional(),
+    isActive: isActiveSchema.optional()
+  }).refine((data) => Object.keys(data).length > 0, {
+    message: 'At least one field must be provided for update'
+  }),
+  params: z.object({
+    id: cuidSchema
+  }),
+  query: z.object({})
+}).describe('Category update validation schema');
 
-  /**
-   * Validation for getting single category
-   * GET /api/v1/categories/:id
-   */
-  static getCategoryById(): ValidationChain[] {
-    return [
-      param('id')
-        .isString()
-        .notEmpty()
-        .withMessage('Category ID is required')
-        .matches(/^[a-zA-Z0-9_-]+$/)
-        .withMessage('Invalid category ID format'),
+/**
+ * Schema for updating category status only
+ * PATCH /api/v1/categories/:id/status
+ */
+export const updateCategoryStatusSchema = z.object({
+  body: z.object({
+    isActive: isActiveSchema
+  }),
+  params: z.object({
+    id: cuidSchema
+  }),
+  query: z.object({})
+}).describe('Category status update validation schema');
 
-      query('includeTaskCount')
-        .optional()
-        .isBoolean()
-        .withMessage('includeTaskCount must be a boolean'),
-    ];
-  }
+// QUERY AND FILTERING SCHEMAS
+// Base query schema without refinements first
+const baseCategoryQuerySchema = z.object({
+  // Pagination
+  page: z
+    .string()
+    .optional()
+    .transform((val) => val ? parseInt(val, 10) : PAGINATION_CONFIG.DEFAULT_PAGE)
+    .pipe(z.number().int().min(1, 'Page must be a positive integer')),
+  limit: z
+    .string()
+    .optional()
+    .transform((val) => val ? parseInt(val, 10) : PAGINATION_CONFIG.DEFAULT_LIMIT)
+    .pipe(
+      z.number()
+        .int()
+        .min(PAGINATION_CONFIG.MIN_LIMIT, `Limit must be at least ${PAGINATION_CONFIG.MIN_LIMIT}`)
+        .max(PAGINATION_CONFIG.MAX_LIMIT, `Limit cannot exceed ${PAGINATION_CONFIG.MAX_LIMIT}`)
+    ),
+  
+  // Sorting
+  sortBy: z.enum([
+    SORT_FIELDS.NAME,
+    SORT_FIELDS.CREATED_AT,
+    SORT_FIELDS.UPDATED_AT,
+    SORT_FIELDS.TASK_COUNT
+  ] as [string, ...string[]], {
+    errorMap: () => ({ 
+      message: `sortBy must be one of: ${[SORT_FIELDS.NAME, SORT_FIELDS.CREATED_AT, SORT_FIELDS.UPDATED_AT, SORT_FIELDS.TASK_COUNT].join(', ')}` 
+    })
+  }).default(SORT_FIELDS.CREATED_AT),
+  sortOrder: z.enum(Object.values(SORT_ORDERS) as [string, ...string[]], {
+    errorMap: () => ({ 
+      message: `sortOrder must be one of: ${Object.values(SORT_ORDERS).join(', ')}` 
+    })
+  }).default(SORT_ORDERS.DESC),
 
-  /**
-   * Validation for deleting category
-   * DELETE /api/v1/categories/:id
-   */
-  static deleteCategory(): ValidationChain[] {
-    return [
-      param('id')
-        .isString()
-        .notEmpty()
-        .withMessage('Category ID is required')
-        .matches(/^[a-zA-Z0-9_-]+$/)
-        .withMessage('Invalid category ID format'),
+  // Active status filter
+  isActive: z
+    .string()
+    .optional()
+    .transform((val) => val === 'true' ? true : val === 'false' ? false : undefined)
+    .pipe(z.boolean().optional()),
 
-      query('force')
-        .optional()
-        .isBoolean()
-        .withMessage('force must be a boolean'),
-    ];
-  }
+  // Color filter (exact match or array of colors)
+  color: z.union([
+    categoryColorSchema,
+    z.array(categoryColorSchema)
+  ]).optional()
+    .transform((val) => Array.isArray(val) ? val : val ? [val] : undefined),
 
-  /**
-   * Validation for getting category tasks
-   * GET /api/v1/categories/:id/tasks
-   */
-  static getCategoryTasks(): ValidationChain[] {
-    return [
-      param('id')
-        .isString()
-        .notEmpty()
-        .withMessage('Category ID is required')
-        .matches(/^[a-zA-Z0-9_-]+$/)
-        .withMessage('Invalid category ID format'),
+  // Icon filter (exact match or array of icons)
+  icon: z.union([
+    categoryIconSchema,
+    z.array(categoryIconSchema)
+  ]).optional()
+    .transform((val) => Array.isArray(val) ? val : val ? [val] : undefined),
 
-      query('page')
-        .optional()
-        .isInt({ min: 1 })
-        .withMessage('Page must be a positive integer'),
+  // Task count filters
+  minTasks: z
+    .string()
+    .optional()
+    .transform((val) => val ? parseInt(val, 10) : undefined)
+    .pipe(z.number().int().min(0, 'Minimum task count cannot be negative').optional()),
+  
+  maxTasks: z
+    .string()
+    .optional()
+    .transform((val) => val ? parseInt(val, 10) : undefined)
+    .pipe(z.number().int().min(0, 'Maximum task count cannot be negative').optional()),
 
-      query('limit')
-        .optional()
-        .isInt({ min: PAGINATION_CONFIG.MIN_LIMIT, max: PAGINATION_CONFIG.MAX_LIMIT })
-        .withMessage(`Limit must be between ${PAGINATION_CONFIG.MIN_LIMIT} and ${PAGINATION_CONFIG.MAX_LIMIT}`),
+  // Boolean filters
+  hasIcon: z
+    .string()
+    .optional()
+    .transform((val) => val === 'true' ? true : val === 'false' ? false : undefined)
+    .pipe(z.boolean().optional()),
 
-      query('status')
-        .optional()
-        .custom((value) => {
-          const statuses = Array.isArray(value) ? value : [value];
-          for (const status of statuses) {
-            if (!Object.values(TASK_STATUSES).includes(status)) {
-              throw new Error(`Invalid status: ${status}. Must be one of: ${Object.values(TASK_STATUSES).join(', ')}`);
-            }
-          }
-          return true;
-        }),
+  // Search functionality
+  search: searchQuerySchema,
 
-      query('priority')
-        .optional()
-        .custom((value) => {
-          const priorities = Array.isArray(value) ? value : [value];
-          for (const priority of priorities) {
-            if (!Object.values(TASK_PRIORITIES).includes(priority)) {
-              throw new Error(`Invalid priority: ${priority}. Must be one of: ${Object.values(TASK_PRIORITIES).join(', ')}`);
-            }
-          }
-          return true;
-        }),
+  // Date range filters
+  createdFrom: z
+    .string()
+    .datetime({ message: 'createdFrom must be a valid ISO 8601 date' })
+    .optional(),
+  
+  createdTo: z
+    .string()
+    .datetime({ message: 'createdTo must be a valid ISO 8601 date' })
+    .optional()
+});
 
-      query('dueDateFrom')
-        .optional()
-        .isISO8601()
-        .withMessage('dueDateFrom must be a valid ISO 8601 date'),
+/**
+ * Schema for getting categories with advanced filtering
+ * GET /api/v1/categories
+ * 
+ * Supports multiple filter combinations and search functionality
+ */
+export const getCategoriesSchema = z.object({
+  body: z.object({}),
+  params: z.object({}),
+  query: baseCategoryQuerySchema
+    .refine((data) => {
+      // Validate task count range consistency
+      if (data.minTasks !== undefined && data.maxTasks !== undefined) {
+        return data.minTasks <= data.maxTasks;
+      }
+      return true;
+    }, {
+      message: 'minTasks must be less than or equal to maxTasks',
+      path: ['maxTasks']
+    })
+    .refine((data) => {
+      // Validate date range consistency
+      if (data.createdFrom && data.createdTo) {
+        return new Date(data.createdFrom) < new Date(data.createdTo);
+      }
+      return true;
+    }, {
+      message: 'createdFrom must be before createdTo',
+      path: ['createdTo']
+    })
+}).describe('Category listing and filtering validation schema');
 
-      query('dueDateTo')
-        .optional()
-        .isISO8601()
-        .withMessage('dueDateTo must be a valid ISO 8601 date'),
-
-      query('isOverdue')
-        .optional()
-        .isBoolean()
-        .withMessage('isOverdue must be a boolean'),
-
-      query('hasDueDate')
-        .optional()
-        .isBoolean()
-        .withMessage('hasDueDate must be a boolean'),
-
-      query('search')
-        .optional()
-        .trim()
-        .isLength({ min: 1, max: 100 })
-        .withMessage('Search term must be between 1 and 100 characters'),
-
-      query('sortBy')
-        .optional()
-        .isIn(Object.values(SORT_FIELDS))
-        .withMessage(`sortBy must be one of: ${Object.values(SORT_FIELDS).join(', ')}`),
-
-      query('sortOrder')
-        .optional()
-        .isIn(Object.values(SORT_ORDERS))
-        .withMessage(`sortOrder must be one of: ${Object.values(SORT_ORDERS).join(', ')}`),
-    ];
-  }
-
-  /**
-   * Validation for toggling category status
-   * PATCH /api/v1/categories/:id/toggle
-   */
-  static toggleCategoryStatus(): ValidationChain[] {
-    return [
-      param('id')
-        .isString()
-        .notEmpty()
-        .withMessage('Category ID is required')
-        .matches(/^[a-zA-Z0-9_-]+$/)
-        .withMessage('Invalid category ID format'),
-    ];
-  }
-
-  /**
-   * Validation for getting category statistics
-   * GET /api/v1/categories/:id/stats
-   */
-  static getCategoryStats(): ValidationChain[] {
-    return [
-      param('id')
-        .isString()
-        .notEmpty()
-        .withMessage('Category ID is required')
-        .matches(/^[a-zA-Z0-9_-]+$/)
-        .withMessage('Invalid category ID format'),
-    ];
-  }
-
-  /**
-   * Validation for bulk category operations
-   * PATCH /api/v1/categories/bulk
-   */
-  static bulkUpdateCategories(): ValidationChain[] {
-    return [
-      body('categoryIds')
-        .isArray({ min: 1, max: 20 })
-        .withMessage('categoryIds must be an array with 1-20 items')
-        .custom((categoryIds: string[]) => {
-          for (const id of categoryIds) {
-            if (typeof id !== 'string' || !id.match(/^[a-zA-Z0-9_-]+$/)) {
-              throw new Error('All category IDs must be valid strings');
-            }
-          }
-          return true;
-        }),
-
-      body('updates')
-        .isObject()
-        .withMessage('updates must be an object')
-        .custom((updates) => {
-          const allowedFields = ['name', 'description', 'color', 'icon', 'isActive'];
-          const updateKeys = Object.keys(updates);
-          
-          if (updateKeys.length === 0) {
-            throw new Error('At least one update field is required');
-          }
-
-          for (const key of updateKeys) {
-            if (!allowedFields.includes(key)) {
-              throw new Error(`Invalid update field: ${key}. Allowed fields: ${allowedFields.join(', ')}`);
-            }
-          }
-
-          // Validate individual update fields
-          if (updates.name && (typeof updates.name !== 'string' || 
-              updates.name.length > CATEGORY_CONFIG.MAX_NAME_LENGTH ||
-              !updates.name.match(/^[a-zA-Z0-9\s\-_]+$/))) {
-            throw new Error('Invalid name in updates');
-          }
-
-          if (updates.description && typeof updates.description !== 'string') {
-            throw new Error('Description must be a string');
-          }
-
-          if (updates.color && !updates.color.match(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/)) {
-            throw new Error('Invalid color format in updates');
-          }
-
-          if (updates.icon && (typeof updates.icon !== 'string' || 
-              !updates.icon.match(/^[a-zA-Z0-9\-_]+$/))) {
-            throw new Error('Invalid icon format in updates');
-          }
-
-          if (updates.isActive !== undefined && typeof updates.isActive !== 'boolean') {
-            throw new Error('isActive must be a boolean');
-          }
-
-          return true;
-        }),
-    ];
-  }
-
-  /**
-   * Validation for moving tasks between categories
-   * PATCH /api/v1/categories/:id/move-tasks
-   */
-  static moveTasksToCategory(): ValidationChain[] {
-    return [
-      param('id')
-        .isString()
-        .notEmpty()
-        .withMessage('Source category ID is required')
-        .matches(/^[a-zA-Z0-9_-]+$/)
-        .withMessage('Invalid source category ID format'),
-
-      body('taskIds')
-        .isArray({ min: 1, max: 50 })
-        .withMessage('taskIds must be an array with 1-50 items')
-        .custom((taskIds: string[]) => {
-          for (const id of taskIds) {
-            if (typeof id !== 'string' || !id.match(/^[a-zA-Z0-9_-]+$/)) {
-              throw new Error('All task IDs must be valid strings');
-            }
-          }
-          return true;
-        }),
-
-      body('targetCategoryId')
-        .optional({ nullable: true })
-        .custom((value) => {
-          if (value === null) return true; // Allow null to remove category from tasks
-          if (value && (typeof value !== 'string' || !value.match(/^[a-zA-Z0-9_-]+$/))) {
-            throw new Error('Invalid target category ID format');
-          }
-          return true;
-        }),
-    ];
-  }
-
-  /**
-   * Custom validation for hex colors with extended support
-   */
-  static validateHexColor(): ValidationChain {
-    return body('color')
+/**
+ * Schema for getting single category
+ * GET /api/v1/categories/:id
+ */
+export const getCategoryByIdSchema = z.object({
+  body: z.object({}),
+  params: z.object({
+    id: cuidSchema
+  }),
+  query: z.object({
+    // Optional: include task count
+    includeTasks: z
+      .string()
       .optional()
-      .custom((value) => {
-        if (!value) return true;
-        
-        // Support both #RGB and #RRGGBB formats
-        const hexColorRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
-        
-        if (!hexColorRegex.test(value)) {
-          throw new Error('Color must be a valid hex color (e.g., #ff0000 or #f00)');
-        }
-        
-        // Additional validation for common color values
-        const validColors = [
-          '#000000', '#ffffff', '#ff0000', '#00ff00', '#0000ff',
-          '#ffff00', '#ff00ff', '#00ffff', '#ffa500', '#800080'
-        ];
-        
-        // Convert 3-digit hex to 6-digit for consistency
-        let normalizedColor = value.toLowerCase();
-        if (normalizedColor.length === 4) {
-          normalizedColor = '#' + normalizedColor.slice(1).split('').map(c => c + c).join('');
-        }
-        
-        return true;
-      });
-  }
-
-  /**
-   * Custom validation for category name uniqueness (to be used with service layer)
-   */
-  static validateCategoryNameUniqueness(): ValidationChain {
-    return body('name')
-      .custom(async (name, { req }) => {
-        // This would typically be implemented in the service layer
-        // but we can add the validation structure here
-        if (!name || typeof name !== 'string') {
-          throw new Error('Category name is required');
-        }
-        
-        // Remove extra whitespace and validate format
-        const cleanName = name.trim().replace(/\s+/g, ' ');
-        
-        if (cleanName !== name) {
-          throw new Error('Category name contains invalid whitespace');
-        }
-        
-        // Reserved category names
-        const reservedNames = [
-          'all', 'none', 'default', 'uncategorized', 
-          'admin', 'system', 'root', 'null', 'undefined'
-        ];
-        
-        if (reservedNames.includes(cleanName.toLowerCase())) {
-          throw new Error(`"${cleanName}" is a reserved category name`);
-        }
-        
-        return true;
-      });
-  }
-
-  /**
-   * Validation for category color palette restrictions
-   */
-  static validateColorPalette(): ValidationChain {
-    return body('color')
+      .transform((val) => val === 'true')
+      .pipe(z.boolean().optional()),
+    
+    // Optional: include inactive tasks in count
+    includeInactiveTasks: z
+      .string()
       .optional()
-      .custom((value) => {
-        if (!value) return true;
-        
-        // Define allowed color palette for consistency
-        const allowedColors = [
-          '#6366f1', // Indigo (default)
-          '#ef4444', // Red
-          '#10b981', // Green
-          '#f59e0b', // Yellow/Amber
-          '#3b82f6', // Blue
-          '#8b5cf6', // Purple
-          '#06b6d4', // Cyan
-          '#84cc16', // Lime
-          '#f97316', // Orange
-          '#ec4899', // Pink
-          '#64748b', // Slate
-          '#dc2626', // Red-600
-          '#059669', // Green-600
-          '#7c3aed', // Violet-600
-          '#0284c7', // Sky-600
-        ];
-        
-        // Convert 3-digit hex to 6-digit for comparison
-        let normalizedColor = value.toLowerCase();
-        if (normalizedColor.length === 4) {
-          normalizedColor = '#' + normalizedColor.slice(1).split('').map(c => c + c).join('');
-        }
-        
-        if (!allowedColors.includes(normalizedColor)) {
-          throw new Error(`Color must be from the predefined palette. Allowed colors: ${allowedColors.join(', ')}`);
-        }
-        
-        return true;
-      });
-  }
+      .transform((val) => val === 'true')
+      .pipe(z.boolean().optional())
+  })
+}).describe('Category retrieval validation schema');
 
-  /**
-   * Validation for icon name with predefined icons
-   */
-  static validateIconName(): ValidationChain {
-    return body('icon')
+/**
+ * Schema for deleting category
+ * DELETE /api/v1/categories/:id
+ */
+export const deleteCategorySchema = z.object({
+  body: z.object({}),
+  params: z.object({
+    id: cuidSchema
+  }),
+  query: z.object({
+    // Force delete even if category has tasks
+    force: z
+      .string()
       .optional()
-      .custom((value) => {
-        if (!value) return true;
-        
-        // Define allowed icon names (assuming we're using a specific icon library)
-        const allowedIcons = [
-          'folder', 'home', 'work', 'school', 'health', 'finance',
-          'shopping', 'travel', 'food', 'entertainment', 'sports',
-          'technology', 'art', 'music', 'books', 'games', 'social',
-          'family', 'personal', 'business', 'project', 'task',
-          'calendar', 'clock', 'star', 'heart', 'flag', 'tag',
-          'bookmark', 'note', 'document', 'image', 'video',
-          'settings', 'tools', 'inbox', 'archive', 'trash'
-        ];
-        
-        if (!allowedIcons.includes(value.toLowerCase())) {
-          throw new Error(`Icon must be one of the predefined icons. Allowed icons: ${allowedIcons.join(', ')}`);
-        }
-        
-        return true;
+      .transform((val) => val === 'true')
+      .pipe(z.boolean().optional()),
+    
+    // Move tasks to another category before deletion
+    moveTo: optionalCuidSchema
+  })
+}).describe('Category deletion validation schema');
+
+// BULK OPERATIONS SCHEMAS
+// Reusable category IDs array validation
+const categoryIdsArraySchema = z
+  .array(cuidSchema)
+  .min(1, 'At least one category ID is required')
+  .max(VALIDATION_CONFIG.BULK.MAX_CATEGORY_DELETE, 
+    `Cannot process more than ${VALIDATION_CONFIG.BULK.MAX_CATEGORY_DELETE} categories at once`)
+  .refine((ids) => new Set(ids).size === ids.length, {
+    message: 'Duplicate category IDs are not allowed'
+  })
+  .describe('Array of unique category IDs for bulk operations');
+
+/**
+ * Schema for bulk category updates
+ * PATCH /api/v1/categories/bulk
+ */
+export const bulkUpdateCategoriesSchema = z.object({
+  body: z.object({
+    categoryIds: categoryIdsArraySchema,
+    updates: z.object({
+      color: categoryColorSchema.optional(),
+      icon: categoryIconSchema.optional(),
+      isActive: isActiveSchema.optional()
+    }).refine((updates) => Object.keys(updates).length > 0, {
+      message: 'At least one update field is required'
+    })
+  }),
+  params: z.object({}),
+  query: z.object({})
+}).describe('Bulk category update validation schema');
+
+/**
+ * Schema for bulk status update
+ * PATCH /api/v1/categories/bulk/status
+ */
+export const bulkUpdateCategoryStatusSchema = z.object({
+  body: z.object({
+    categoryIds: categoryIdsArraySchema,
+    isActive: isActiveSchema
+  }),
+  params: z.object({}),
+  query: z.object({})
+}).describe('Bulk category status update validation schema');
+
+/**
+ * Schema for bulk category deletion
+ * DELETE /api/v1/categories/bulk
+ */
+export const bulkDeleteCategoriesSchema = z.object({
+  body: z.object({
+    categoryIds: categoryIdsArraySchema,
+    force: z.boolean().default(false).describe('Force delete categories with tasks'),
+    moveTasksTo: optionalCuidSchema.describe('Category to move tasks to before deletion')
+  }),
+  params: z.object({}),
+  query: z.object({})
+}).describe('Bulk category deletion validation schema');
+
+// SPECIALIZED OPERATION SCHEMAS
+/**
+ * Schema for category search
+ * GET /api/v1/categories/search
+ */
+export const searchCategoriesSchema = z.object({
+  body: z.object({}),
+  params: z.object({}),
+  query: z.object({
+    q: z
+      .string()
+      .trim()
+      .min(VALIDATION_CONFIG.SEARCH.MIN_LENGTH, 
+        `Search query must be at least ${VALIDATION_CONFIG.SEARCH.MIN_LENGTH} characters`)
+      .max(VALIDATION_CONFIG.SEARCH.MAX_LENGTH, 
+        `Search query cannot exceed ${VALIDATION_CONFIG.SEARCH.MAX_LENGTH} characters`)
+      .regex(VALIDATION_CONFIG.SEARCH.PATTERN, 'Search query contains invalid characters')
+  }).merge(
+    // Create new schema without search field for merging
+    z.object({
+      page: baseCategoryQuerySchema.shape.page,
+      limit: baseCategoryQuerySchema.shape.limit,
+      sortBy: baseCategoryQuerySchema.shape.sortBy,
+      sortOrder: baseCategoryQuerySchema.shape.sortOrder,
+      isActive: baseCategoryQuerySchema.shape.isActive,
+      color: baseCategoryQuerySchema.shape.color,
+      icon: baseCategoryQuerySchema.shape.icon,
+      minTasks: baseCategoryQuerySchema.shape.minTasks,
+      maxTasks: baseCategoryQuerySchema.shape.maxTasks,
+      hasIcon: baseCategoryQuerySchema.shape.hasIcon,
+      createdFrom: baseCategoryQuerySchema.shape.createdFrom,
+      createdTo: baseCategoryQuerySchema.shape.createdTo
+    })
+  )
+}).describe('Category search validation schema');
+
+/**
+ * Schema for getting category statistics
+ * GET /api/v1/categories/stats
+ */
+export const getCategoryStatsSchema = z.object({
+  body: z.object({}),
+  params: z.object({}),
+  query: z.object({
+    // Date range for statistics
+    from: z
+      .string()
+      .datetime({ message: 'from must be a valid ISO 8601 date' })
+      .optional(),
+    to: z
+      .string()
+      .datetime({ message: 'to must be a valid ISO 8601 date' })
+      .optional(),
+    
+    // Include inactive categories in stats
+    includeInactive: z
+      .string()
+      .optional()
+      .transform((val) => val === 'true')
+      .pipe(z.boolean().optional())
+  })
+}).describe('Category statistics validation schema');
+
+/**
+ * Schema for category duplication
+ * POST /api/v1/categories/:id/duplicate
+ */
+export const duplicateCategorySchema = z.object({
+  body: z.object({
+    name: categoryNameSchema.optional().describe('New name for duplicated category'),
+    copyTasks: z.boolean().default(false).describe('Whether to copy associated tasks')
+  }),
+  params: z.object({
+    id: cuidSchema
+  }),
+  query: z.object({})
+}).describe('Category duplication validation schema');
+
+/**
+ * Schema for category export
+ * GET /api/v1/categories/export
+ */
+export const exportCategoriesSchema = z.object({
+  body: z.object({}),
+  params: z.object({}),
+  query: z.object({
+    format: z.enum(Object.values(EXPORT_FORMATS) as [string, ...string[]], {
+      errorMap: () => ({ 
+        message: `Export format must be one of: ${Object.values(EXPORT_FORMATS).join(', ')}` 
+      })
+    }).default(EXPORT_FORMATS.JSON),
+    
+    includeInactive: z
+      .string()
+      .optional()
+      .transform((val) => val === 'true')
+      .pipe(z.boolean().optional()),
+    
+    includeTasks: z
+      .string()
+      .optional()
+      .transform((val) => val === 'true')
+      .pipe(z.boolean().optional())
+  }).merge(
+    // Merge specific fields from base query schema
+    z.object({
+      isActive: baseCategoryQuerySchema.shape.isActive,
+      color: baseCategoryQuerySchema.shape.color,
+      createdFrom: baseCategoryQuerySchema.shape.createdFrom,
+      createdTo: baseCategoryQuerySchema.shape.createdTo
+    })
+  )
+}).describe('Category export validation schema');
+
+// TYPE EXPORTS (Auto-generated from Zod Schemas)
+// Input types for controllers and services
+export type CreateCategoryInput = z.infer<typeof createCategorySchema>['body'];
+export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>['body'];
+export type GetCategoriesQuery = z.infer<typeof getCategoriesSchema>['query'];
+export type SearchCategoriesQuery = z.infer<typeof searchCategoriesSchema>['query'];
+export type BulkUpdateCategoriesInput = z.infer<typeof bulkUpdateCategoriesSchema>['body'];
+export type BulkDeleteCategoriesInput = z.infer<typeof bulkDeleteCategoriesSchema>['body'];
+export type CategoryStatsQuery = z.infer<typeof getCategoryStatsSchema>['query'];
+export type ExportCategoriesQuery = z.infer<typeof exportCategoriesSchema>['query'];
+
+// Parameter types
+export type CategoryIdParam = z.infer<typeof getCategoryByIdSchema>['params'];
+
+// VALIDATION MIDDLEWARE FACTORY
+/**
+ * Generic validation middleware factory with enhanced error handling
+ * Follows Single Responsibility Principle - only handles validation
+ */
+export const validateCategorySchema = <T extends z.ZodSchema>(schema: T) => {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      // Enhanced validation with detailed context
+      const validationResult = await schema.parseAsync({
+        body: req.body,
+        params: req.params, 
+        query: req.query
       });
-  }
-
-  /**
-   * Comprehensive validation for category creation with all custom validators
-   */
-  static createCategoryWithCustomValidation(): ValidationChain[] {
-    return [
-      ...this.createCategory(),
-      this.validateCategoryNameUniqueness(),
-      this.validateColorPalette(),
-      this.validateIconName(),
-    ];
-  }
-
-  /**
-   * Validation for category search and filtering
-   * GET /api/v1/categories/search
-   */
-  static searchCategories(): ValidationChain[] {
-    return [
-      query('q')
-        .optional()
-        .trim()
-        .isLength({ min: 1, max: 100 })
-        .withMessage('Search query must be between 1 and 100 characters')
-        .matches(/^[a-zA-Z0-9\s\-_]+$/)
-        .withMessage('Search query can only contain letters, numbers, spaces, hyphens, and underscores'),
-
-      query('color')
-        .optional()
-        .matches(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/)
-        .withMessage('Color filter must be a valid hex color'),
-
-      query('hasIcon')
-        .optional()
-        .isBoolean()
-        .withMessage('hasIcon must be a boolean'),
-
-      query('isActive')
-        .optional()
-        .isBoolean()
-        .withMessage('isActive must be a boolean'),
-
-      query('minTasks')
-        .optional()
-        .isInt({ min: 0 })
-        .withMessage('minTasks must be a non-negative integer'),
-
-      query('maxTasks')
-        .optional()
-        .isInt({ min: 0 })
-        .withMessage('maxTasks must be a non-negative integer'),
-
-      query('sortBy')
-        .optional()
-        .isIn(['name', 'createdAt', 'updatedAt', 'taskCount'])
-        .withMessage('sortBy must be one of: name, createdAt, updatedAt, taskCount'),
-
-      query('sortOrder')
-        .optional()
-        .isIn(Object.values(SORT_ORDERS))
-        .withMessage(`sortOrder must be one of: ${Object.values(SORT_ORDERS).join(', ')}`),
-    ];
-  }
-
-  /**
-   * Helper method to validate category limits per user
-   */
-  static validateCategoryLimit(): ValidationChain {
-    return body()
-      .custom(async (_, { req }) => {
-        // This validation would typically be handled in the service layer
-        // but we can define the structure here
-        const userId = (req as any).user?.id;
+      
+      // Replace request objects with validated/transformed data
+      req.body = validationResult.body;
+      req.params = validationResult.params;
+      req.query = validationResult.query;
+      
+      next();
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        // Enhanced error formatting with field paths and context
+        const formattedErrors = error.errors.map(err => ({
+          field: err.path.join('.'),
+          message: err.message,
+          code: err.code,
+          // Only include received/expected if they exist on the error
+          ...(('received' in err) && { received: (err as any).received }),
+          ...(('expected' in err) && { expected: (err as any).expected })
+        }));
         
-        if (!userId) {
-          throw new Error('User authentication required');
-        }
-        
-        // The actual count check would be done in the service layer
-        // This is just the validation structure
-        return true;
-      });
-  }
+        res.status(400).json({
+          success: false,
+          error: {
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: ERROR_MESSAGES.VALIDATION_ERROR,
+            details: formattedErrors,
+            context: 'category_validation'
+          },
+          meta: {
+            timestamp: new Date().toISOString(),
+            validationErrors: formattedErrors.length
+          }
+        });
+        return;
+      }
+      
+      // Pass non-validation errors to global error handler
+      next(error);
+    }
+  };
+};
 
-  /**
-   * Validation for category export functionality
-   * GET /api/v1/categories/export
-   */
-  static exportCategories(): ValidationChain[] {
-    return [
-      query('format')
-        .optional()
-        .isIn(['json', 'csv', 'xlsx'])
-        .withMessage('Export format must be one of: json, csv, xlsx'),
+// VALIDATION HELPER FUNCTIONS
+/**
+ * Validates category name uniqueness at runtime
+ * This is separated from schema validation as it requires database access
+ */
+export const validateCategoryNameUniqueness = (
+  name: string, 
+  userId: string, 
+  excludeId?: string
+) => {
+  // This would typically be implemented in the service layer
+  // returning a Promise<boolean> after checking the database
+  return z.string().min(1).parse(name); // Basic validation here
+};
 
-      query('includeInactive')
-        .optional()
-        .isBoolean()
-        .withMessage('includeInactive must be a boolean'),
+/**
+ * Validates user category limit
+ * Business rule validation that requires database access
+ */
+export const validateUserCategoryLimit = (userId: string) => {
+  // This would be implemented in the service layer
+  // checking against BUSINESS_RULES.CATEGORY.MAX_PER_USER
+  return z.string().parse(userId); // Basic validation here
+};
 
-      query('includeTasks')
-        .optional()
-        .isBoolean()
-        .withMessage('includeTasks must be a boolean'),
+/**
+ * Custom validation for category deletion with tasks
+ * Complex business rule that may require multiple database queries
+ */
+export const validateCategoryDeletion = (
+  categoryId: string, 
+  force: boolean = false, 
+  moveTasksTo?: string
+) => {
+  return z.object({
+    categoryId: cuidSchema,
+    force: z.boolean(),
+    moveTasksTo: optionalCuidSchema
+  }).parse({ categoryId, force, moveTasksTo });
+};
 
-      query('dateFrom')
-        .optional()
-        .isISO8601()
-        .withMessage('dateFrom must be a valid ISO 8601 date'),
+// SCHEMA COMPOSITION HELPERS
+/**
+ * Creates a composed schema for complex validation scenarios
+ * Follows Open/Closed Principle - extensible without modification
+ */
+export const createComposedCategorySchema = (
+  baseSchema: z.ZodObject<any>,
+  extensions: Record<string, z.ZodSchema> = {}
+) => {
+  let composedSchema = baseSchema;
+  
+  Object.entries(extensions).forEach(([key, extension]) => {
+    composedSchema = composedSchema.extend({ [key]: extension });
+  });
+  
+  return composedSchema;
+};
 
-      query('dateTo')
-        .optional()
-        .isISO8601()
-        .withMessage('dateTo must be a valid ISO 8601 date'),
-    ];
-  }
-}
+/**
+ * Creates conditional validation based on feature flags
+ * Allows different validation rules in different environments
+ */
+export const createConditionalCategorySchema = (
+  baseSchema: z.ZodObject<any>,
+  conditions: Record<string, () => boolean>,
+  conditionalSchemas: Record<string, z.ZodObject<any>>
+) => {
+  let schema = baseSchema;
+  
+  Object.entries(conditions).forEach(([key, condition]) => {
+    if (condition() && conditionalSchemas[key]) {
+      schema = schema.extend(conditionalSchemas[key].shape);
+    }
+  });
+  
+  return schema;
+};
+
+// UTILITY FUNCTIONS (imported from constants)
+// These functions are imported from constants but re-exported for convenience
+import {
+  isValidCategoryColor,
+  isValidCategoryIcon,
+  isReservedCategoryName,
+  normalizeHexColor,
+  getDefaultCategoryColor,
+  getDefaultCategoryIcon,
+  isFeatureEnabled
+} from '@/utils/constants';
+
+// Re-export for use in other modules
+export {
+  isValidCategoryColor,
+  isValidCategoryIcon,
+  isReservedCategoryName,
+  normalizeHexColor,
+  getDefaultCategoryColor,
+  getDefaultCategoryIcon,
+  isFeatureEnabled
+};

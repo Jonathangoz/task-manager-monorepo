@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "type": "commonjs",
   "engines": {
-    "node": ">=22.0.0",
+    "node": ">=22.15.0",
     "pnpm": ">=10.0.0"
   },
   "scripts": {
@@ -22,28 +22,39 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:migrate:dev": "prisma migrate dev",
-    "prisma:seed": "ts-node -r tsconfig-paths/register prisma/seed.ts"
+    "prisma:seed": "ts-node -r tsconfig-paths/register prisma/seed.ts",
+    "swagger:validate": "ts-node -r tsconfig-paths/register src/scripts/validate-swagger.ts",
+    "swagger:generate": "swagger-jsdoc -d src/utils/swagger.ts src/routes/*.ts -o docs/swagger.json",
+    "docs:serve": "swagger-ui-serve docs/swagger.json",
+    "docs:build": "redoc-cli build docs/swagger.json --output docs/index.html"
   },
   "dependencies": {
-    "@prisma/client": "^5.22.0",
+    "@prisma/client": "^6.12.0",
     "argon2": "^0.43.1",
-    "axios": "^1.11.0",
-    "compression": "^1.8.1",
+    "axios": "^1.7.0",
+    "compression": "^1.8.0",
+    "connect-timeout": "^1.9.1",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
-    "dotenv": "^16.6.1",
-    "express": "^4.21.2",
-    "express-rate-limit": "^7.5.1",
-    "express-validator": "^7.2.1",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "express-rate-limit": "^7.4.1",
+    "express-slow-down": "^2.1.0",
+    "helmet": "^8.0.0",
     "http-errors": "^2.0.0",
-    "cookie-parser": "^1.4.6",
-    "helmet": "^7.2.0",
-    "ioredis": "^5.3.2",
-    "jose": "^5.10.0",
+    "ioredis": "^5.4.1",
+    "jose": "^5.9.0",
     "morgan": "^1.10.0",
-    "pino": "^8.21.0",
-    "pino-pretty": "^10.3.1",
+    "pino": "^9.5.0",
+    "pino-pretty": "^11.3.0",
+    "prisma": "^6.12.0",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.0",
-    "zod": "^3.25.76"
+    "swagger-ui-express": "^5.0.1",
+    "tsconfig-paths": "^4.2.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7",
+    "ts-node": "^10.9.2"
   }
 }

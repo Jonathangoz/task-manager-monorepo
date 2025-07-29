@@ -1,74 +1,172 @@
+// src/commons/routes/user.routes.ts - Versión actualizada sin método deprecated
+
 import { Router } from 'express';
-import { UserController } from '../controllers/user.controller';
-import { AuthMiddleware } from '../middlewares/auth.middleware';
-import { ValidationMiddleware } from '../middlewares/validation.middleware';
-import { RateLimitMiddleware } from '../middlewares/rate-limit.middleware';
+import { UserController } from '@/commons/controllers/UserController';
 import { 
-  updateUserSchema,
-  changePasswordSchema,
-  getUsersQuerySchema 
-} from '../schemas/user.schemas';
+  verifyToken, 
+  requireOwnership, 
+  extractSessionInfo 
+} from '@/commons/middlewares/auth.middleware';
+import { 
+  createValidator,
+  validatePagination, 
+  requireBody, 
+  validateCUID, 
+  sanitizeInput 
+} from '@/commons/middlewares/validation.middleware';
+import RateLimitMiddleware from '@/commons/middlewares/rateLimit.middleware';
+import { 
+  validateGetUsersQuery,
+  validateUpdateUserBody,
+  validateUpdateAvatarBody,
+  validateDeactivateUserBody,
+  validateUserParams,
+  validateVerifyEmailTokenParams,
+  UserParamsSchema,
+  VerifyEmailTokenParamsSchema
+} from '@/commons/validators/user.validator';
+import { asyncHandler } from '@/commons/middlewares/error.middleware';
+
+interface UserRoutesDependencies {
+  userController: UserController;
+}
 
 export class UserRoutes {
-  static get routes(): Router {
+  private userController: UserController;
+
+  constructor(dependencies: UserRoutesDependencies) {
+    this.userController = dependencies.userController;
+  }
+
+  public get routes(): Router {
     const router = Router();
-    const userController = new UserController();
 
-    // Rate limiting para operaciones de usuarios
-    const userRateLimit = RateLimitMiddleware.createRateLimit({
-      windowMs: 15 * 60 * 1000, // 15 minutos
-      max: 50, // máximo 50 requests por IP
-      message: 'Demasiadas peticiones, intenta de nuevo más tarde'
-    });
+    // Middleware global para todas las rutas de usuario
+    router.use(extractSessionInfo);
+    router.use(sanitizeInput);
+    router.use(verifyToken); // Todas las rutas de usuario requieren autenticación
+    router.use(RateLimitMiddleware.perUser());
 
-    // Todas las rutas de usuario requieren autenticación
-    router.use(AuthMiddleware.validateJWT);
-    router.use(userRateLimit);
+    // === RUTAS DE CONSULTA ===
 
-    // Obtener lista de usuarios (con paginación y filtros)
+    /**
+     * GET /users
+     * Obtener lista de usuarios con paginación y filtros
+     */
     router.get(
       '/',
-      ValidationMiddleware.validateQuery(getUsersQuerySchema),
-      userController.getUsers
+      validateGetUsersQuery,
+      asyncHandler(this.userController.getUsers)
     );
 
-    // Obtener usuario por ID
+    /**
+     * GET /users/:id
+     * Obtener usuario por ID
+     */
     router.get(
       '/:id',
-      ValidationMiddleware.validateParams({ id: 'string' }),
-      userController.getUserById
+      validateUserParams,
+      asyncHandler(this.userController.getUserById)
     );
 
-    // Actualizar usuario
+    /**
+     * GET /users/:id/profile
+     * Obtener perfil público de usuario
+     */
+    router.get(
+      '/:id/profile',
+      validateUserParams,
+      asyncHandler(this.userController.getUserProfile)
+    );
+
+    // === RUTAS DE MODIFICACIÓN (requieren ownership) ===
+
+    /**
+     * PUT /users/:id
+     * Actualizar información del usuario
+     * Solo el propietario puede actualizar sus datos
+     */
     router.put(
       '/:id',
-      ValidationMiddleware.validateParams({ id: 'string' }),
-      ValidationMiddleware.validateBody(updateUserSchema),
-      userController.updateUser
+      validateUserParams,
+      requireOwnership('id'),
+      requireBody,
+      validateUpdateUserBody,
+      asyncHandler(this.userController.updateUser)
     );
 
-    // Cambiar contraseña
+    /**
+     * PATCH /users/:id/avatar
+     * Actualizar avatar del usuario
+     */
     router.patch(
-      '/:id/password',
-      ValidationMiddleware.validateParams({ id: 'string' }),
-      ValidationMiddleware.validateBody(changePasswordSchema),
-      userController.changePassword
+      '/:id/avatar',
+      validateUserParams,
+      requireOwnership('id'),
+      requireBody,
+      validateUpdateAvatarBody,
+      asyncHandler(this.userController.updateAvatar)
     );
 
-    // Desactivar usuario (soft delete)
+    /**
+     * DELETE /users/:id
+     * Desactivar usuario (soft delete)
+     * Solo el propietario puede desactivar su cuenta
+     */
     router.delete(
       '/:id',
-      ValidationMiddleware.validateParams({ id: 'string' }),
-      userController.deactivateUser
+      validateUserParams,
+      requireOwnership('id'),
+      validateDeactivateUserBody,
+      asyncHandler(this.userController.deactivateUser)
     );
 
-    // Reactivar usuario
+    /**
+     * PATCH /users/:id/activate
+     * Reactivar usuario
+     * Solo el propietario puede reactivar su cuenta
+     */
     router.patch(
       '/:id/activate',
-      ValidationMiddleware.validateParams({ id: 'string' }),
-      userController.activateUser
+      validateUserParams,
+      requireOwnership('id'),
+      asyncHandler(this.userController.activateUser)
+    );
+
+    // === RUTAS DE VERIFICACIÓN ===
+
+    /**
+     * POST /users/:id/verify-email
+     * Enviar token de verificación de email
+     */
+    router.post(
+      '/:id/verify-email',
+      validateUserParams,
+      requireOwnership('id'),
+      asyncHandler(this.userController.sendEmailVerification)
+    );
+
+    /**
+     * PATCH /users/:id/verify-email/:token
+     * Verificar email con token
+     */
+    router.patch(
+      '/:id/verify-email/:token',
+      createValidator(
+        UserParamsSchema.merge(VerifyEmailTokenParamsSchema), 
+        'params'
+      ),
+      requireOwnership('id'),
+      asyncHandler(this.userController.verifyEmail)
     );
 
     return router;
+  }
+
+  /**
+   * Método estático para crear instancia con factory pattern
+   */
+  static create(dependencies: UserRoutesDependencies): UserRoutes {
+    return new UserRoutes(dependencies);
   }
 }

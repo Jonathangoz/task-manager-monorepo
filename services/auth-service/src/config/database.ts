@@ -1,7 +1,7 @@
 // src/config/database.ts
 import { PrismaClient } from '@prisma/client';
 import { logger } from '@/utils/logger';
-import { config } from './environment';
+import { environment } from './environment';
 
 declare global {
   var __db__: PrismaClient | undefined;
@@ -10,7 +10,7 @@ declare global {
 // Singleton pattern para PrismaClient
 let db: PrismaClient;
 
-if (config.app.env === 'production') {
+if (environment.NODE_ENV === 'production') {
   db = new PrismaClient({
     log: ['warn', 'error'],
     errorFormat: 'minimal',

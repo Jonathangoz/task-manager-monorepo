@@ -1,16 +1,27 @@
-// ==============================================
-// src/core/infrastructure/repositories/UserRepository.ts
+// src/core/infrastructure/repositories/UserRepository.ts - Repositorio de usuarios con logging estructurado y manejo de errores
 import { PrismaClient } from '@prisma/client';
 import { db } from '@/config/database';
-import { logger } from '@/utils/logger';
+import { loggers, dbLogger } from '@/utils/logger';
 import { User } from '@/core/domain/entities/User';
 import { 
   IUserRepository, 
   CreateUserData, 
-  UpdateUserData, 
-  UserFilters 
+  UpdateUserData,
+  UserWithPassword,
+  UserWithoutPassword
 } from '@/core/domain/interfaces/IUserRepository';
-import { ERROR_CODES, ERROR_MESSAGES } from '@/utils/constants';
+import { 
+  UserFilters, 
+  PaginationOptions, 
+  PaginatedUsers,
+  UserSession 
+} from '@/core/domain/interfaces/IUserService';
+import { 
+  ERROR_CODES, 
+  ERROR_MESSAGES, 
+  PRISMA_ERROR_CODES,
+  DEFAULT_VALUES 
+} from '@/utils/constants';
 
 export class UserRepository implements IUserRepository {
   constructor(private database: PrismaClient = db) {}
@@ -18,140 +29,392 @@ export class UserRepository implements IUserRepository {
   /**
    * Crear un nuevo usuario
    */
-  async create(data: CreateUserData): Promise<User> {
+  async create(data: CreateUserData): Promise<UserWithPassword> {
+    const startTime = Date.now();
+    
     try {
-      logger.info({ email: data.email, username: data.username }, 'Creating new user');
+      dbLogger.debug({
+        operation: 'create',
+        table: 'user',
+        email: data.email,
+        username: data.username
+      }, 'Creating new user');
       
       const user = await this.database.user.create({
         data: {
-          email: data.email,
+          email: data.email.toLowerCase(),
           username: data.username,
           password: data.password,
-          firstName: data.firstName,
-          lastName: data.lastName,
+          firstName: data.firstName || null,
+          lastName: data.lastName || null,
         },
       });
 
-      logger.info({ userId: user.id }, 'User created successfully');
-      return this.mapToEntity(user);
-    } catch (error: any) {
-      logger.error({ error, email: data.email }, 'Failed to create user');
+      const duration = Date.now() - startTime;
+      loggers.dbQuery('create', 'user', duration, user.id);
       
-      // Manejar errores de unicidad
-      if (error.code === 'P2002') {
-        const field = error.meta?.target?.[0] || 'email';
-        throw new Error(`User already exists with this ${field}`);
+      dbLogger.info({
+        userId: user.id,
+        email: data.email,
+        duration
+      }, 'User created successfully');
+      
+      return this.mapToUserWithPassword(user);
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      loggers.dbError(error, 'create', 'user');
+      
+      dbLogger.error({
+        error,
+        email: data.email,
+        username: data.username,
+        duration
+      }, 'Failed to create user');
+      
+      // Manejar errores específicos de Prisma
+      if (error.code === PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION) {
+        const target = error.meta?.target;
+        if (target?.includes('email')) {
+          throw new Error(ERROR_MESSAGES.USER_ALREADY_EXISTS);
+        }
+        if (target?.includes('username')) {
+          throw new Error(ERROR_MESSAGES.USER_ALREADY_EXISTS);
+        }
+        throw new Error(ERROR_MESSAGES.USER_ALREADY_EXISTS);
       }
       
-      throw new Error('Failed to create user');
+      throw new Error(ERROR_MESSAGES.DATABASE_CONNECTION_ERROR);
     }
   }
 
   /**
-   * Buscar usuario por ID
+   * Buscar usuario por ID (sin password)
    */
-  async findById(id: string): Promise<User | null> {
+  async findById(id: string): Promise<UserWithoutPassword | null> {
+    const startTime = Date.now();
+    
     try {
-      logger.debug({ userId: id }, 'Finding user by ID');
+      dbLogger.debug({ userId: id, operation: 'findById' }, 'Finding user by ID');
       
       const user = await this.database.user.findUnique({
         where: { id },
-        include: {
-          refreshTokens: {
-            where: { isRevoked: false },
-            orderBy: { createdAt: 'desc' },
-          },
-          userSessions: {
-            where: { isActive: true },
-            orderBy: { lastSeen: 'desc' },
-          },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+          isActive: true,
+          isVerified: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
+          // password: false - explícitamente excluido
         },
       });
 
+      const duration = Date.now() - startTime;
+      loggers.dbQuery('findUnique', 'user', duration, id);
+
       if (!user) {
-        logger.debug({ userId: id }, 'User not found');
+        dbLogger.debug({ userId: id, duration }, 'User not found by ID');
         return null;
       }
 
-      return this.mapToEntity(user);
-    } catch (error) {
-      logger.error({ error, userId: id }, 'Failed to find user by ID');
-      throw new Error('Failed to retrieve user');
+      dbLogger.debug({ userId: id, duration }, 'User found by ID');
+      return this.mapToUserWithoutPassword(user);
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      loggers.dbError(error, 'findUnique', 'user', id);
+      
+      dbLogger.error({
+        error,
+        userId: id,
+        duration,
+        operation: 'findById'
+      }, 'Failed to find user by ID');
+      
+      throw new Error(ERROR_MESSAGES.DATABASE_CONNECTION_ERROR);
     }
   }
 
   /**
-   * Buscar usuario por email
+   * Buscar usuario por ID (con password para autenticación)
    */
-  async findByEmail(email: string): Promise<User | null> {
+  async findByIdWithPassword(id: string): Promise<UserWithPassword | null> {
+    const startTime = Date.now();
+    
     try {
-      logger.debug({ email }, 'Finding user by email');
+      dbLogger.debug({ userId: id, operation: 'findByIdWithPassword' }, 'Finding user by ID with password');
       
       const user = await this.database.user.findUnique({
-        where: { email },
-        include: {
-          refreshTokens: {
-            where: { isRevoked: false },
-            orderBy: { createdAt: 'desc' },
-          },
-          userSessions: {
-            where: { isActive: true },
-            orderBy: { lastSeen: 'desc' },
-          },
-        },
+        where: { id },
       });
 
+      const duration = Date.now() - startTime;
+      loggers.dbQuery('findUnique', 'user', duration, id);
+
       if (!user) {
-        logger.debug({ email }, 'User not found by email');
+        dbLogger.debug({ userId: id, duration }, 'User not found by ID');
         return null;
       }
 
-      return this.mapToEntity(user);
-    } catch (error) {
-      logger.error({ error, email }, 'Failed to find user by email');
-      throw new Error('Failed to retrieve user');
+      dbLogger.debug({ userId: id, duration }, 'User found by ID with password');
+      return this.mapToUserWithPassword(user);
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      loggers.dbError(error, 'findUnique', 'user', id);
+      
+      dbLogger.error({
+        error,
+        userId: id,
+        duration,
+        operation: 'findByIdWithPassword'
+      }, 'Failed to find user by ID with password');
+      
+      throw new Error(ERROR_MESSAGES.DATABASE_CONNECTION_ERROR);
     }
   }
 
   /**
-   * Buscar usuario por username
+   * Buscar usuario por email (sin password)
    */
-  async findByUsername(username: string): Promise<User | null> {
+  async findByEmail(email: string): Promise<UserWithoutPassword | null> {
+    const startTime = Date.now();
+    const normalizedEmail = email.toLowerCase();
+    
     try {
-      logger.debug({ username }, 'Finding user by username');
+      dbLogger.debug({ 
+        email: normalizedEmail, 
+        operation: 'findByEmail' 
+      }, 'Finding user by email');
+      
+      const user = await this.database.user.findUnique({
+        where: { email: normalizedEmail },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+          isActive: true,
+          isVerified: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
+          // password: false - explícitamente excluido
+        },
+      });
+
+      const duration = Date.now() - startTime;
+      loggers.dbQuery('findUnique', 'user', duration);
+
+      if (!user) {
+        dbLogger.debug({ 
+          email: normalizedEmail, 
+          duration 
+        }, 'User not found by email');
+        return null;
+      }
+
+      dbLogger.debug({ 
+        userId: user.id, 
+        email: normalizedEmail, 
+        duration 
+      }, 'User found by email');
+      
+      return this.mapToUserWithoutPassword(user);
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      loggers.dbError(error, 'findUnique', 'user');
+      
+      dbLogger.error({
+        error,
+        email: normalizedEmail,
+        duration,
+        operation: 'findByEmail'
+      }, 'Failed to find user by email');
+      
+      throw new Error(ERROR_MESSAGES.DATABASE_CONNECTION_ERROR);
+    }
+  }
+
+  /**
+   * Buscar usuario por email (con password para autenticación)
+   */
+  async findByEmailWithPassword(email: string): Promise<UserWithPassword | null> {
+    const startTime = Date.now();
+    const normalizedEmail = email.toLowerCase();
+    
+    try {
+      dbLogger.debug({ 
+        email: normalizedEmail, 
+        operation: 'findByEmailWithPassword' 
+      }, 'Finding user by email with password');
+      
+      const user = await this.database.user.findUnique({
+        where: { email: normalizedEmail },
+      });
+
+      const duration = Date.now() - startTime;
+      loggers.dbQuery('findUnique', 'user', duration);
+
+      if (!user) {
+        dbLogger.debug({ 
+          email: normalizedEmail, 
+          duration 
+        }, 'User not found by email');
+        return null;
+      }
+
+      dbLogger.debug({ 
+        userId: user.id, 
+        email: normalizedEmail, 
+        duration 
+      }, 'User found by email with password');
+      
+      return this.mapToUserWithPassword(user);
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      loggers.dbError(error, 'findUnique', 'user');
+      
+      dbLogger.error({
+        error,
+        email: normalizedEmail,
+        duration,
+        operation: 'findByEmailWithPassword'
+      }, 'Failed to find user by email with password');
+      
+      throw new Error(ERROR_MESSAGES.DATABASE_CONNECTION_ERROR);
+    }
+  }
+
+  /**
+   * Buscar usuario por username (sin password)
+   */
+  async findByUsername(username: string): Promise<UserWithoutPassword | null> {
+    const startTime = Date.now();
+    
+    try {
+      dbLogger.debug({ 
+        username, 
+        operation: 'findByUsername' 
+      }, 'Finding user by username');
       
       const user = await this.database.user.findUnique({
         where: { username },
-        include: {
-          refreshTokens: {
-            where: { isRevoked: false },
-            orderBy: { createdAt: 'desc' },
-          },
-          userSessions: {
-            where: { isActive: true },
-            orderBy: { lastSeen: 'desc' },
-          },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+          isActive: true,
+          isVerified: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
+          // password: false - explícitamente excluido
         },
       });
 
+      const duration = Date.now() - startTime;
+      loggers.dbQuery('findUnique', 'user', duration);
+
       if (!user) {
-        logger.debug({ username }, 'User not found by username');
+        dbLogger.debug({ 
+          username, 
+          duration 
+        }, 'User not found by username');
         return null;
       }
 
-      return this.mapToEntity(user);
-    } catch (error) {
-      logger.error({ error, username }, 'Failed to find user by username');
-      throw new Error('Failed to retrieve user');
+      dbLogger.debug({ 
+        userId: user.id, 
+        username, 
+        duration 
+      }, 'User found by username');
+      
+      return this.mapToUserWithoutPassword(user);
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      loggers.dbError(error, 'findUnique', 'user');
+      
+      dbLogger.error({
+        error,
+        username,
+        duration,
+        operation: 'findByUsername'
+      }, 'Failed to find user by username');
+      
+      throw new Error(ERROR_MESSAGES.DATABASE_CONNECTION_ERROR);
+    }
+  }
+
+  /**
+   * Buscar usuario por username (con password para autenticación)
+   */
+  async findByUsernameWithPassword(username: string): Promise<UserWithPassword | null> {
+    const startTime = Date.now();
+    
+    try {
+      dbLogger.debug({ 
+        username, 
+        operation: 'findByUsernameWithPassword' 
+      }, 'Finding user by username with password');
+      
+      const user = await this.database.user.findUnique({
+        where: { username },
+      });
+
+      const duration = Date.now() - startTime;
+      loggers.dbQuery('findUnique', 'user', duration);
+
+      if (!user) {
+        dbLogger.debug({ 
+          username, 
+          duration 
+        }, 'User not found by username');
+        return null;
+      }
+
+      dbLogger.debug({ 
+        userId: user.id, 
+        username, 
+        duration 
+      }, 'User found by username with password');
+      
+      return this.mapToUserWithPassword(user);
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      loggers.dbError(error, 'findUnique', 'user');
+      
+      dbLogger.error({
+        error,
+        username,
+        duration,
+        operation: 'findByUsernameWithPassword'
+      }, 'Failed to find user by username with password');
+      
+      throw new Error(ERROR_MESSAGES.DATABASE_CONNECTION_ERROR);
     }
   }
 
   /**
    * Actualizar datos del usuario
    */
-  async update(id: string, data: UpdateUserData): Promise<User> {
+  async update(id: string, data: UpdateUserData): Promise<UserWithoutPassword> {
+    const startTime = Date.now();
+    
     try {
-      logger.info({ userId: id, updateData: data }, 'Updating user');
+      dbLogger.info({ 
+        userId: id, 
+        updateFields: Object.keys(data),
+        operation: 'update'
+      }, 'Updating user');
       
       const user = await this.database.user.update({
         where: { id },
@@ -159,28 +422,60 @@ export class UserRepository implements IUserRepository {
           ...data,
           updatedAt: new Date(),
         },
-        include: {
-          refreshTokens: {
-            where: { isRevoked: false },
-            orderBy: { createdAt: 'desc' },
-          },
-          userSessions: {
-            where: { isActive: true },
-            orderBy: { lastSeen: 'desc' },
-          },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+          isActive: true,
+          isVerified: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
+          // password: false - explícitamente excluido
         },
       });
 
-      logger.info({ userId: id }, 'User updated successfully');
-      return this.mapToEntity(user);
-    } catch (error: any) {
-      logger.error({ error, userId: id }, 'Failed to update user');
+      const duration = Date.now() - startTime;
+      loggers.dbQuery('update', 'user', duration, id);
       
-      if (error.code === 'P2025') {
+      dbLogger.info({ 
+        userId: id, 
+        updatedFields: Object.keys(data),
+        duration 
+      }, 'User updated successfully');
+      
+      return this.mapToUserWithoutPassword(user);
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      loggers.dbError(error, 'update', 'user', id);
+      
+      dbLogger.error({
+        error,
+        userId: id,
+        updateData: data,
+        duration,
+        operation: 'update'
+      }, 'Failed to update user');
+      
+      if (error.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND) {
         throw new Error(ERROR_MESSAGES.USER_NOT_FOUND);
       }
       
-      throw new Error('Failed to update user');
+      if (error.code === PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION) {
+        const target = error.meta?.target;
+        if (target?.includes('email')) {
+          throw new Error(ERROR_MESSAGES.USER_ALREADY_EXISTS);
+        }
+        if (target?.includes('username')) {
+          throw new Error(ERROR_MESSAGES.USER_ALREADY_EXISTS);
+        }
+        throw new Error(ERROR_MESSAGES.USER_ALREADY_EXISTS);
+      }
+      
+      throw new Error(ERROR_MESSAGES.DATABASE_CONNECTION_ERROR);
     }
   }
 
@@ -188,8 +483,13 @@ export class UserRepository implements IUserRepository {
    * Actualizar último login del usuario
    */
   async updateLastLogin(id: string): Promise<void> {
+    const startTime = Date.now();
+    
     try {
-      logger.debug({ userId: id }, 'Updating user last login');
+      dbLogger.debug({ 
+        userId: id, 
+        operation: 'updateLastLogin' 
+      }, 'Updating user last login');
       
       await this.database.user.update({
         where: { id },
@@ -199,15 +499,29 @@ export class UserRepository implements IUserRepository {
         },
       });
 
-      logger.debug({ userId: id }, 'User last login updated');
-    } catch (error: any) {
-      logger.error({ error, userId: id }, 'Failed to update last login');
+      const duration = Date.now() - startTime;
+      loggers.dbQuery('update', 'user', duration, id);
       
-      if (error.code === 'P2025') {
+      dbLogger.debug({ 
+        userId: id, 
+        duration 
+      }, 'User last login updated');
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      loggers.dbError(error, 'update', 'user', id);
+      
+      dbLogger.error({
+        error,
+        userId: id,
+        duration,
+        operation: 'updateLastLogin'
+      }, 'Failed to update last login');
+      
+      if (error.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND) {
         throw new Error(ERROR_MESSAGES.USER_NOT_FOUND);
       }
       
-      throw new Error('Failed to update last login');
+      throw new Error(ERROR_MESSAGES.DATABASE_CONNECTION_ERROR);
     }
   }
 
@@ -215,8 +529,13 @@ export class UserRepository implements IUserRepository {
    * Actualizar contraseña del usuario
    */
   async updatePassword(id: string, hashedPassword: string): Promise<void> {
+    const startTime = Date.now();
+    
     try {
-      logger.info({ userId: id }, 'Updating user password');
+      dbLogger.info({ 
+        userId: id, 
+        operation: 'updatePassword' 
+      }, 'Updating user password');
       
       await this.database.user.update({
         where: { id },
@@ -226,15 +545,32 @@ export class UserRepository implements IUserRepository {
         },
       });
 
-      logger.info({ userId: id }, 'User password updated successfully');
-    } catch (error: any) {
-      logger.error({ error, userId: id }, 'Failed to update password');
+      const duration = Date.now() - startTime;
+      loggers.dbQuery('update', 'user', duration, id);
       
-      if (error.code === 'P2025') {
+      dbLogger.info({ 
+        userId: id, 
+        duration 
+      }, 'User password updated successfully');
+      
+      // Log de seguridad
+      loggers.passwordChanged(id, '', ''); // Email se obtendría en el servicio
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      loggers.dbError(error, 'update', 'user', id);
+      
+      dbLogger.error({
+        error,
+        userId: id,
+        duration,
+        operation: 'updatePassword'
+      }, 'Failed to update password');
+      
+      if (error.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND) {
         throw new Error(ERROR_MESSAGES.USER_NOT_FOUND);
       }
       
-      throw new Error('Failed to update password');
+      throw new Error(ERROR_MESSAGES.DATABASE_CONNECTION_ERROR);
     }
   }
 
@@ -243,14 +579,27 @@ export class UserRepository implements IUserRepository {
    */
   async findMany(
     filters?: UserFilters, 
-    limit: number = 20, 
-    offset: number = 0
-  ): Promise<{ users: User[]; total: number }> {
+    pagination?: PaginationOptions
+  ): Promise<PaginatedUsers> {
+    const startTime = Date.now();
+    
     try {
-      logger.debug({ filters, limit, offset }, 'Finding multiple users');
+      const limit = Math.min(
+        pagination?.limit || DEFAULT_VALUES.PAGINATION_LIMIT,
+        DEFAULT_VALUES.PAGINATION_MAX_LIMIT
+      );
+      const page = Math.max(pagination?.page || 1, 1);
+      const offset = (page - 1) * limit;
+      
+      dbLogger.debug({ 
+        filters, 
+        pagination: { ...pagination, limit, page },
+        operation: 'findMany'
+      }, 'Finding multiple users');
       
       const where: any = {};
       
+      // Aplicar filtros
       if (filters?.isActive !== undefined) {
         where.isActive = filters.isActive;
       }
@@ -269,223 +618,34 @@ export class UserRepository implements IUserRepository {
         }
       }
 
-      const [users, total] = await Promise.all([
-        this.database.user.findMany({
-          where,
-          skip: offset,
-          take: limit,
-          orderBy: { createdAt: 'desc' },
-          include: {
-            refreshTokens: {
-              where: { isRevoked: false },
-              orderBy: { createdAt: 'desc' },
-            },
-            userSessions: {
-              where: { isActive: true },
-              orderBy: { lastSeen: 'desc' },
-            },
-          },
-        }),
-        this.database.user.count({ where }),
-      ]);
-
-      logger.debug({ count: users.length, total }, 'Found users');
-      
-      return {
-        users: users.map(user => this.mapToEntity(user)),
-        total,
-      };
-    } catch (error) {
-      logger.error({ error, filters }, 'Failed to find users');
-      throw new Error('Failed to retrieve users');
-    }
-  }
-
-  /**
-   * Verificar si existe un usuario con email o username
-   */
-  async exists(email: string, username?: string): Promise<boolean> {
-    try {
-      logger.debug({ email, username }, 'Checking user existence');
-      
-      const where: any = {
-        OR: [{ email }],
-      };
-      
-      if (username) {
-        where.OR.push({ username });
-      }
-
-      const count = await this.database.user.count({ where });
-      
-      const exists = count > 0;
-      logger.debug({ email, username, exists }, 'User existence check completed');
-      
-      return exists;
-    } catch (error) {
-      logger.error({ error, email, username }, 'Failed to check user existence');
-      throw new Error('Failed to check user existence');
-    }
-  }
-
-  /**
-   * Desactivar usuario (soft delete)
-   */
-  async deactivate(id: string): Promise<void> {
-    try {
-      logger.info({ userId: id }, 'Deactivating user');
-      
-      await this.database.user.update({
-        where: { id },
-        data: {
-          isActive: false,
-          updatedAt: new Date(),
-        },
-      });
-
-      logger.info({ userId: id }, 'User deactivated successfully');
-    } catch (error: any) {
-      logger.error({ error, userId: id }, 'Failed to deactivate user');
-      
-      if (error.code === 'P2025') {
-        throw new Error(ERROR_MESSAGES.USER_NOT_FOUND);
-      }
-      
-      throw new Error('Failed to deactivate user');
-    }
-  }
-
-  /**
-   * Eliminar usuario completamente (hard delete)
-   */
-  async delete(id: string): Promise<void> {
-    try {
-      logger.warn({ userId: id }, 'Hard deleting user');
-      
-      // Eliminar en transacción para mantener integridad
-      await this.database.$transaction(async (tx) => {
-        // Eliminar refresh tokens
-        await tx.refreshToken.deleteMany({
-          where: { userId: id },
-        });
-
-        // Eliminar sesiones
-        await tx.userSession.deleteMany({
-          where: { userId: id },
-        });
-
-        // Eliminar intentos de login
-        const user = await tx.user.findUnique({
-          where: { id },
-          select: { email: true },
-        });
-
-        if (user) {
-          await tx.loginAttempt.deleteMany({
-            where: { email: user.email },
-          });
+      // Filtro de búsqueda por texto
+      if (filters?.search) {
+        const searchTerm = filters.search.trim();
+        if (searchTerm) {
+          where.OR = [
+            { email: { contains: searchTerm, mode: 'insensitive' as const } },
+            { username: { contains: searchTerm, mode: 'insensitive' as const } },
+            { firstName: { contains: searchTerm, mode: 'insensitive' as const } },
+            { lastName: { contains: searchTerm, mode: 'insensitive' as const } },
+          ];
         }
-
-        // Eliminar usuario
-        await tx.user.delete({
-          where: { id },
-        });
-      });
-
-      logger.warn({ userId: id }, 'User hard deleted successfully');
-    } catch (error: any) {
-      logger.error({ error, userId: id }, 'Failed to delete user');
-      
-      if (error.code === 'P2025') {
-        throw new Error(ERROR_MESSAGES.USER_NOT_FOUND);
       }
-      
-      throw new Error('Failed to delete user');
-    }
-  }
 
-  /**
-   * Mapear datos de Prisma a entidad de dominio
-   */
-  private mapToEntity(prismaUser: any): User {
-    return new User(
-      prismaUser.id,
-      prismaUser.email,
-      prismaUser.username,
-      prismaUser.password,
-      prismaUser.firstName,
-      prismaUser.lastName,
-      prismaUser.avatar,
-      prismaUser.isActive,
-      prismaUser.isVerified,
-      prismaUser.lastLoginAt,
-      prismaUser.createdAt,
-      prismaUser.updatedAt,
-      prismaUser.refreshTokens || [],
-      prismaUser.userSessions || []
-    );
-  }
-
-  /**
-   * Método para obtener estadísticas de usuarios
-   */
-  async getUserStats(): Promise<{
-    total: number;
-    active: number;
-    verified: number;
-    newThisMonth: number;
-  }> {
-    try {
-      const now = new Date();
-      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-      const [total, active, verified, newThisMonth] = await Promise.all([
-        this.database.user.count(),
-        this.database.user.count({ where: { isActive: true } }),
-        this.database.user.count({ where: { isVerified: true } }),
-        this.database.user.count({
-          where: { createdAt: { gte: firstDayOfMonth } },
-        }),
-      ]);
-
-      return { total, active, verified, newThisMonth };
-    } catch (error) {
-      logger.error({ error }, 'Failed to get user stats');
-      throw new Error('Failed to retrieve user statistics');
-    }
-  }
-
-  /**
-   * Buscar usuarios por criterio de búsqueda (email, username, nombre)
-   */
-  async searchUsers(
-    searchTerm: string, 
-    limit: number = 20, 
-    offset: number = 0
-  ): Promise<{ users: User[]; total: number }> {
-    try {
-      logger.debug({ searchTerm, limit, offset }, 'Searching users');
-      
-      const where = {
-        AND: [
-          { isActive: true },
-          {
-            OR: [
-              { email: { contains: searchTerm, mode: 'insensitive' as const } },
-              { username: { contains: searchTerm, mode: 'insensitive' as const } },
-              { firstName: { contains: searchTerm, mode: 'insensitive' as const } },
-              { lastName: { contains: searchTerm, mode: 'insensitive' as const } },
-            ],
-          },
-        ],
-      };
+      // Configurar ordenamiento
+      let orderBy: any = { createdAt: 'desc' };
+      if (pagination?.sortBy) {
+        const validSortFields = ['createdAt', 'updatedAt', 'email', 'username', 'lastLoginAt'];
+        if (validSortFields.includes(pagination.sortBy)) {
+          orderBy = { [pagination.sortBy]: pagination.sortOrder || 'asc' };
+        }
+      }
 
       const [users, total] = await Promise.all([
         this.database.user.findMany({
           where,
           skip: offset,
           take: limit,
-          orderBy: { createdAt: 'desc' },
+          orderBy,
           select: {
             id: true,
             email: true,
@@ -498,19 +658,439 @@ export class UserRepository implements IUserRepository {
             lastLoginAt: true,
             createdAt: true,
             updatedAt: true,
-            // No incluir password en búsquedas
+            // Excluir password explícitamente
           },
         }),
         this.database.user.count({ where }),
       ]);
 
+      const duration = Date.now() - startTime;
+      loggers.dbQuery('findMany', 'user', duration);
+      
+      dbLogger.debug({ 
+        count: users.length, 
+        total, 
+        page, 
+        limit,
+        duration 
+      }, 'Found users');
+      
+      const totalPages = Math.ceil(total / limit);
+      
+      // Mapear usuarios sin password
+      const mappedUsers = users.map(user => User.fromPrisma({ 
+        ...user, 
+        password: '' // Password vacío para listados
+      }));
+      
       return {
-        users: users.map(user => this.mapToEntity({ ...user, password: '', refreshTokens: [], userSessions: [] })),
+        users: mappedUsers,
         total,
+        page,
+        limit,
+        totalPages,
       };
-    } catch (error) {
-      logger.error({ error, searchTerm }, 'Failed to search users');
-      throw new Error('Failed to search users');
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      loggers.dbError(error, 'findMany', 'user');
+      
+      dbLogger.error({
+        error,
+        filters,
+        pagination,
+        duration,
+        operation: 'findMany'
+      }, 'Failed to find users');
+      
+      throw new Error(ERROR_MESSAGES.DATABASE_CONNECTION_ERROR);
+    }
+  }
+
+  /**
+   * Verificar si existe un usuario con email o username
+   */
+  async exists(email: string, username?: string): Promise<boolean> {
+    const startTime = Date.now();
+    const normalizedEmail = email.toLowerCase();
+    
+    try {
+      dbLogger.debug({ 
+        email: normalizedEmail, 
+        username,
+        operation: 'exists'
+      }, 'Checking user existence');
+      
+      const where: any = {
+        OR: [{ email: normalizedEmail }],
+      };
+      
+      if (username) {
+        where.OR.push({ username });
+      }
+
+      const count = await this.database.user.count({ where });
+      
+      const duration = Date.now() - startTime;
+      loggers.dbQuery('count', 'user', duration);
+      
+      const exists = count > 0;
+      
+      dbLogger.debug({ 
+        email: normalizedEmail, 
+        username, 
+        exists,
+        duration 
+      }, 'User existence check completed');
+      
+      return exists;
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      loggers.dbError(error, 'count', 'user');
+      
+      dbLogger.error({
+        error,
+        email: normalizedEmail,
+        username,
+        duration,
+        operation: 'exists'
+      }, 'Failed to check user existence');
+      
+      throw new Error(ERROR_MESSAGES.DATABASE_CONNECTION_ERROR);
+    }
+  }
+
+  /**
+   * Obtener sesiones activas del usuario
+   */
+  async getUserSessions(userId: string): Promise<UserSession[]> {
+    const startTime = Date.now();
+    
+    try {
+      dbLogger.debug({ 
+        userId,
+        operation: 'getUserSessions'
+      }, 'Getting user sessions');
+      
+      const sessions = await this.database.userSession.findMany({
+        where: { 
+          userId,
+          isActive: true 
+        },
+        orderBy: { lastSeen: 'desc' },
+      });
+
+      const duration = Date.now() - startTime;
+      loggers.dbQuery('findMany', 'userSession', duration, userId);
+      
+      dbLogger.debug({ 
+        userId, 
+        sessionCount: sessions.length,
+        duration 
+      }, 'User sessions retrieved');
+
+      return sessions.map(session => ({
+        id: session.id,
+        sessionId: session.sessionId || session.id, // Fallback si no existe sessionId
+        userId: session.userId,
+        device: session.device || undefined, // Corregido: usar 'device' en lugar de 'deviceInfo'
+        ipAddress: session.ipAddress || undefined,
+        location: session.location || undefined, // Usar el campo correcto
+        userAgent: session.userAgent || undefined,
+        isActive: session.isActive,
+        lastSeen: session.lastSeen,
+        createdAt: session.createdAt,
+        expiresAt: session.expiresAt,
+      }));
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      loggers.dbError(error, 'findMany', 'userSession', userId);
+      
+      dbLogger.error({
+        error,
+        userId,
+        duration,
+        operation: 'getUserSessions'
+      }, 'Failed to get user sessions');
+      
+      throw new Error(ERROR_MESSAGES.DATABASE_CONNECTION_ERROR);
+    }
+  }
+
+  /**
+   * Desactivar usuario (soft delete)
+   */
+  async deactivate(id: string): Promise<void> {
+    const startTime = Date.now();
+    
+    try {
+      dbLogger.info({ 
+        userId: id,
+        operation: 'deactivate'
+      }, 'Deactivating user');
+      
+      await this.database.user.update({
+        where: { id },
+        data: {
+          isActive: false,
+          updatedAt: new Date(),
+        },
+      });
+
+      const duration = Date.now() - startTime;
+      loggers.dbQuery('update', 'user', duration, id);
+      
+      dbLogger.info({ 
+        userId: id,
+        duration 
+      }, 'User deactivated successfully');
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      loggers.dbError(error, 'update', 'user', id);
+      
+      dbLogger.error({
+        error,
+        userId: id,
+        duration,
+        operation: 'deactivate'
+      }, 'Failed to deactivate user');
+      
+      if (error.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND) {
+        throw new Error(ERROR_MESSAGES.USER_NOT_FOUND);
+      }
+      
+      throw new Error(ERROR_MESSAGES.DATABASE_CONNECTION_ERROR);
+    }
+  }
+
+  /**
+   * Activar usuario
+   */
+  async activate(id: string): Promise<void> {
+    const startTime = Date.now();
+    
+    try {
+      dbLogger.info({ 
+        userId: id,
+        operation: 'activate'
+      }, 'Activating user');
+      
+      await this.database.user.update({
+        where: { id },
+        data: {
+          isActive: true,
+          updatedAt: new Date(),
+        },
+      });
+
+      const duration = Date.now() - startTime;
+      loggers.dbQuery('update', 'user', duration, id);
+      
+      dbLogger.info({ 
+        userId: id,
+        duration 
+      }, 'User activated successfully');
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      loggers.dbError(error, 'update', 'user', id);
+      
+      dbLogger.error({
+        error,
+        userId: id,
+        duration,
+        operation: 'activate'
+      }, 'Failed to activate user');
+      
+      if (error.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND) {
+        throw new Error(ERROR_MESSAGES.USER_NOT_FOUND);
+      }
+      
+      throw new Error(ERROR_MESSAGES.DATABASE_CONNECTION_ERROR);
+    }
+  }
+
+  /**
+   * Eliminar usuario completamente (hard delete)
+   */
+  async delete(id: string): Promise<void> {
+    const startTime = Date.now();
+    
+    try {
+      dbLogger.warn({ 
+        userId: id,
+        operation: 'delete'
+      }, 'Hard deleting user');
+      
+      // Eliminar en transacción para mantener integridad referencial
+      await this.database.$transaction(async (tx) => {
+        // Obtener email del usuario para eliminar loginAttempts
+        const user = await tx.user.findUnique({
+          where: { id },
+          select: { email: true },
+        });
+
+        if (!user) {
+          throw new Error(ERROR_MESSAGES.USER_NOT_FOUND);
+        }
+
+        // Eliminar refresh tokens
+        await tx.refreshToken.deleteMany({
+          where: { userId: id },
+        });
+
+        // Eliminar sesiones de usuario
+        await tx.userSession.deleteMany({
+          where: { userId: id },
+        });
+
+        // Eliminar intentos de login por email
+        await tx.loginAttempt.deleteMany({
+          where: { email: user.email },
+        });
+
+        // Eliminar tokens de verificación/reset si existen en tu schema
+        // await tx.verificationToken.deleteMany({
+        //   where: { userId: id },
+        // });
+
+        // Finalmente eliminar el usuario
+        await tx.user.delete({
+          where: { id },
+        });
+      });
+
+      const duration = Date.now() - startTime;
+      loggers.dbQuery('delete', 'user', duration, id);
+      
+      dbLogger.warn({ 
+        userId: id,
+        duration 
+      }, 'User hard deleted successfully');
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      loggers.dbError(error, 'delete', 'user', id);
+      
+      dbLogger.error({
+        error,
+        userId: id,
+        duration,
+        operation: 'delete'
+      }, 'Failed to delete user');
+      
+      if (error.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND) {
+        throw new Error(ERROR_MESSAGES.USER_NOT_FOUND);
+      }
+      
+      throw new Error(ERROR_MESSAGES.DATABASE_CONNECTION_ERROR);
+    }
+  }
+
+  /**
+   * Mapear datos de Prisma a UserWithPassword
+   */
+  private mapToUserWithPassword(prismaUser: any): UserWithPassword {
+    try {
+      return {
+        id: prismaUser.id,
+        email: prismaUser.email,
+        username: prismaUser.username,
+        password: prismaUser.password,
+        firstName: prismaUser.firstName,
+        lastName: prismaUser.lastName,
+        avatar: prismaUser.avatar,
+        isActive: prismaUser.isActive,
+        isVerified: prismaUser.isVerified,
+        lastLoginAt: prismaUser.lastLoginAt,
+        createdAt: prismaUser.createdAt,
+        updatedAt: prismaUser.updatedAt,
+      };
+    } catch (error: any) {
+      dbLogger.error({
+        error,
+        userId: prismaUser?.id,
+        operation: 'mapToUserWithPassword'
+      }, 'Failed to map Prisma user to UserWithPassword');
+      
+      throw new Error('Invalid user data structure');
+    }
+  }
+
+  /**
+   * Mapear datos de Prisma a UserWithoutPassword
+   */
+  private mapToUserWithoutPassword(prismaUser: any): UserWithoutPassword {
+    try {
+      return {
+        id: prismaUser.id,
+        email: prismaUser.email,
+        username: prismaUser.username,
+        firstName: prismaUser.firstName,
+        lastName: prismaUser.lastName,
+        avatar: prismaUser.avatar,
+        isActive: prismaUser.isActive,
+        isVerified: prismaUser.isVerified,
+        lastLoginAt: prismaUser.lastLoginAt,
+        createdAt: prismaUser.createdAt,
+        updatedAt: prismaUser.updatedAt,
+      };
+    } catch (error: any) {
+      dbLogger.error({
+        error,
+        userId: prismaUser?.id,
+        operation: 'mapToUserWithoutPassword'
+      }, 'Failed to map Prisma user to UserWithoutPassword');
+      
+      throw new Error('Invalid user data structure');
+    }
+  }
+
+  /**
+   * Método para obtener estadísticas de usuarios
+   */
+  async getUserStats(): Promise<{
+    total: number;
+    active: number;
+    verified: number;
+    newThisMonth: number;
+  }> {
+    const startTime = Date.now();
+    
+    try {
+      dbLogger.debug({ operation: 'getUserStats' }, 'Getting user statistics');
+      
+      const now = new Date();
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      const [total, active, verified, newThisMonth] = await Promise.all([
+        this.database.user.count(),
+        this.database.user.count({ where: { isActive: true } }),
+        this.database.user.count({ where: { isVerified: true } }),
+        this.database.user.count({
+          where: { createdAt: { gte: firstDayOfMonth } },
+        }),
+      ]);
+
+      const duration = Date.now() - startTime;
+      loggers.dbQuery('count', 'user', duration);
+      
+      const stats = { total, active, verified, newThisMonth };
+      
+      dbLogger.debug({ 
+        stats,
+        duration 
+      }, 'User statistics retrieved');
+      
+      return stats;
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      loggers.dbError(error, 'count', 'user');
+      
+      dbLogger.error({
+        error,
+        duration,
+        operation: 'getUserStats'
+      }, 'Failed to get user stats');
+      
+      throw new Error(ERROR_MESSAGES.DATABASE_CONNECTION_ERROR);
     }
   }
 }

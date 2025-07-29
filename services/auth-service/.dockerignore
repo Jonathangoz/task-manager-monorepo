@@ -1,0 +1,8 @@
+# task-manager-auth-service
+node_modules/
+dist/
+.env
+.git
+.vscode
+*.log
+logs/

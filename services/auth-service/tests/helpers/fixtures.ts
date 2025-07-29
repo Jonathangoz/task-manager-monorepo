@@ -1,5 +1,5 @@
-import { CreateUserData } from '@/core/domain/interfaces/IUserRepository';
-import { LoginCredentials, RegisterData } from '@/core/domain/interfaces/IAuthService';
+import { CreateUserData } from '@/core/interfaces/IUserRepository';
+import { LoginCredentials, RegisterData } from '@/core/interfaces/IAuthService';
 
 export const userFixtures = {
   validUser: {

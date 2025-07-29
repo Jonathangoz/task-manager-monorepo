@@ -1,27 +1,146 @@
-# Agregar task-service al compose
+# Task-Manager-monorepo docker-compose.dev.yml
+
 services:
-  # ... servicios existentes
+  # ==============================================
+  # DATABASES
+  # ==============================================
   
+  # Auth Service Database
+  auth-db:
+    image: postgres:16-alpine
+    container_name: task-manager-auth-db
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d auth_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - task-manager-network
+
+  # Task Service Database
+  task-db:
+    image: postgres:16-alpine
+    container_name: task-manager-task-db
+    environment:
+      POSTGRES_DB: task_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    ports:
+      - "5433:5432"
+    volumes:
+      - task_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d task_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - task-manager-network
+
+  # ==============================================
+  # REDIS CACHE (SIN CONTRASEÑA)
+  # ==============================================
+  
+  redis:
+    image: redis:7-alpine
+    container_name: task-manager-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - task-manager-network
+
+  # ==============================================
+  # MICROSERVICES - SOLO BACKEND
+  # ==============================================
+
+  # Auth Service
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile.dev
+    container_name: task-manager-auth-service
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgresql://postgres:1234@auth-db:5432/auth_db
+      REDIS_URL: redis://redis:6379
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PREFIX: "auth:"
+      DATABASE_HOST: auth-db    
+      DATABASE_PORT: 5432       
+      JWT_SECRET: "base64:u+vQTtcSFJR4GsfR7D4bvK6IAsACgvb8hW62FdlEqYCP/GoZQPNCw9Bmw4iVrrSrkj998JYRz41rldpInU/K9g=="
+      REFRESH_TOKEN_SECRET: "base64:vfIeKTFck9rzwlhO4Jft2XgJmDstLnhn4ZB6anVLYeWvogGiVL/PoK+mvkHTdWYA7pQslxgzDuEMVdNPzpK2cg=="
+      JWE_SECRET: "base64:jMjjQLeL0B38/H6ujAR1eOi8cRKGxSQUQbuv72n9ew0="
+      CORS_ORIGIN: "http://localhost:3000,http://localhost:3002"
+      LOG_LEVEL: "debug"
+      LOG_PRETTY: "true"
+    volumes:
+      - ./services/auth-service:/app
+      - /app/node_modules
+      - /app/dist
+      - ./logs:/app/logs
+    depends_on:
+      auth-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - task-manager-network
+
+  # Task Service
   task-service:
     build:
-      context: ./services/task-service
-      dockerfile: Dockerfile.dev
+      context: .
+      dockerfile: services/task-service/Dockerfile.dev
     container_name: task-manager-task-service
     ports:
       - "3002:3002"
     environment:
       NODE_ENV: development
       PORT: 3002
-      DATABASE_URL: postgresql://task_user:task_password@task-db:5432/task_db
+      DATABASE_URL: postgresql://postgres:1234@task-db:5432/task_db
       REDIS_URL: redis://redis:6379
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       REDIS_PREFIX: "tasks:"
+      DATABASE_HOST: task-db    
+      DATABASE_PORT: 5432
+      SERVICE_NAME: "task-service"
       AUTH_SERVICE_URL: "http://auth-service:3001"
-      JWT_SECRET: "dev-jwt-secret-super-secure-for-development-only-minimum-64-characters"
+      JWT_SECRET: "base64:u+vQTtcSFJR4GsfR7D4bvK6IAsACgvb8hW62FdlEqYCP/GoZQPNCw9Bmw4iVrrSrkj998JYRz41rldpInU/K9g=="
       CORS_ORIGIN: "http://localhost:3000,http://localhost:3001"
+      LOG_LEVEL: "debug"
+      LOG_PRETTY: "true"
     volumes:
       - ./services/task-service:/app
       - /app/node_modules
       - /app/dist
+      - ./logs:/app/logs
     depends_on:
       task-db:
         condition: service_healthy
@@ -30,24 +149,24 @@ services:
       auth-service:
         condition: service_started
     restart: unless-stopped
+    networks:
+      - task-manager-network
 
-  # Agregar frontend al compose
-  task-frontend:
-    build:
-      context: ./frontend/task-frontend
-      dockerfile: Dockerfile.dev
-    container_name: task-manager-frontend
-    ports:
-      - "3000:3000"
-    environment:
-      NODE_ENV: development
-      NEXT_PUBLIC_AUTH_SERVICE_URL_DEV: "http://localhost:3001/api/v1"
-      NEXT_PUBLIC_TASK_SERVICE_URL_DEV: "http://localhost:3002/api/v1"
-    volumes:
-      - ./frontend/task-frontend:/app
-      - /app/node_modules
-      - /app/.next
-    depends_on:
-      - auth-service
-      - task-service
-    restart: unless-stopped
+# ==============================================
+# VOLUMES
+# ==============================================
+volumes:
+  auth_db_data:
+    name: task_manager_auth_db_data
+  task_db_data:
+    name: task_manager_task_db_data
+  redis_data:
+    name: task_manager_redis_data
+
+# ==============================================
+# NETWORKS
+# ==============================================
+networks:
+  task-manager-network:
+    name: task-manager-network
+    driver: bridge

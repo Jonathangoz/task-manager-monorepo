@@ -1,326 +1,529 @@
 // src/presentation/controllers/TaskController.ts
 import { Request, Response, NextFunction } from 'express';
+import { AuthenticatedRequest } from '@/commons/middlewares/auth.middleware';
 import { ITaskService } from '@/core/domain/interfaces/ITaskService';
-import { HTTP_STATUS, SUCCESS_MESSAGES, ERROR_CODES, ERROR_MESSAGES } from '@/utils/constants';
+import {
+  HTTP_STATUS,
+  SUCCESS_MESSAGES,
+  ERROR_CODES,
+  ERROR_MESSAGES,
+  ApiResponse,
+  TaskFilters,
+} from '@/utils/constants';
 import { logger } from '@/utils/logger';
-import { createPaginationMeta } from '@/utils/pagination';
-import { TaskFilters, SortOptions, ApiResponse } from '@/utils/constants';
+import {
+  extractPaginationParams,
+  PaginationError,
+  PaginationParams,
+} from '@/utils/pagination';
+import {
+  TaskStatus,
+  TaskPriority,
+  UpdateTaskData,
+  isValidTaskStatus,
+  isValidTaskPriority,
+} from '@/core/domain/types/TaskDomain';
+import {
+  ServiceCreateTaskData,
+  validateServiceCreateTaskData,
+  validateBulkTaskIds,
+  validateSearchQuery,
+} from '@/core/domain/interfaces/ITaskService';
 
-interface AuthenticatedRequest extends Request {
-  user: {
-    id: string;
-    email: string;
-  };
+interface TaskControllerDependencies {
+  taskService: ITaskService;
 }
 
 export class TaskController {
-  constructor(private readonly taskService: ITaskService) {}
+  constructor(private readonly dependencies: TaskControllerDependencies) {}
 
-  /**
-   * Get user tasks with pagination and filters
-   * GET /api/v1/tasks
-   */
-  getTasks = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  private get taskService(): ITaskService {
+    return this.dependencies.taskService;
+  }
+
+  getTasks = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
     try {
-      const userId = req.user.id;
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
-      
-      // Build filters
-      const filters: TaskFilters = {
-        status: req.query.status as string | string[],
-        priority: req.query.priority as string | string[],
-        categoryId: req.query.categoryId as string,
-        dueDateFrom: req.query.dueDateFrom as string,
-        dueDateTo: req.query.dueDateTo as string,
-        isOverdue: req.query.isOverdue === 'true',
-        hasDueDate: req.query.hasDueDate === 'true',
-        tags: req.query.tags as string | string[],
-        search: req.query.search as string,
-      };
+      const userId = req.user!.id;
+      const paginationParams = this.extractPaginationParamsWithErrorHandling(
+        req,
+        res
+      );
+      if (!paginationParams) return;
 
-      // Build sort options
-      const sortOptions: SortOptions = {
-        field: (req.query.sortBy as string) || 'createdAt',
-        order: (req.query.sortOrder as 'asc' | 'desc') || 'desc',
-      };
+      const filters = this.buildTaskFilters(req.query);
 
-      const result = await this.taskService.getUserTasks(userId, {
-        page,
-        limit,
+      const result = await this.taskService.getUserTasks(
+        userId,
         filters,
-        sort: sortOptions,
-      });
+        paginationParams.sort,
+        paginationParams.page,
+        paginationParams.limit
+      );
 
-      const response: ApiResponse = {
-        success: true,
-        message: SUCCESS_MESSAGES.TASKS_RETRIEVED,
-        data: result.tasks,
-        meta: {
-          timestamp: new Date().toISOString(),
-          requestId: req.headers['x-request-id'] as string,
-          pagination: createPaginationMeta(page, limit, result.total),
-        },
-      };
+      const response = this.createSuccessResponse(
+        SUCCESS_MESSAGES.TASKS_RETRIEVED,
+        result.tasks,
+        req,
+        { pagination: result.meta }
+      );
 
       res.status(HTTP_STATUS.OK).json(response);
 
-      logger.info(
-        { userId, page, limit, total: result.total },
-        'Tasks retrieved successfully'
-      );
+      this.logSuccess('Tasks retrieved successfully', {
+        userId,
+        page: paginationParams.page,
+        limit: paginationParams.limit,
+        total: result.meta.total,
+      });
     } catch (error) {
       next(error);
     }
   };
 
-  /**
-   * Get single task by ID
-   * GET /api/v1/tasks/:id
-   */
-  getTaskById = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  getTaskById = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
+      const userId = req.user!.id;
 
       const task = await this.taskService.getTaskById(id, userId);
 
-      const response: ApiResponse = {
-        success: true,
-        message: 'Task retrieved successfully',
-        data: task,
-        meta: {
-          timestamp: new Date().toISOString(),
-          requestId: req.headers['x-request-id'] as string,
-        },
-      };
+      if (!task) {
+        this.sendNotFoundResponse(
+          res,
+          ERROR_MESSAGES.TASK_NOT_FOUND,
+          ERROR_CODES.TASK_NOT_FOUND
+        );
+        return;
+      }
+
+      const response = this.createSuccessResponse(
+        'Task retrieved successfully',
+        task,
+        req
+      );
 
       res.status(HTTP_STATUS.OK).json(response);
-
-      logger.info({ taskId: id, userId }, 'Task retrieved by ID');
     } catch (error) {
       next(error);
     }
   };
 
-  /**
-   * Create new task
-   * POST /api/v1/tasks
-   */
-  createTask = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  createTask = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
     try {
-      const userId = req.user.id;
-      const taskData = {
-        ...req.body,
-        userId,
-      };
-
-      const task = await this.taskService.createTask(taskData);
-
-      const response: ApiResponse = {
-        success: true,
-        message: SUCCESS_MESSAGES.TASK_CREATED,
-        data: task,
-        meta: {
-          timestamp: new Date().toISOString(),
-          requestId: req.headers['x-request-id'] as string,
-        },
-      };
-
-      res.status(HTTP_STATUS.CREATED).json(response);
-
-      logger.info(
-        { taskId: task.id, userId, title: task.title },
-        'Task created successfully'
+      const userId = req.user!.id;
+      const taskData = validateServiceCreateTaskData(req.body);
+      const task = await this.taskService.createTask(userId, taskData);
+      const response = this.createSuccessResponse(
+        SUCCESS_MESSAGES.TASK_CREATED,
+        task,
+        req
       );
+      res.status(HTTP_STATUS.CREATED).json(response);
     } catch (error) {
       next(error);
     }
   };
 
-  /**
-   * Update task
-   * PUT /api/v1/tasks/:id
-   */
-  updateTask = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  updateTask = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
-      const updateData = req.body;
-
+      const userId = req.user!.id;
+      const updateData = this.extractUpdateTaskData(req.body);
       const task = await this.taskService.updateTask(id, userId, updateData);
-
-      const response: ApiResponse = {
-        success: true,
-        message: SUCCESS_MESSAGES.TASK_UPDATED,
-        data: task,
-        meta: {
-          timestamp: new Date().toISOString(),
-          requestId: req.headers['x-request-id'] as string,
-        },
-      };
-
-      res.status(HTTP_STATUS.OK).json(response);
-
-      logger.info(
-        { taskId: id, userId, changes: Object.keys(updateData) },
-        'Task updated successfully'
+      const response = this.createSuccessResponse(
+        SUCCESS_MESSAGES.TASK_UPDATED,
+        task,
+        req
       );
+      res.status(HTTP_STATUS.OK).json(response);
     } catch (error) {
       next(error);
     }
   };
 
-  /**
-   * Update task status only
-   * PATCH /api/v1/tasks/:id/status
-   */
-  updateTaskStatus = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  updateTaskStatus = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
     try {
       const { id } = req.params;
       const { status } = req.body;
-      const userId = req.user.id;
+      const userId = req.user!.id;
 
-      const task = await this.taskService.updateTaskStatus(id, userId, status);
+      if (!status || !isValidTaskStatus(status)) {
+        this.sendValidationErrorResponse(
+          res,
+          'Invalid task status provided',
+          ERROR_CODES.INVALID_TASK_STATUS
+        );
+        return;
+      }
 
-      const response: ApiResponse = {
-        success: true,
-        message: SUCCESS_MESSAGES.TASK_STATUS_UPDATED,
-        data: task,
-        meta: {
-          timestamp: new Date().toISOString(),
-          requestId: req.headers['x-request-id'] as string,
-        },
-      };
-
-      res.status(HTTP_STATUS.OK).json(response);
-
-      logger.info(
-        { taskId: id, userId, newStatus: status },
-        'Task status updated'
+      const task = await this.taskService.updateTaskStatus(
+        id,
+        userId,
+        status as TaskStatus
       );
+      const response = this.createSuccessResponse(
+        SUCCESS_MESSAGES.TASK_STATUS_UPDATED,
+        task,
+        req
+      );
+      res.status(HTTP_STATUS.OK).json(response);
     } catch (error) {
       next(error);
     }
   };
 
-  /**
-   * Update task priority only
-   * PATCH /api/v1/tasks/:id/priority
-   */
-  updateTaskPriority = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  updateTaskPriority = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
     try {
       const { id } = req.params;
       const { priority } = req.body;
-      const userId = req.user.id;
+      const userId = req.user!.id;
 
-      const task = await this.taskService.updateTaskPriority(id, userId, priority);
+      if (!priority || !isValidTaskPriority(priority)) {
+        this.sendValidationErrorResponse(
+          res,
+          'Invalid task priority provided',
+          ERROR_CODES.INVALID_TASK_PRIORITY
+        );
+        return;
+      }
 
-      const response: ApiResponse = {
-        success: true,
-        message: SUCCESS_MESSAGES.TASK_PRIORITY_UPDATED,
-        data: task,
-        meta: {
-          timestamp: new Date().toISOString(),
-          requestId: req.headers['x-request-id'] as string,
-        },
-      };
-
-      res.status(HTTP_STATUS.OK).json(response);
-
-      logger.info(
-        { taskId: id, userId, newPriority: priority },
-        'Task priority updated'
+      const task = await this.taskService.updateTaskPriority(
+        id,
+        userId,
+        priority as TaskPriority
       );
+      const response = this.createSuccessResponse(
+        SUCCESS_MESSAGES.TASK_PRIORITY_UPDATED,
+        task,
+        req
+      );
+      res.status(HTTP_STATUS.OK).json(response);
     } catch (error) {
       next(error);
     }
   };
 
-  /**
-   * Delete task
-   * DELETE /api/v1/tasks/:id
-   */
-  deleteTask = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  deleteTask = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
     try {
       const { id } = req.params;
-      const userId = req.user.id;
-
+      const userId = req.user!.id;
       await this.taskService.deleteTask(id, userId);
-
-      const response: ApiResponse = {
-        success: true,
-        message: SUCCESS_MESSAGES.TASK_DELETED,
-        meta: {
-          timestamp: new Date().toISOString(),
-          requestId: req.headers['x-request-id'] as string,
-        },
-      };
-
-      res.status(HTTP_STATUS.OK).json(response);
-
-      logger.info({ taskId: id, userId }, 'Task deleted successfully');
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  /**
-   * Get task statistics
-   * GET /api/v1/tasks/stats
-   */
-  getTaskStats = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const userId = req.user.id;
-      const stats = await this.taskService.getUserTaskStats(userId);
-
-      const response: ApiResponse = {
-        success: true,
-        message: SUCCESS_MESSAGES.STATS_RETRIEVED,
-        data: stats,
-        meta: {
-          timestamp: new Date().toISOString(),
-          requestId: req.headers['x-request-id'] as string,
-        },
-      };
-
-      res.status(HTTP_STATUS.OK).json(response);
-
-      logger.info({ userId }, 'Task statistics retrieved');
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  /**
-   * Bulk update tasks
-   * PATCH /api/v1/tasks/bulk
-   */
-  bulkUpdateTasks = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const { taskIds, updates } = req.body;
-      const userId = req.user.id;
-
-      const result = await this.taskService.bulkUpdateTasks(taskIds, userId, updates);
-
-      const response: ApiResponse = {
-        success: true,
-        message: `${result.updated} tasks updated successfully`,
-        data: { updated: result.updated, failed: result.failed },
-        meta: {
-          timestamp: new Date().toISOString(),
-          requestId: req.headers['x-request-id'] as string,
-        },
-      };
-
-      res.status(HTTP_STATUS.OK).json(response);
-
-      logger.info(
-        { userId, updated: result.updated, failed: result.failed },
-        'Bulk task update completed'
+      const response = this.createSuccessResponse(
+        SUCCESS_MESSAGES.TASK_DELETED,
+        undefined,
+        req
       );
+      res.status(HTTP_STATUS.OK).json(response);
     } catch (error) {
       next(error);
     }
   };
+
+  getTaskStats = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user!.id;
+      const stats = await this.taskService.getUserStats(userId);
+      const response = this.createSuccessResponse(
+        SUCCESS_MESSAGES.STATS_RETRIEVED,
+        stats,
+        req
+      );
+      res.status(HTTP_STATUS.OK).json(response);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  markTaskAsCompleted = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const userId = req.user!.id;
+      const task = await this.taskService.markTaskAsCompleted(id, userId);
+      const response = this.createSuccessResponse(
+        SUCCESS_MESSAGES.TASK_COMPLETED,
+        task,
+        req
+      );
+      res.status(HTTP_STATUS.OK).json(response);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getTasksByCategory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { categoryId } = req.params;
+      const userId = req.user!.id;
+      const paginationParams = this.extractPaginationParamsWithErrorHandling(req, res);
+      if (!paginationParams) return;
+      const result = await this.taskService.getTasksByCategory(
+        categoryId,
+        userId,
+        paginationParams.page,
+        paginationParams.limit
+      );
+      const response = this.createSuccessResponse(
+        SUCCESS_MESSAGES.TASKS_RETRIEVED,
+        result.tasks,
+        req,
+        { pagination: result.meta }
+      );
+      res.status(HTTP_STATUS.OK).json(response);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  searchTasks = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { q: query } = req.query;
+      const userId = req.user!.id;
+      const validatedQuery = validateSearchQuery(query);
+      const paginationParams = this.extractPaginationParamsWithErrorHandling(req, res);
+      if (!paginationParams) return;
+      const filters = this.buildTaskFilters(req.query);
+      const result = await this.taskService.searchTasks(
+        userId,
+        validatedQuery,
+        filters,
+        paginationParams.page,
+        paginationParams.limit
+      );
+      const response = this.createSuccessResponse(
+        'Search completed successfully',
+        result.tasks,
+        req,
+        { pagination: result.meta }
+      );
+      res.status(HTTP_STATUS.OK).json(response);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getOverdueTasks = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user!.id;
+      const tasks = await this.taskService.getOverdueTasks(userId);
+      const response = this.createSuccessResponse(
+        'Overdue tasks retrieved successfully',
+        tasks,
+        req
+      );
+      res.status(HTTP_STATUS.OK).json(response);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  bulkUpdateTaskStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { taskIds, status } = req.body;
+      const userId = req.user!.id;
+      const validatedTaskIds = validateBulkTaskIds(taskIds);
+      if (!status || !isValidTaskStatus(status)) {
+        this.sendValidationErrorResponse(res, 'Invalid task status provided', ERROR_CODES.INVALID_TASK_STATUS);
+        return;
+      }
+      const result = await this.taskService.bulkUpdateStatus(validatedTaskIds, userId, status as TaskStatus);
+      const response = this.createSuccessResponse(
+        `Bulk operation completed: ${result.successfullyProcessed} tasks updated`,
+        result,
+        req
+      );
+      res.status(HTTP_STATUS.OK).json(response);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  bulkDeleteTasks = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { taskIds } = req.body;
+      const userId = req.user!.id;
+      const validatedTaskIds = validateBulkTaskIds(taskIds);
+      const result = await this.taskService.bulkDeleteTasks(validatedTaskIds, userId);
+      const response = this.createSuccessResponse(
+        `Bulk deletion completed: ${result.successfullyProcessed} tasks deleted`,
+        result,
+        req
+      );
+      res.status(HTTP_STATUS.OK).json(response);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  duplicateTask = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const userId = req.user!.id;
+      const modifications = req.body ? this.extractServiceCreateTaskData(req.body) : undefined;
+      const task = await this.taskService.duplicateTask(id, userId, modifications);
+      const response = this.createSuccessResponse(
+        'Task duplicated successfully',
+        task,
+        req
+      );
+      res.status(HTTP_STATUS.CREATED).json(response);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getProductivityStats = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user!.id;
+      const stats = await this.taskService.getProductivityStats(userId);
+      const response = this.createSuccessResponse(
+        'Productivity statistics retrieved successfully',
+        stats,
+        req
+      );
+      res.status(HTTP_STATUS.OK).json(response);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  exportUserTasks = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user!.id;
+      const { format = 'json' } = req.query;
+      if (!this.isValidExportFormat(format as string)) {
+        this.sendValidationErrorResponse(res, 'Export format must be json, csv, or xml', ERROR_CODES.VALIDATION_ERROR);
+        return;
+      }
+      const filters = this.buildTaskFilters(req.query);
+      const exportData = await this.taskService.exportUserTasks(
+        userId,
+        format as 'json' | 'csv' | 'xml',
+        filters
+      );
+      this.setExportHeaders(res, format as string);
+      res.status(HTTP_STATUS.OK).send(exportData);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  // ===== PRIVATE METHODS =====
+  private buildTaskFilters(query: any): TaskFilters {
+    const filters: TaskFilters = {};
+    if (query.status) filters.status = query.status;
+    if (query.priority) filters.priority = query.priority;
+    if (query.categoryId) filters.categoryId = query.categoryId;
+    // ... more filters
+    return filters;
+  }
+
+  private extractServiceCreateTaskData(body: any): Partial<ServiceCreateTaskData> {
+    const data: Partial<ServiceCreateTaskData> = {};
+    if (body.title !== undefined) data.title = body.title;
+    if (body.description !== undefined) data.description = body.description;
+    // ... more fields
+    return data;
+  }
+
+  private extractUpdateTaskData(body: any): UpdateTaskData {
+    const updateData: UpdateTaskData = {};
+    if (body.title !== undefined) updateData.title = body.title;
+    if (body.description !== undefined) updateData.description = body.description;
+    // ... more fields
+    return updateData;
+  }
+
+  private extractPaginationParamsWithErrorHandling(req: Request, res: Response): PaginationParams | null {
+    try {
+      return extractPaginationParams(req);
+    } catch (error) {
+      if (error instanceof PaginationError) {
+        res.status(error.statusCode).json({
+          success: false,
+          message: error.message,
+          error: { code: error.code, details: error.message }
+        });
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  private isValidExportFormat(format: string): boolean {
+    return ['json', 'csv', 'xml'].includes(format);
+  }
+
+  private setExportHeaders(res: Response, format: string): void {
+    const contentTypes: { [key: string]: string } = {
+      json: 'application/json',
+      csv: 'text/csv',
+      xml: 'application/xml'
+    };
+    res.setHeader('Content-Type', contentTypes[format]);
+    res.setHeader('Content-Disposition', `attachment; filename="tasks.${format}"`);
+  }
+
+  private createSuccessResponse(message: string, data?: any, req?: Request, additionalMeta?: any): ApiResponse {
+    return {
+      success: true,
+      message,
+      data,
+      meta: {
+        timestamp: new Date().toISOString(),
+        requestId: req?.headers['x-request-id'] as string,
+        ...additionalMeta,
+      },
+    };
+  }
+
+  private sendNotFoundResponse(res: Response, message: string, code: string): void {
+    res.status(HTTP_STATUS.NOT_FOUND).json({
+      success: false,
+      message,
+      error: { code }
+    });
+  }
+
+  private sendValidationErrorResponse(res: Response, details: string, code: string): void {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      message: ERROR_MESSAGES.VALIDATION_ERROR,
+      error: {
+        code,
+        details
+      }
+    });
+  }
+
+  private logSuccess(message: string, context: Record<string, any>): void {
+    logger.info(context, message);
+  }
 }

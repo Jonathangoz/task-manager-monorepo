@@ -1,144 +1,725 @@
-// src/utils/logger.ts - Task Service Logger - Estructura logging con Pino
+// ==============================================
+// src/utils/logger.ts - Auth Service Logger
+// Sistema de logging con Pino, timezone Bogotá y rotación de archivos
+// ==============================================
 
 import pino from 'pino';
-import { v4 as uuidv4 } from 'uuid';
+import path from 'path';
+import { mkdirSync, existsSync } from 'fs';
 
-// Environment-based configuration
-const isDevelopment = process.env.NODE_ENV === 'development';
-const logLevel = process.env.LOG_LEVEL || 'info';
-const logPretty = process.env.LOG_PRETTY === 'true';
+// ==============================================
+// CONFIGURACIÓN DE TIMEZONE BOGOTÁ
+// ==============================================
+const BOGOTA_TIMEZONE = 'America/Bogota';
 
-// Logger configuration
-const loggerConfig: pino.LoggerOptions = {
-  level: logLevel,
-  base: {
-    service: 'task-service',
-    version: process.env.npm_package_version || '1.0.0',
-    env: process.env.NODE_ENV || 'development',
-  },
-  timestamp: pino.stdTimeFunctions.isoTime,
-  formatters: {
-    level: (label) => ({ level: label }),
-    error: (err) => ({
-      error: {
-        type: err.constructor.name,
-        message: err.message,
-        stack: err.stack,
-      },
-    }),
-  },
+// Función para formatear timestamp con timezone Bogotá
+const formatTimestamp = () => {
+  const now = new Date();
+  const bogotaTime = new Intl.DateTimeFormat('es-CO', {
+    timeZone: BOGOTA_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(now);
+
+  const parts = bogotaTime.reduce((acc, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {} as Record<string, string>);
+
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
 };
 
-// Pretty printing for development
-if (isDevelopment && logPretty) {
-  loggerConfig.transport = {
-    target: 'pino-pretty',
-    options: {
-      colorize: true,
-      ignore: 'pid,hostname',
-      translateTime: 'yyyy-mm-dd HH:MM:ss',
-    },
-  };
+// ==============================================
+// CONFIGURACIÓN TEMPORAL HASTA QUE SE CARGUE ENVIRONMENT
+// ==============================================
+const getLogLevel = (): pino.LevelWithSilent => {
+  const level = process.env.LOG_LEVEL as pino.LevelWithSilent;
+  return ['trace', 'debug', 'info', 'warn', 'error', 'fatal'].includes(level) ? level : 'info';
+};
+
+const getLogPretty = (): boolean => {
+  return process.env.LOG_PRETTY === 'true' || process.env.NODE_ENV === 'development';
+};
+
+const isDevelopment = process.env.NODE_ENV === 'development';
+const isProduction = process.env.NODE_ENV === 'production';
+
+// ==============================================
+// CONFIGURACIÓN DE DIRECTORIOS DE LOGS
+// ==============================================
+const LOG_DIR = path.join(process.cwd(), 'logs');
+
+// Crear directorio de logs si no existe
+if (!existsSync(LOG_DIR)) {
+  mkdirSync(LOG_DIR, { recursive: true });
 }
 
-// Create logger instance
-export const logger = pino(loggerConfig);
-
-// Request ID context for tracing
-export const createRequestLogger = (requestId?: string) => {
-  const reqId = requestId || uuidv4();
-  return logger.child({ requestId: reqId });
+// ==============================================
+// CONFIGURACIÓN BASE DEL LOGGER
+// ==============================================
+const baseLoggerConfig: pino.LoggerOptions = {
+  level: getLogLevel(),
+  base: {
+    service: 'auth-service',
+    version: process.env.npm_package_version || '1.0.0',
+    env: process.env.NODE_ENV || 'development',
+    timezone: BOGOTA_TIMEZONE,
+  },
+  // Removemos el timestamp personalizado para evitar conflictos con pino-pretty
+  formatters: {
+    level: (label) => ({ level: label }),
+    log: (object) => {
+      if (object.err) {
+        const err = object.err as any;
+        return {
+          ...object,
+          error: {
+            type: err.constructor.name,
+            message: err.message,
+            stack: isDevelopment ? err.stack : undefined,
+            code: err.code,
+            statusCode: err.statusCode,
+          },
+        };
+      }
+      return object;
+    },
+  },
 };
 
-// Structured logging helpers
+// ==============================================
+// CONFIGURACIÓN PARA DESARROLLO
+// ==============================================
+const createDevelopmentLogger = (): pino.Logger => {
+  const devConfig = { ...baseLoggerConfig };
+  
+  if (getLogPretty()) {
+    devConfig.transport = {
+      target: 'pino-pretty',
+      options: {
+        colorize: true,
+        ignore: 'pid,hostname,timezone',
+        translateTime: 'SYS:yyyy-mm-dd HH:MM:ss', // Dejamos que pino-pretty maneje el timestamp
+        messageFormat: '[{service}] {msg}',
+        singleLine: false,
+        // Sin customPrettifiers para evitar DataCloneError
+      },
+    };
+  }
+
+  return pino(devConfig);
+};
+
+// ==============================================
+// CONFIGURACIÓN PARA PRODUCCIÓN
+// ==============================================
+const createProductionLogger = (): pino.Logger => {
+  const productionConfig = { ...baseLoggerConfig };
+
+  // En producción, escribimos a múltiples destinos
+  const destinations = [
+    // Archivo general (todos los logs)
+    {
+      level: getLogLevel(),
+      dest: path.join(LOG_DIR, 'auth.log'),
+    },
+    // Archivo de errores (solo errores y fatales)
+    {
+      level: 'error',
+      dest: path.join(LOG_DIR, 'auth-error.log'),
+    },
+    // Archivo de seguridad (eventos de autenticación)
+    {
+      level: 'info',
+      dest: path.join(LOG_DIR, 'auth-security.log'),
+    },
+    // Stdout para contenedores/PM2
+    {
+      level: getLogLevel(),
+      dest: 1, // stdout
+    },
+  ];
+
+  // Configurar transporte múltiple
+  productionConfig.transport = {
+    targets: destinations.map(dest => ({
+      target: 'pino/file',
+      level: dest.level,
+      options: {
+        destination: dest.dest,
+        mkdir: true,
+      },
+    })),
+  };
+
+  return pino(productionConfig);
+};
+
+// ==============================================
+// CREAR INSTANCIA DEL LOGGER
+// ==============================================
+export const logger = isDevelopment ? createDevelopmentLogger() : createProductionLogger();
+
+// ==============================================
+// LOGGERS ESPECIALIZADOS POR COMPONENTE
+// ==============================================
+export const httpLogger = logger.child({ 
+  component: 'http',
+  domain: 'web',
+});
+
+export const dbLogger = logger.child({ 
+  component: 'database',
+  domain: 'persistence',
+});
+
+export const redisLogger = logger.child({ 
+  component: 'redis',
+  domain: 'cache',
+});
+
+export const authLogger = logger.child({ 
+  component: 'auth',
+  domain: 'security',
+});
+
+export const securityLogger = logger.child({ 
+  component: 'security',
+  domain: 'security',
+});
+
+// ==============================================
+// LOGGER CON CONTEXTO DE REQUEST
+// ==============================================
+export const createRequestLogger = (requestId?: string, userId?: string) => {
+  const context: Record<string, any> = { context: 'request' };
+  
+  if (requestId) context.requestId = requestId;
+  if (userId) context.userId = userId;
+  
+  return logger.child(context);
+};
+
+// Función helper para crear child loggers con contexto
+export const createContextLogger = (context: Record<string, any>) => {
+  return logger.child(context);
+};
+
+// ==============================================
+// LOGGERS ESTRUCTURADOS POR DOMINIO DE AUTH
+// ==============================================
 export const loggers = {
-  // Task operations
-  taskCreated: (userId: string, taskId: string, title: string) =>
-    logger.info({ userId, taskId, title, event: 'task.created' }, 'Task created'),
+  // ==============================================
+  // EVENTOS DE AUTENTICACIÓN
+  // ==============================================
+  userRegistered: (userId: string, email: string, ip?: string) =>
+    authLogger.info({
+      userId,
+      email: email.toLowerCase(),
+      ip,
+      event: 'user.registered',
+      domain: 'auth',
+    }, `👤 Usuario registrado: ${email}`),
 
-  taskUpdated: (userId: string, taskId: string, changes: object) =>
-    logger.info({ userId, taskId, changes, event: 'task.updated' }, 'Task updated'),
+  userLogin: (userId: string, email: string, ip?: string, userAgent?: string) =>
+    authLogger.info({
+      userId,
+      email: email.toLowerCase(),
+      ip,
+      userAgent,
+      event: 'user.login',
+      domain: 'auth',
+    }, `🔑 Login exitoso: ${email}`),
 
-  taskDeleted: (userId: string, taskId: string) =>
-    logger.info({ userId, taskId, event: 'task.deleted' }, 'Task deleted'),
+  userLoginFailed: (email: string, reason: string, ip?: string, userAgent?: string) =>
+    securityLogger.warn({
+      email: email.toLowerCase(),
+      reason,
+      ip,
+      userAgent,
+      event: 'user.login.failed',
+      domain: 'security',
+    }, `❌ Login fallido: ${email} - ${reason}`),
 
-  taskStatusChanged: (userId: string, taskId: string, oldStatus: string, newStatus: string) =>
-    logger.info({ userId, taskId, oldStatus, newStatus, event: 'task.status.changed' }, 'Task status changed'),
+  userLogout: (userId: string, email?: string, ip?: string) =>
+    authLogger.info({
+      userId,
+      email: email?.toLowerCase(),
+      ip,
+      event: 'user.logout',
+      domain: 'auth',
+    }, `👋 Logout: ${email || userId}`),
 
-  // Category operations
-  categoryCreated: (userId: string, categoryId: string, name: string) =>
-    logger.info({ userId, categoryId, name, event: 'category.created' }, 'Category created'),
+  passwordChanged: (userId: string, email: string, ip?: string) =>
+    securityLogger.info({
+      userId,
+      email: email.toLowerCase(),
+      ip,
+      event: 'password.changed',
+      domain: 'security',
+    }, `🔐 Contraseña cambiada: ${email}`),
 
-  categoryUpdated: (userId: string, categoryId: string, changes: object) =>
-    logger.info({ userId, categoryId, changes, event: 'category.updated' }, 'Category updated'),
+  accountLocked: (userId: string, email: string, attempts: number, ip?: string) =>
+    securityLogger.warn({
+      userId,
+      email: email.toLowerCase(),
+      attempts,
+      ip,
+      event: 'account.locked',
+      domain: 'security',
+    }, `🔒 Cuenta bloqueada: ${email} (${attempts} intentos)`),
 
-  categoryDeleted: (userId: string, categoryId: string) =>
-    logger.info({ userId, categoryId, event: 'category.deleted' }, 'Category deleted'),
+  accountUnlocked: (userId: string, email: string, method: string) =>
+    securityLogger.info({
+      userId,
+      email: email.toLowerCase(),
+      method,
+      event: 'account.unlocked',
+      domain: 'security',
+    }, `🔓 Cuenta desbloqueada: ${email} (${method})`),
 
-  // Authentication events
-  tokenValidated: (userId: string, method: string) =>
-    logger.info({ userId, method, event: 'auth.validated' }, 'Token validated'),
+  // ==============================================
+  // GESTIÓN DE TOKENS
+  // ==============================================
+  tokenGenerated: (userId: string, tokenType: 'access' | 'refresh' | 'reset', expiresIn?: string) =>
+    authLogger.info({
+      userId,
+      tokenType,
+      expiresIn,
+      event: 'token.generated',
+      domain: 'auth',
+    }, `🎫 Token ${tokenType} generado para usuario ${userId}`),
 
-  authServiceError: (error: Error, endpoint: string) =>
-    logger.error({ error, endpoint, event: 'auth.service.error' }, 'Auth service error'),
+  tokenValidated: (userId: string, tokenType: 'access' | 'refresh', ip?: string) =>
+    authLogger.debug({
+      userId,
+      tokenType,
+      ip,
+      event: 'token.validated',
+      domain: 'auth',
+    }, `✅ Token ${tokenType} validado para usuario ${userId}`),
 
-  // Cache events
-  cacheHit: (key: string, ttl?: number) =>
-    logger.debug({ key, ttl, event: 'cache.hit' }, 'Cache hit'),
+  tokenValidationFailed: (reason: string, tokenType: 'access' | 'refresh', ip?: string, tokenPreview?: string) =>
+    securityLogger.warn({
+      reason,
+      tokenType,
+      ip,
+      tokenPreview,
+      event: 'token.validation.failed',
+      domain: 'security',
+    }, `❌ Validación de token ${tokenType} falló: ${reason}`),
 
-  cacheMiss: (key: string) =>
-    logger.debug({ key, event: 'cache.miss' }, 'Cache miss'),
+  tokenRevoked: (userId: string, tokenType: 'access' | 'refresh' | 'all', reason?: string) =>
+    securityLogger.info({
+      userId,
+      tokenType,
+      reason,
+      event: 'token.revoked',
+      domain: 'security',
+    }, `🚫 Token ${tokenType} revocado para usuario ${userId}`),
 
-  cacheError: (error: Error, key: string, operation: string) =>
-    logger.error({ error, key, operation, event: 'cache.error' }, 'Cache operation failed'),
+  refreshTokenRotated: (userId: string, oldTokenId?: string, newTokenId?: string) =>
+    authLogger.info({
+      userId,
+      oldTokenId,
+      newTokenId,
+      event: 'refresh_token.rotated',
+      domain: 'auth',
+    }, `🔄 Refresh token rotado para usuario ${userId}`),
 
-  // Database events
-  dbQuery: (query: string, duration: number, rowCount?: number) =>
-    logger.debug({ query, duration, rowCount, event: 'db.query' }, 'Database query executed'),
+  // ==============================================
+  // EVENTOS DE SEGURIDAD
+  // ==============================================
+  suspiciousActivity: (ip: string, activity: string, details?: object, userId?: string) =>
+    securityLogger.warn({
+      ip,
+      activity,
+      details,
+      userId,
+      event: 'security.suspicious',
+      domain: 'security',
+    }, `⚠️ Actividad sospechosa: ${activity} desde ${ip}`),
 
-  dbError: (error: Error, operation: string) =>
-    logger.error({ error, operation, event: 'db.error' }, 'Database operation failed'),
+  rateLimitExceeded: (ip: string, endpoint: string, limit: number, windowMs: number) =>
+    securityLogger.warn({
+      ip,
+      endpoint,
+      limit,
+      windowMs,
+      event: 'security.rate_limit',
+      domain: 'security',
+    }, `🚫 Rate limit excedido: ${ip} en ${endpoint} (${limit}/${windowMs}ms)`),
 
-  // Security events
-  rateLimitExceeded: (ip: string, endpoint: string, limit: number) =>
-    logger.warn({ ip, endpoint, limit, event: 'security.rate_limit' }, 'Rate limit exceeded'),
+  bruteForceAttempt: (ip: string, email: string, attempts: number, windowMs: number) =>
+    securityLogger.error({
+      ip,
+      email: email.toLowerCase(),
+      attempts,
+      windowMs,
+      event: 'security.brute_force',
+      domain: 'security',
+    }, `🔥 Intento de fuerza bruta: ${email} desde ${ip} (${attempts} intentos)`),
 
-  unauthorizedAccess: (ip: string, endpoint: string, reason: string) =>
-    logger.warn({ ip, endpoint, reason, event: 'security.unauthorized' }, 'Unauthorized access attempt'),
+  unauthorizedAccess: (ip: string, endpoint: string, reason: string, userAgent?: string) =>
+    securityLogger.warn({
+      ip,
+      endpoint,
+      reason,
+      userAgent,
+      event: 'security.unauthorized',
+      domain: 'security',
+    }, `🚫 Acceso no autorizado: ${ip} en ${endpoint} - ${reason}`),
 
-  // Performance monitoring
-  requestDuration: (method: string, path: string, statusCode: number, duration: number) =>
-    logger.info({ method, path, statusCode, duration, event: 'request.completed' }, 'Request completed'),
+  // ==============================================
+  // EVENTOS DE BASE DE DATOS
+  // ==============================================
+  dbQuery: (operation: string, table: string, duration: number, userId?: string) =>
+    dbLogger.debug({
+      operation,
+      table,
+      duration,
+      userId,
+      event: 'db.query',
+      domain: 'database',
+    }, `🗄️ Query ${operation} en ${table} (${duration}ms)`),
 
-  slowQuery: (query: string, duration: number, threshold: number) =>
-    logger.warn({ query, duration, threshold, event: 'performance.slow_query' }, 'Slow database query detected'),
+  dbError: (error: Error, operation: string, table?: string, userId?: string) =>
+    dbLogger.error({
+      error,
+      operation,
+      table,
+      userId,
+      event: 'db.error',
+      domain: 'database',
+    }, `❌ Error en BD (${operation}): ${error.message}`),
+
+  dbConnection: (status: 'connected' | 'disconnected' | 'error', details?: object) =>
+    dbLogger.info({
+      status,
+      details,
+      event: 'db.connection',
+      domain: 'database',
+    }, `🔌 Base de datos: ${status}`),
+
+  slowQuery: (operation: string, table: string, duration: number, threshold: number) =>
+    dbLogger.warn({
+      operation,
+      table,
+      duration,
+      threshold,
+      event: 'performance.slow_query',
+      domain: 'performance',
+    }, `🐌 Query lenta: ${operation} en ${table} (${duration}ms > ${threshold}ms)`),
+
+  // ==============================================
+  // EVENTOS DE CACHE (REDIS)
+  // ==============================================
+  cacheHit: (key: string, ttl?: number, userId?: string) =>
+    redisLogger.debug({
+      key,
+      ttl,
+      userId,
+      event: 'cache.hit',
+      domain: 'cache',
+    }, `💾 Cache hit: ${key}`),
+
+  cacheMiss: (key: string, userId?: string) =>
+    redisLogger.debug({
+      key,
+      userId,
+      event: 'cache.miss',
+      domain: 'cache',
+    }, `🔍 Cache miss: ${key}`),
+
+  cacheSet: (key: string, ttl: number, userId?: string) =>
+    redisLogger.debug({
+      key,
+      ttl,
+      userId,
+      event: 'cache.set',
+      domain: 'cache',
+    }, `💾 Cache set: ${key} (TTL: ${ttl}s)`),
+
+  cacheError: (error: Error, key: string, operation: 'get' | 'set' | 'del', userId?: string) =>
+    redisLogger.error({
+      error,
+      key,
+      operation,
+      userId,
+      event: 'cache.error',
+      domain: 'cache',
+    }, `❌ Error en cache (${operation}): ${key}`),
+
+  sessionStored: (userId: string, sessionId: string, ttl: number) =>
+    redisLogger.info({
+      userId,
+      sessionId,
+      ttl,
+      event: 'session.stored',
+      domain: 'auth',
+    }, `💾 Sesión almacenada: ${sessionId} (TTL: ${ttl}s)`),
+
+  sessionDestroyed: (userId: string, sessionId: string, reason?: string) =>
+    redisLogger.info({
+      userId,
+      sessionId,
+      reason,
+      event: 'session.destroyed',
+      domain: 'auth',
+    }, `🗑️ Sesión destruida: ${sessionId}`),
+
+  // ==============================================
+  // MONITOREO DE RENDIMIENTO
+  // ==============================================
+  requestCompleted: (method: string, path: string, statusCode: number, duration: number, userId?: string) =>
+    httpLogger.info({
+      method,
+      path,
+      statusCode,
+      duration,
+      userId,
+      event: 'request.completed',
+      domain: 'web',
+    }, `🌐 ${method} ${path} - ${statusCode} (${duration}ms)`),
+
+  highMemoryUsage: (usage: number, threshold: number) =>
+    logger.warn({
+      memoryUsage: usage,
+      threshold,
+      event: 'performance.high_memory',
+      domain: 'performance',
+    }, `🧠 Alto uso de memoria: ${usage}MB > ${threshold}MB`),
+
+  highCpuUsage: (usage: number, threshold: number) =>
+    logger.warn({
+      cpuUsage: usage,
+      threshold,
+      event: 'performance.high_cpu',
+      domain: 'performance',
+    }, `⚡ Alto uso de CPU: ${usage}% > ${threshold}%`),
 };
 
-// Error severity levels
+// ==============================================
+// MANEJO DE ERRORES POR SEVERIDAD
+// ==============================================
 export const logError = {
-  critical: (error: Error, context?: object) =>
-    logger.fatal({ error, ...context }, 'Critical error occurred'),
+  critical: (error: Error, context?: object, userId?: string) => {
+    logger.fatal({
+      error,
+      userId,
+      severity: 'critical',
+      ...context
+    }, `💀 ERROR CRÍTICO: ${error.message}`);
+    
+    // En producción, podrías enviar alertas aquí
+    if (isProduction) {
+      // TODO: Integrar con sistema de alertas (Slack, email, etc.)
+    }
+  },
 
-  high: (error: Error, context?: object) =>
-    logger.error({ error, ...context }, 'High severity error'),
+  high: (error: Error, context?: object, userId?: string) =>
+    logger.error({
+      error,
+      userId,
+      severity: 'high',
+      ...context
+    }, `❌ Error crítico: ${error.message}`),
 
-  medium: (error: Error, context?: object) =>
-    logger.warn({ error, ...context }, 'Medium severity error'),
+  medium: (error: Error, context?: object, userId?: string) =>
+    logger.warn({
+      error,
+      userId,
+      severity: 'medium',
+      ...context
+    }, `⚠️ Error medio: ${error.message}`),
 
-  low: (error: Error, context?: object) =>
-    logger.info({ error, ...context }, 'Low severity error'),
+  low: (error: Error, context?: object, userId?: string) =>
+    logger.info({
+      error,
+      userId,
+      severity: 'low',
+      ...context
+    }, `ℹ️ Error menor: ${error.message}`),
 };
 
-// Health check logging
+// ==============================================
+// HEALTH CHECKS Y MONITOREO
+// ==============================================
 export const healthCheck = {
-  passed: (service: string, duration: number) =>
-    logger.info({ service, duration, status: 'healthy' }, 'Health check passed'),
+  passed: (service: string, duration: number, details?: object) =>
+    logger.info({
+      service,
+      duration,
+      status: 'healthy',
+      details,
+      event: 'health.check.passed',
+      domain: 'health',
+    }, `✅ Health check OK: ${service} (${duration}ms)`),
 
   failed: (service: string, error: Error, duration: number) =>
-    logger.error({ service, error, duration, status: 'unhealthy' }, 'Health check failed'),
+    logger.error({
+      service,
+      error,
+      duration,
+      status: 'unhealthy',
+      event: 'health.check.failed',
+      domain: 'health',
+    }, `❌ Health check FAILED: ${service} (${duration}ms)`),
 
   degraded: (service: string, warning: string, duration: number) =>
-    logger.warn({ service, warning, duration, status: 'degraded' }, 'Health check degraded'),
+    logger.warn({
+      service,
+      warning,
+      duration,
+      status: 'degraded',
+      event: 'health.check.degraded',
+      domain: 'health',
+    }, `⚠️ Health check DEGRADED: ${service} - ${warning} (${duration}ms)`),
 };
+
+// ==============================================
+// UTILIDADES DE STARTUP
+// ==============================================
+export const startup = {
+  serviceStarted: (port: number, env: string) =>
+    logger.info({
+      port,
+      env,
+      event: 'service.started',
+      domain: 'startup',
+    }, `🚀 Auth Service iniciado en puerto ${port} (${env})`),
+
+  configLoaded: (configSummary: object) =>
+    logger.info({
+      config: configSummary,
+      event: 'config.loaded',
+      domain: 'startup',
+    }, '⚙️ Configuración cargada'),
+
+  dependencyConnected: (dependency: string, version?: string) =>
+    logger.info({
+      dependency,
+      version,
+      event: 'dependency.connected',
+      domain: 'startup',
+    }, `🔌 Conectado a ${dependency}${version ? ` v${version}` : ''}`),
+
+  gracefulShutdown: (signal: string) =>
+    logger.info({
+      signal,
+      event: 'service.shutdown',
+      domain: 'startup',
+    }, `🛑 Apagado graceful recibido: ${signal}`),
+};
+
+// ==============================================
+// FUNCIÓN PARA RECONFIGURER EL LOGGER DESPUÉS DE CARGAR ENVIRONMENT
+// ==============================================
+let reconfiguredLogger: pino.Logger | null = null;
+
+export const reconfigureLogger = (envConfig: any) => {
+  if (reconfiguredLogger) return reconfiguredLogger;
+
+  const logLevel = envConfig.logging?.level || envConfig.LOG_LEVEL || 'info';
+  const logPretty = envConfig.logging?.pretty ?? envConfig.LOG_PRETTY ?? true;
+  const isDev = envConfig.app?.isDevelopment ?? envConfig.NODE_ENV === 'development';
+  const isProd = envConfig.app?.isProduction ?? envConfig.NODE_ENV === 'production';
+
+const reconfiguredConfig: pino.LoggerOptions = {
+  level: logLevel,
+  base: {
+    service: 'auth-service',
+    version: process.env.npm_package_version || '1.0.0',
+    env: envConfig.app?.env || envConfig.NODE_ENV || 'development',
+    timezone: BOGOTA_TIMEZONE,
+  },
+  // Removemos el timestamp personalizado para evitar conflictos con pino-pretty
+  formatters: {
+    level: (label) => ({ level: label }),
+    log: (object) => {
+      if (object.err) {
+        const err = object.err as any;
+        return {
+          ...object,
+          error: {
+            type: err.constructor.name,
+            message: err.message,
+            stack: isDev ? err.stack : undefined,
+            code: err.code,
+            statusCode: err.statusCode,
+          },
+        };
+      }
+      return object;
+    },
+  },
+};
+
+  if (isDev && logPretty) {
+    reconfiguredConfig.transport = {
+      target: 'pino-pretty',
+      options: {
+        colorize: true,
+        ignore: 'pid,hostname,timezone',
+        translateTime: 'SYS:yyyy-mm-dd HH:MM:ss', // Dejamos que pino-pretty maneje el timestamp
+        messageFormat: '[{service}] {msg}',
+        singleLine: false,
+        // Sin customPrettifiers para evitar DataCloneError
+      },
+    };
+  } else if (isProd) {
+    // Configuración de producción con múltiples destinos
+    const destinations = [
+      {
+        level: logLevel,
+        dest: path.join(LOG_DIR, 'auth.log'),
+      },
+      {
+        level: 'error',
+        dest: path.join(LOG_DIR, 'auth-error.log'),
+      },
+      {
+        level: 'warn',
+        dest: path.join(LOG_DIR, 'auth-security.log'),
+      },
+      {
+        level: logLevel,
+        dest: 1, // stdout
+      },
+    ];
+
+    reconfiguredConfig.transport = {
+      targets: destinations.map(dest => ({
+        target: 'pino/file',
+        level: dest.level,
+        options: {
+          destination: dest.dest,
+          mkdir: true,
+        },
+      })),
+    };
+  }
+
+  reconfiguredLogger = pino(reconfiguredConfig);
+  
+  // Log de reconfiguración
+  reconfiguredLogger.info({
+    logLevel,
+    timezone: BOGOTA_TIMEZONE,
+    logDir: LOG_DIR,
+    prettyPrint: isDev && logPretty,
+    reconfigured: true,
+  }, '🔧 Auth Logger reconfigurado con environment cargado');
+
+  return reconfiguredLogger;
+};
+
+// Función para obtener el logger actual (reconfigurado si está disponible)
+export const getLogger = () => reconfiguredLogger || logger;
 
 export default logger;

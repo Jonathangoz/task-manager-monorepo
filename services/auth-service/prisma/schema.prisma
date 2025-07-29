@@ -38,6 +38,7 @@ model User {
   refreshTokens RefreshToken[]
   userSessions  UserSession[]  @relation("UserSessions")
   loginAttempts LoginAttempt[] @relation("UserLoginAttempts")
+  verificationTokens VerificationToken[] @relation("VerificationToken")
   
   @@map("users")
   @@index([email], name: "users_email_idx")
@@ -134,7 +135,7 @@ model VerificationToken {
   createdAt DateTime @default(now()) @map("created_at")
   
   // Relación
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation("VerificationToken", fields: [userId], references: [id], onDelete: Cascade)
   
   @@map("verification_tokens")
   @@index([token], name: "verification_tokens_token_idx")

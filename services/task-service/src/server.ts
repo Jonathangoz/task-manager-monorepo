@@ -4,20 +4,53 @@
 // ==============================================
 
 import 'dotenv/config';
-import { logger } from '@/utils/logger';
+import * as http from 'http';
+import express from 'express';
+import { logger, startup, logError, healthCheck } from '@/utils/logger';
 import { config } from '@/config/environment';
-import { connectDatabase, disconnectDatabase, updateUserStats, cleanupOldCompletedTasks } from '@/config/database';
+import { connectDatabase, disconnectDatabase, cleanupOldCompletedTasks } from '@/config/database';
 import { taskRedisConnection } from '@/config/redis';
 import app from '@/app';
 
+// ==============================================
+// TIPOS E INTERFACES
+// ==============================================
+interface HealthCheckResult {
+  service: string;
+  status: 'healthy' | 'unhealthy';
+  error?: string;
+  duration?: number;
+}
+
+interface ServerInfo {
+  port: number;
+  environment: string;
+  apiVersion: string;
+  pid: number;
+  nodeVersion: string;
+  uptime: number;
+  memoryUsage: NodeJS.MemoryUsage;
+  startupTime: number;
+}
+
+// ==============================================
+// CLASE PRINCIPAL DE BOOTSTRAP
+// ==============================================
 class TaskServiceBootstrap {
+  private server?: http.Server;
   private cleanupInterval?: NodeJS.Timeout;
   private statsInterval?: NodeJS.Timeout;
+  private isShuttingDown = false;
+  private readonly gracefulShutdownTimeout = 30000; // 30 segundos
 
   constructor() {
     this.validateEnvironment();
+    this.logStartupInfo();
   }
 
+  /**
+   * Valida que todas las variables de entorno requeridas estén presentes
+   */
   private validateEnvironment(): void {
     const requiredEnvVars = [
       'NODE_ENV',
@@ -32,8 +65,9 @@ class TaskServiceBootstrap {
     
     if (missingVars.length > 0) {
       logger.fatal({
-        missingVariables: missingVars
-      }, 'Missing required environment variables');
+        missingVariables: missingVars,
+        event: 'environment_validation_failed'
+      }, '💀 Missing required environment variables');
       process.exit(1);
     }
 
@@ -41,155 +75,522 @@ class TaskServiceBootstrap {
       environment: config.app.env,
       nodeVersion: process.version,
       port: config.app.port,
-      apiVersion: config.app.apiVersion
-    }, 'Environment validation passed');
+      apiVersion: config.app.apiVersion,
+      event: 'environment_validation_passed'
+    }, '✅ Environment validation passed');
   }
 
+  /**
+   * Log de información inicial del servicio
+   */
+  private logStartupInfo(): void {
+    startup.configLoaded({
+      service: 'task-service',
+      environment: config.app.env,
+      port: config.app.port,
+      redis: {
+        enabled: true,
+        prefix: config.redis.prefix
+      },
+      jobs: {
+        cleanup: config.jobs.cleanup.enabled,
+        statsUpdate: config.jobs.statsUpdate.enabled
+      },
+      features: {
+        swagger: config.swagger.enabled,
+        healthCheck: config.features.healthCheckEnabled
+      }
+    });
+  }
+
+  /**
+   * Inicializa la conexión a PostgreSQL
+   */
   private async initializeDatabase(): Promise<void> {
     try {
-      logger.info('Initializing PostgreSQL database connection...');
+      logger.info({
+        event: 'database_initialization_started',
+        component: 'database'
+      }, '🗄️ Initializing PostgreSQL database connection...');
+      
       await connectDatabase();
-      logger.info('Database connection established successfully');
+      
+      startup.dependencyConnected('PostgreSQL', 'Prisma ORM');
+      
+      logger.info({
+        event: 'database_initialized',
+        component: 'database'
+      }, '✅ Database connection established successfully');
+      
     } catch (error) {
-      logger.fatal({ error }, 'Failed to connect to database');
+      logError.critical(error as Error, {
+        context: 'database_initialization',
+        component: 'database'
+      });
+      
       throw error;
     }
   }
 
+  /**
+   * Inicializa la conexión a Redis
+   */
   private async initializeRedis(): Promise<void> {
     try {
-      logger.info('Initializing Redis connection...');
+      logger.info({
+        event: 'redis_initialization_started',
+        component: 'redis'
+      }, '🔴 Initializing Redis connection...');
+      
       await taskRedisConnection.connect();
-      logger.info('Redis connection established successfully');
+      
+      startup.dependencyConnected('Redis', 'Cache & Session Store');
+      
+      logger.info({
+        event: 'redis_initialized',
+        component: 'redis'
+      }, '✅ Redis connection established successfully');
+      
     } catch (error) {
-      logger.error({ error }, 'Failed to connect to Redis - continuing without cache');
-      // No throwear error para Redis ya que el servicio puede funcionar sin caché
+      logger.error({
+        error: error instanceof Error ? error.message : String(error),
+        event: 'redis_initialization_failed',
+        component: 'redis'
+      }, '⚠️ Failed to connect to Redis - continuing without cache');
+      
+      // No lanzar error para Redis ya que el servicio puede funcionar sin caché
     }
   }
 
+  /**
+   * Configura los trabajos en segundo plano
+   */
   private setupBackgroundJobs(): void {
-    // Limpieza de tareas completadas antiguas (diario)
-    if (config.jobs.cleanupInterval > 0) {
+    logger.info({
+      event: 'background_jobs_setup_started',
+      component: 'jobs'
+    }, '⚙️ Setting up background jobs...');
+
+    // Trabajo de limpieza de tareas completadas antiguas
+    if (config.jobs.cleanup.enabled && config.jobs.cleanup.intervalMs > 0) {
       this.cleanupInterval = setInterval(async () => {
+        if (this.isShuttingDown) return;
+        
         try {
-          logger.info('Running cleanup job for old completed tasks');
-          await cleanupOldCompletedTasks(90); // 90 días
-          logger.info('Cleanup job completed successfully');
+          logger.info({
+            event: 'cleanup_job_started',
+            component: 'jobs',
+            retentionDays: config.jobs.cleanup.retentionDays
+          }, '🧹 Running cleanup job for old completed tasks');
+          
+          const deletedCount = await cleanupOldCompletedTasks(config.jobs.cleanup.retentionDays);
+          
+          logger.info({
+            event: 'cleanup_job_completed',
+            component: 'jobs',
+            deletedCount,
+            retentionDays: config.jobs.cleanup.retentionDays
+          }, `✅ Cleanup job completed: ${deletedCount} tasks removed`);
+          
         } catch (error) {
-          logger.error({ error }, 'Cleanup job failed');
+          logError.medium(error as Error, {
+            context: 'background_cleanup_job',
+            component: 'jobs'
+          });
         }
-      }, config.jobs.cleanupInterval);
+      }, config.jobs.cleanup.intervalMs);
 
       logger.info({
-        intervalMs: config.jobs.cleanupInterval
-      }, 'Cleanup background job scheduled');
+        intervalMs: config.jobs.cleanup.intervalMs,
+        retentionDays: config.jobs.cleanup.retentionDays,
+        event: 'cleanup_job_scheduled',
+        component: 'jobs'
+      }, '📅 Cleanup background job scheduled');
     }
 
-    // Actualización de estadísticas (cada 5 minutos)
-    if (config.jobs.statsUpdateInterval > 0) {
+    // Trabajo de actualización de estadísticas
+    if (config.jobs.statsUpdate.enabled && config.jobs.statsUpdate.intervalMs > 0) {
       this.statsInterval = setInterval(async () => {
+        if (this.isShuttingDown) return;
+        
         try {
-          // Este job se puede optimizar para actualizar solo usuarios activos
-          logger.debug('Stats update job would run here (implemented per user request)');
+          logger.debug({
+            event: 'stats_job_placeholder',
+            component: 'jobs'
+          }, '📊 Stats update job placeholder (implement per user request)');
+          
+          // Aquí se puede implementar la actualización de estadísticas
+          // por ahora es un placeholder
+          
         } catch (error) {
-          logger.error({ error }, 'Stats update job failed');
+          logError.low(error as Error, {
+            context: 'background_stats_job',
+            component: 'jobs'
+          });
         }
-      }, config.jobs.statsUpdateInterval);
+      }, config.jobs.statsUpdate.intervalMs);
 
       logger.info({
-        intervalMs: config.jobs.statsUpdateInterval
-      }, 'Stats update background job scheduled');
+        intervalMs: config.jobs.statsUpdate.intervalMs,
+        event: 'stats_job_scheduled',
+        component: 'jobs'
+      }, '📊 Stats update background job scheduled');
     }
+
+    logger.info({
+      event: 'background_jobs_setup_completed',
+      component: 'jobs',
+      jobs: {
+        cleanup: !!this.cleanupInterval,
+        stats: !!this.statsInterval
+      }
+    }, '✅ Background jobs setup completed');
   }
 
+  /**
+   * Realiza health checks de todos los servicios
+   */
   private async performHealthChecks(): Promise<void> {
-    const healthChecks = [];
+    logger.info({
+      event: 'health_checks_started',
+      component: 'health'
+    }, '🔍 Performing health checks...');
+
+    const healthChecks: Promise<HealthCheckResult>[] = [];
 
     // Database health check
     healthChecks.push(
       connectDatabase()
-        .then(() => ({ service: 'database', status: 'healthy' }))
-        .catch((error) => ({ service: 'database', status: 'unhealthy', error: error.message }))
+        .then(() => ({ 
+          service: 'database', 
+          status: 'healthy' as const
+        }))
+        .catch((error) => ({ 
+          service: 'database', 
+          status: 'unhealthy' as const, 
+          error: error.message 
+        }))
     );
 
     // Redis health check
     healthChecks.push(
       taskRedisConnection.connect()
-        .then(() => ({ service: 'redis', status: 'healthy' }))
-        .catch((error) => ({ service: 'redis', status: 'unhealthy', error: error.message }))
+        .then(() => ({ 
+          service: 'redis', 
+          status: 'healthy' as const
+        }))
+        .catch((error) => ({ 
+          service: 'redis', 
+          status: 'unhealthy' as const, 
+          error: error.message 
+        }))
     );
 
-    const results = await Promise.allSettled(healthChecks);
-    
-    results.forEach((result, index) => {
-      if (result.status === 'fulfilled') {
-        const check = result.value;
-        if (check.status === 'healthy') {
-          logger.info({ service: check.service }, 'Health check passed');
+    try {
+      const results = await Promise.allSettled(healthChecks);
+      
+      results.forEach((result) => {
+        if (result.status === 'fulfilled') {
+          const check = result.value;
+          
+          if (check.status === 'healthy') {
+            healthCheck.passed(check.service, 0, { status: check.status });
+            
+            logger.info({
+              service: check.service,
+              status: check.status,
+              event: 'health_check_passed',
+              component: 'health'
+            }, `✅ ${check.service} health check passed`);
+            
+          } else {
+            healthCheck.failed(check.service, new Error(check.error || 'Unknown error'), 0);
+            
+            logger.warn({
+              service: check.service,
+              status: check.status,
+              error: check.error,
+              event: 'health_check_failed',
+              component: 'health'
+            }, `⚠️ ${check.service} health check failed`);
+          }
         } else {
-          logger.warn({ service: check.service, error: check.error }, 'Health check failed');
+          logger.error({
+            error: result.reason?.message || 'Unknown error',
+            event: 'health_check_error',
+            component: 'health'
+          }, '❌ Health check promise rejected');
         }
-      }
-    });
+      });
+
+    } catch (error) {
+      logError.high(error as Error, {
+        context: 'health_checks_execution',
+        component: 'health'
+      });
+    }
+
+    logger.info({
+      event: 'health_checks_completed',
+      component: 'health'
+    }, '✅ Health checks completed');
   }
 
+  /**
+   * Configura el graceful shutdown
+   */
   private setupGracefulShutdown(): void {
     const shutdown = async (signal: string) => {
-      logger.info(`Received ${signal} signal, starting graceful shutdown...`);
+      if (this.isShuttingDown) {
+        logger.warn({
+          signal,
+          event: 'shutdown_already_in_progress'
+        }, '⚠️ Shutdown already in progress, ignoring signal');
+        return;
+      }
+
+      this.isShuttingDown = true;
+      
+      startup.gracefulShutdown(signal);
+      
+      logger.info({
+        signal,
+        timeout: this.gracefulShutdownTimeout,
+        event: 'graceful_shutdown_started'
+      }, `🛑 Received ${signal} signal, starting graceful shutdown...`);
 
       try {
-        // Detener trabajos en segundo plano
+        // 1. Detener trabajos en segundo plano
         if (this.cleanupInterval) {
           clearInterval(this.cleanupInterval);
-          logger.info('Cleanup interval stopped');
+          logger.info({
+            event: 'cleanup_interval_stopped',
+            component: 'jobs'
+          }, '🛑 Cleanup interval stopped');
         }
 
         if (this.statsInterval) {
           clearInterval(this.statsInterval);
-          logger.info('Stats interval stopped');
+          logger.info({
+            event: 'stats_interval_stopped',
+            component: 'jobs'
+          }, '🛑 Stats interval stopped');
         }
 
-        // Cerrar conexiones
-        await Promise.all([
-          disconnectDatabase().catch(err => 
-            logger.error({ error: err }, 'Error disconnecting from database')
-          ),
-          taskRedisConnection.disconnect().catch(err => 
-            logger.error({ error: err }, 'Error disconnecting from Redis')
-          )
-        ]);
+        // 2. Cerrar servidor HTTP
+        if (this.server) {
+          await new Promise<void>((resolve, reject) => {
+            this.server!.close((err) => {
+              if (err) {
+                reject(err);
+              } else {
+                logger.info({
+                  event: 'http_server_closed',
+                  component: 'server'
+                }, '🔌 HTTP server closed successfully');
+                resolve();
+              }
+            });
+          });
+        }
 
-        logger.info('All connections closed successfully');
+        // 3. Cerrar conexiones de base de datos y Redis
+        const shutdownPromises = [];
+
+        shutdownPromises.push(
+          disconnectDatabase()
+            .then(() => {
+              logger.info({
+                event: 'database_disconnected',
+                component: 'database'  
+              }, '🔌 Database disconnected successfully');
+            })
+            .catch(err => {
+              logError.medium(err, {
+                context: 'database_disconnect_error',
+                component: 'database'
+              });
+            })
+        );
+
+        shutdownPromises.push(
+          taskRedisConnection.disconnect()
+            .then(() => {
+              logger.info({
+                event: 'redis_disconnected',
+                component: 'redis'
+              }, '🔌 Redis disconnected successfully');
+            })
+            .catch(err => {
+              logError.medium(err, {
+                context: 'redis_disconnect_error',
+                component: 'redis'
+              });
+            })
+        );
+
+        await Promise.allSettled(shutdownPromises);
+
+        logger.info({
+          event: 'graceful_shutdown_completed',
+          signal
+        }, '✅ All connections closed successfully');
+        
         process.exit(0);
+        
       } catch (error) {
-        logger.error({ error }, 'Error during graceful shutdown');
+        logError.critical(error as Error, {
+          context: 'graceful_shutdown_error',
+          signal
+        });
+        
         process.exit(1);
       }
     };
 
+    // Configurar timeout de cierre forzado
+    const forceShutdown = () => {
+      setTimeout(() => {
+        if (this.isShuttingDown) {
+          logger.fatal({
+            timeout: this.gracefulShutdownTimeout,
+            event: 'forced_shutdown'
+          }, '💀 Forced shutdown after timeout');
+          process.exit(1);
+        }
+      }, this.gracefulShutdownTimeout);
+    };
+
     // Escuchar señales de cierre
-    process.on('SIGINT', () => shutdown('SIGINT'));
-    process.on('SIGTERM', () => shutdown('SIGTERM'));
-    process.on('SIGUSR2', () => shutdown('SIGUSR2')); // Para nodemon
+    process.on('SIGINT', () => {
+      forceShutdown();
+      shutdown('SIGINT');
+    });
+    
+    process.on('SIGTERM', () => {
+      forceShutdown();
+      shutdown('SIGTERM');
+    });
+    
+    process.on('SIGUSR2', () => {
+      forceShutdown();
+      shutdown('SIGUSR2');
+    }); // Para nodemon
 
     // Manejar errores no capturados
     process.on('uncaughtException', (error: Error) => {
-      logger.fatal({ error }, 'Uncaught exception occurred');
+      logError.critical(error, {
+        context: 'uncaught_exception',
+        pid: process.pid
+      });
       process.exit(1);
     });
 
     process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
       logger.fatal({
-        reason: reason.toString(),
-        promise: promise.toString()
-      }, 'Unhandled promise rejection');
+        reason: reason?.toString() || 'Unknown reason',
+        promise: promise.toString(),
+        event: 'unhandled_rejection',
+        pid: process.pid
+      }, '💀 Unhandled promise rejection occurred');
       process.exit(1);
+    });
+
+    logger.info({
+      timeout: this.gracefulShutdownTimeout,
+      event: 'graceful_shutdown_configured'
+    }, '🛡️ Graceful shutdown handlers configured');
+  }
+
+  /**
+   * Inicia el servidor HTTP usando Express
+   */
+  private async startHttpServer(): Promise<ServerInfo> {
+    return new Promise((resolve, reject) => {
+      const startTime = Date.now();
+      const app = express();
+      console.log('Express app created:', !!app); 
+      
+      try {
+        // Verificar que app sea una aplicación Express válida
+        if (!app || typeof app !== 'function') {
+          throw new Error('Invalid Express application');
+        }
+
+        // Crear servidor HTTP con la aplicación Express
+        this.server = http.createServer(app);
+        
+        // Configurar event listeners
+        this.server.on('listening', () => {
+          const address = this.server!.address();
+          const port = typeof address === 'string' ? parseInt(address) : address?.port || config.app.port;
+          
+          const serverInfo: ServerInfo = {
+            port,
+            environment: config.app.env,
+            apiVersion: config.app.apiVersion,
+            pid: process.pid,
+            nodeVersion: process.version,
+            uptime: process.uptime(),
+            memoryUsage: process.memoryUsage(),
+            startupTime: Date.now() - startTime
+          };
+
+          startup.serviceStarted(port, config.app.env);
+          
+          logger.info({
+            ...serverInfo,
+            event: 'http_server_started',
+            component: 'server'
+          }, `🚀 HTTP server listening on port ${port}`);
+          
+          resolve(serverInfo);
+        });
+
+        this.server.on('error', (error: NodeJS.ErrnoException) => {
+          if (error.code === 'EADDRINUSE') {
+            logError.critical(new Error(`Port ${config.app.port} is already in use`), {
+              context: 'http_server_port_in_use',
+              port: config.app.port,
+              code: error.code
+            });
+          } else {
+            logError.critical(error, {
+              context: 'http_server_start_error',
+              port: config.app.port,
+              code: error.code
+            });
+          }
+          reject(error);
+        });
+
+        // Configurar timeouts del servidor
+        this.server.timeout = 30000; // 30 segundos
+        this.server.keepAliveTimeout = 5000; // 5 segundos
+        this.server.headersTimeout = 6000; // 6 segundos
+
+        // Iniciar el servidor
+        this.server.listen(config.app.port, '0.0.0.0');
+
+      } catch (error) {
+        logError.critical(error as Error, {
+          context: 'http_server_setup_error',
+          port: config.app.port
+        });
+        reject(error);
+      }
     });
   }
 
+  /**
+   * Proceso principal de inicialización del servicio
+   */
   public async start(): Promise<void> {
     try {
-      logger.info('Starting Task Service bootstrap process...');
+      logger.info({
+        event: 'service_bootstrap_started',
+        service: 'task-service'
+      }, '🚀 Starting Task Service bootstrap process...');
 
       // 1. Configurar manejo de cierre graceful
       this.setupGracefulShutdown();
@@ -205,21 +606,12 @@ class TaskServiceBootstrap {
       this.setupBackgroundJobs();
 
       // 5. Iniciar servidor HTTP
-      const startTime = Date.now();
-      
-      app.listen(config.app.port, '0.0.0.0');
+      const serverInfo = await this.startHttpServer();
 
+      // Log final de inicialización exitosa
       logger.info({
-        port: config.app.port,
-        environment: config.app.env,
-        startupTime: `${Date.now() - startTime}ms`,
-        pid: process.pid,
-        memoryUsage: process.memoryUsage(),
-        uptime: process.uptime()
-      }, 'Task Service started successfully and ready to accept connections');
-
-      // Log de configuración importante (sin valores sensibles)
-      logger.info({
+        ...serverInfo,
+        event: 'service_started_successfully',
         features: {
           swagger: config.swagger.enabled,
           rateLimit: config.rateLimit.enabled,
@@ -231,26 +623,107 @@ class TaskServiceBootstrap {
             stats: !!this.statsInterval
           }
         }
-      }, 'Service features status');
+      }, '🎉 Task Service started successfully and ready to accept connections');
 
     } catch (error) {
-      logger.fatal({ error }, 'Failed to start Task Service');
+      logError.critical(error as Error, {
+        context: 'service_bootstrap_failed',
+        service: 'task-service'
+      });
+      
+      logger.fatal({
+        error: error instanceof Error ? error.message : String(error),
+        event: 'service_bootstrap_failed'
+      }, '💀 Failed to start Task Service');
+      
       process.exit(1);
     }
   }
+
+  /**
+   * Obtiene información del estado actual del servicio
+   */
+  public getServiceInfo() {
+    return {
+      service: 'task-service',
+      version: config.app.apiVersion,
+      environment: config.app.env,
+      port: config.app.port,
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      connections: {
+        database: true, // Asumir conectado si llegamos aquí
+        redis: taskRedisConnection.isHealthy()
+      },
+      jobs: {
+        cleanup: {
+          enabled: config.jobs.cleanup.enabled,
+          running: !!this.cleanupInterval
+        },
+        statsUpdate: {
+          enabled: config.jobs.statsUpdate.enabled,
+          running: !!this.statsInterval
+        }
+      },
+      features: {
+        swagger: config.swagger.enabled,
+        healthCheck: config.features.healthCheckEnabled,
+        rateLimit: config.rateLimit.enabled
+      },
+      server: {
+        running: !!this.server && this.server.listening,
+        timeout: this.server?.timeout,
+        keepAliveTimeout: this.server?.keepAliveTimeout
+      }
+    };
+  }
+
+  /**
+   * Detiene el servicio de forma controlada
+   */
+  public async stop(): Promise<void> {
+    if (this.isShuttingDown) {
+      logger.warn({
+        event: 'stop_already_in_progress'
+      }, '⚠️ Service stop already in progress');
+      return;
+    }
+
+    logger.info({
+      event: 'service_stop_requested'
+    }, '🛑 Service stop requested');
+
+    // Usar el método de shutdown existente
+    await new Promise<void>((resolve) => {
+      process.once('exit', resolve);
+      process.kill(process.pid, 'SIGTERM');
+    });
+  }
 }
 
-// Inicializar y arrancar el servicio
+// ==============================================
+// INICIALIZACIÓN Y ARRANQUE
+// ==============================================
+
+// Crear instancia del bootstrap
 const bootstrap = new TaskServiceBootstrap();
 
 // Solo arrancar si no estamos en modo test
 if (process.env.NODE_ENV !== 'test') {
   bootstrap.start().catch((error) => {
-    logger.fatal({ error }, 'Bootstrap failed');
+    logger.fatal({
+      error: error instanceof Error ? error.message : String(error),
+      event: 'bootstrap_startup_failed'
+    }, '💀 Bootstrap failed during startup');
+    
     process.exit(1);
   });
 }
 
-// Exportar para testing
+// ==============================================
+// EXPORTACIONES
+// ==============================================
+
+// Exportar para testing y uso externo
 export { TaskServiceBootstrap };
 export default bootstrap;

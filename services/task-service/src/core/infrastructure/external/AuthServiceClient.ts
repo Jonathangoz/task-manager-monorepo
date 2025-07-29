@@ -27,9 +27,10 @@ export class AuthServiceClient {
   private readonly timeout: number;
 
   constructor() {
-    this.baseURL = config.auth.serviceUrl;
-    this.apiKey = config.auth.serviceApiKey;
-    this.timeout = config.auth.serviceTimeout;
+    // CORRECCIÓN 1: Acceder a config.authService en lugar de config.auth
+    this.baseURL = config.authService.url;
+    this.apiKey = config.authService.apiKey;
+    this.timeout = config.authService.timeout;
 
     this.client = axios.create({
       baseURL: this.baseURL,
@@ -45,124 +46,78 @@ export class AuthServiceClient {
   }
 
   private setupInterceptors(): void {
-    // Request interceptor
     this.client.interceptors.request.use(
-      (config) => {
-        const requestId = this.generateRequestId();
-        config.headers['X-Request-ID'] = requestId;
-        
-        logger.debug({
-          url: config.url,
-          method: config.method,
-          requestId,
-        }, 'Auth service request');
-        
-        return config;
+      (req) => {
+        logger.debug({ req: { method: req.method, url: req.url, headers: req.headers } }, 'AuthService Request');
+        return req;
       },
-      (error) => {
-        logger.error({ error }, 'Auth service request error');
+      (error: AxiosError) => {
+        logger.error({ error: this.extractErrorDetails(error) }, 'AuthService Request Error');
         return Promise.reject(error);
       }
     );
 
-    // Response interceptor
     this.client.interceptors.response.use(
-      (response) => {
-        logger.debug({
-          url: response.config.url,
-          status: response.status,
-          requestId: response.config.headers['X-Request-ID'],
-        }, 'Auth service response');
-        
-        return response;
+      (res) => {
+        logger.debug({ res: { status: res.status, data: res.data } }, 'AuthService Response');
+        return res;
       },
       (error: AxiosError) => {
-        const requestId = error.config?.headers?.['X-Request-ID'];
-        
-        logger.error({
-          url: error.config?.url,
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          requestId,
-          error: error.message,
-        }, 'Auth service response error');
-        
+        logger.error({ error: this.extractErrorDetails(error) }, 'AuthService Response Error');
         return Promise.reject(this.handleError(error));
       }
     );
   }
 
-  async validateToken(token: string): Promise<TokenValidationResponse> {
+  public async verifyToken(token: string): Promise<TokenValidationResponse> {
     try {
-      const response = await this.client.post(AUTH_ENDPOINTS.VERIFY_TOKEN, {
-        token: token.replace('Bearer ', ''), // Remove Bearer prefix if present
-      });
-
-      if (response.data.success) {
-        return {
-          valid: true,
-          user: response.data.data.user,
-        };
-      } else {
-        return {
-          valid: false,
-          error: response.data.message || 'Token validation failed',
-        };
-      }
+      const response = await this.client.post<TokenValidationResponse>(
+        AUTH_ENDPOINTS.VERIFY_TOKEN,
+        { token }
+      );
+      return response.data;
     } catch (error: any) {
-      logger.error({ error: error.message, token: token.substring(0, 20) + '...' }, 'Token validation failed');
-      
+      logger.error(`Error verifying token: ${this.getErrorMessage(error)}`);
+      // Devuelve una estructura que coincide con TokenValidationResponse para el error
+      return { valid: false, error: this.getErrorMessage(error) };
+    }
+  }
+
+  private extractErrorDetails(error: AxiosError): any {
+    if (error.response) {
       return {
-        valid: false,
-        error: this.getErrorMessage(error),
+        status: error.response.status,
+        data: error.response.data,
+        headers: error.response.headers,
       };
-    }
-  }
-
-  async getUserProfile(userId: string): Promise<AuthUser | null> {
-    try {
-      const response = await this.client.get(`${AUTH_ENDPOINTS.GET_USER}/${userId}`);
-
-      if (response.data.success) {
-        return response.data.data;
-      } else {
-        logger.warn({ userId }, 'User profile not found');
-        return null;
-      }
-    } catch (error: any) {
-      logger.error({ error: error.message, userId }, 'Failed to get user profile');
-      return null;
-    }
-  }
-
-  async healthCheck(): Promise<boolean> {
-    try {
-      const response = await this.client.get('/api/v1/health', {
-        timeout: 5000, // Shorter timeout for health checks
-      });
-      
-      return response.status === 200;
-    } catch (error) {
-      logger.error({ error }, 'Auth service health check failed');
-      return false;
+    } else if (error.request) {
+      return {
+        request: error.request,
+        message: 'No response received from auth service',
+      };
+    } else {
+      return {
+        message: error.message,
+      };
     }
   }
 
   private handleError(error: AxiosError): Error {
     if (error.response) {
-      // Server responded with error status
-      const status = error.response.status;
-      const message = error.response.data?.message || error.message;
-      
-      switch (status) {
+      const message = this.getErrorMessage(error); // Usa la función corregida
+      switch (error.response.status) {
+        case 400:
+          return new Error(`Auth service bad request: ${message}`);
         case 401:
-          return new Error('Authentication failed');
+          return new Error(`Auth service unauthorized: ${message}`);
         case 403:
-          return new Error('Access forbidden');
+          return new Error(`Auth service forbidden: ${message}`);
         case 404:
-          return new Error('Auth service endpoint not found');
-        case 429:
-          return new Error('Too many requests to auth service');
+          return new Error(`Auth service endpoint not found: ${message}`);
+        case 409:
+          return new Error(`Auth service conflict: ${message}`);
+        case 422:
+          return new Error(`Auth service unprocessable entity: ${message}`);
         case 500:
           return new Error('Auth service internal error');
         case 503:
@@ -175,15 +130,21 @@ export class AuthServiceClient {
       return new Error('Auth service unreachable');
     } else {
       // Other error
-      return new Error(`Auth service client error: ${error.message}`);
+      // Asegura que error.message exista antes de acceder a ella
+      return new Error(`Auth service client error: ${error.message || 'unknown error'}`);
     }
   }
 
   private getErrorMessage(error: any): string {
+    // CORRECCIÓN 2: Acceso más seguro a la propiedad 'message'
     if (error.response?.data?.message) {
       return error.response.data.message;
     }
-    return error.message || 'Auth service communication error';
+    // Asegurarse de que 'error' es un objeto y contiene la propiedad 'message'
+    if (typeof error === 'object' && error !== null && 'message' in error) {
+      return error.message;
+    }
+    return 'Auth service communication error';
   }
 
   private generateRequestId(): string {
@@ -203,12 +164,5 @@ export class AuthServiceClient {
     if (newConfig.timeout) {
       this.client.defaults.timeout = newConfig.timeout;
     }
-    
-    logger.info({ newConfig }, 'Auth service client configuration updated');
-  }
-
-  // Method to check if auth service is configured
-  isConfigured(): boolean {
-    return !!(this.baseURL && this.apiKey);
   }
 }
