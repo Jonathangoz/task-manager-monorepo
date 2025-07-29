@@ -41,17 +41,17 @@ services:
       - key: REDIS_PREFIX
         value: "auth:"
       - key: JWT_SECRET
-        generateValue: true
+        generateValue: false
       - key: JWT_EXPIRES_IN
         value: "15m"
       - key: JWT_ISSUER
         value: "task-manager-auth"
       - key: REFRESH_TOKEN_SECRET
-        generateValue: true
+        generateValue: false
       - key: REFRESH_TOKEN_EXPIRES_IN
         value: "7d"
       - key: JWE_SECRET
-        generateValue: true
+        generateValue: false
       - key: JWE_ALGORITHM
         value: "dir"
       - key: JWE_ENCRYPTION
@@ -108,17 +108,17 @@ services:
       - key: REDIS_PREFIX
         value: "auth:staging:"
       - key: JWT_SECRET
-        generateValue: true
+        generateValue: false
       - key: JWT_EXPIRES_IN
         value: "15m"
       - key: JWT_ISSUER
         value: "task-manager-auth-staging"
       - key: REFRESH_TOKEN_SECRET
-        generateValue: true
+        generateValue: false
       - key: REFRESH_TOKEN_EXPIRES_IN
         value: "7d"
       - key: JWE_SECRET
-        generateValue: true
+        generateValue: false
       - key: JWE_ALGORITHM
         value: "dir"
       - key: JWE_ENCRYPTION
@@ -175,7 +175,7 @@ services:
         value: "/api/v1/auth/verify-token"
       - key: JWT_SECRET
         sync: false
-        generateValue: true # Debe ser el mismo que auth-service
+        generateValue: false # Debe ser el mismo que auth-service
       - key: JWT_ISSUER
         value: "task-manager-auth"
       - key: CORS_ORIGIN
@@ -242,7 +242,7 @@ services:
         value: "/api/v1/auth/verify-token"
       - key: JWT_SECRET
         sync: false
-        generateValue: true
+        generateValue: false
       - key: JWT_ISSUER
         value: "task-manager-auth-staging"
       - key: CORS_ORIGIN
