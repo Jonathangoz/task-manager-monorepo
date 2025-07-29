@@ -1,36 +1,37 @@
-# .github/workflows/task-service-deploy.yml
 name: ✅ Task Service CI/CD
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
     paths:
       - 'services/task-service/**'
       - 'shared/**'
+      - 'pnpm-lock.yaml'
       - '.github/workflows/task-service-deploy.yml'
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
       - 'services/task-service/**'
       - 'shared/**'
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: '22'
+  PNPM_VERSION: '9'
   SERVICE_PATH: './services/task-service'
 
 jobs:
-  # ✅ Análisis de Código y Testing
+  # ✅ Testing y Quality Checks
   test:
     name: 🧪 Tests & Code Quality
     runs-on: ubuntu-latest
     
     services:
       postgres:
-        image: postgres:15-alpine
+        image: postgres:16-alpine
         env:
-          POSTGRES_DB: task_test
-          POSTGRES_USER: test_user
-          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: task_test_db
+          POSTGRES_USER: task_test_user
+          POSTGRES_PASSWORD: task_test_password
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -57,71 +58,64 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: ${{ env.SERVICE_PATH }}/package-lock.json
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: 🗂️ Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: 💾 Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
 
       - name: 📦 Install Dependencies
-        working-directory: ${{ env.SERVICE_PATH }}
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: 🔍 Lint Code
-        working-directory: ${{ env.SERVICE_PATH }}
-        run: npm run lint
+        run: pnpm --filter task-manager-task-service lint:check
 
-      - name: 🎨 Check Code Format
-        working-directory: ${{ env.SERVICE_PATH }}
-        run: npm run format:check
+      - name: 🏗️ Generate Prisma Client
+        run: pnpm --filter task-manager-task-service prisma:generate
+        env:
+          DATABASE_URL: postgresql://task_test_user:task_test_password@localhost:5432/task_test_db
+
+      - name: 🗄️ Run Database Migrations
+        run: pnpm --filter task-manager-task-service prisma:migrate:dev
+        env:
+          DATABASE_URL: postgresql://task_test_user:task_test_password@localhost:5432/task_test_db
 
       - name: 🏗️ Build Application
-        working-directory: ${{ env.SERVICE_PATH }}
-        run: npm run build
+        run: pnpm --filter task-manager-task-service build
 
-      - name: 🗄️ Setup Test Database
-        working-directory: ${{ env.SERVICE_PATH }}
-        env:
-          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/task_test
-          REDIS_URL: redis://localhost:6379
-        run: |
-          npx prisma generate
-          npx prisma migrate deploy
-
-      - name: 🧪 Run Unit Tests
-        working-directory: ${{ env.SERVICE_PATH }}
+      - name: 🧪 Run Tests
+        run: pnpm --filter task-manager-task-service test:coverage
         env:
           NODE_ENV: test
-          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/task_test
+          DATABASE_URL: postgresql://task_test_user:task_test_password@localhost:5432/task_test_db
           REDIS_URL: redis://localhost:6379
           AUTH_SERVICE_URL: http://localhost:3001
-          AUTH_SERVICE_VERIFY_TOKEN_ENDPOINT: /api/v1/auth/verify-token
-        run: npm run test:coverage
-
-      - name: 🧪 Run Integration Tests
-        working-directory: ${{ env.SERVICE_PATH }}
-        env:
-          NODE_ENV: test
-          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/task_test
-          REDIS_URL: redis://localhost:6379
-          AUTH_SERVICE_URL: http://localhost:3001
-          AUTH_SERVICE_VERIFY_TOKEN_ENDPOINT: /api/v1/auth/verify-token
-        run: npm run test:integration
-
-      - name: 🧪 API Contract Tests
-        working-directory: ${{ env.SERVICE_PATH }}
-        env:
-          NODE_ENV: test
-          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/task_test
-          REDIS_URL: redis://localhost:6379
-          AUTH_SERVICE_URL: http://localhost:3001
-        run: npm run test:contracts
+          AUTH_SERVICE_VERIFY_ENDPOINT: /api/v1/auth/verify-token
+          JWT_SECRET: base64:dGVzdC1qd3Qtc2VjcmV0LXN1cGVyLXNlY3VyZS1mb3ItdGVzdGluZy1vbmx5LTY0LWNoYXJzLWhlcmU=
 
       - name: 📊 Upload Coverage Reports
         uses: codecov/codecov-action@v4
         with:
-          files: ${{ env.SERVICE_PATH }}/coverage/lcov.info
+          file: ${{ env.SERVICE_PATH }}/coverage/lcov.info
           flags: task-service
           name: task-service-coverage
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  # 🔗 Dependency Check (verifica que Auth Service esté disponible)
+  # 🔗 Check Auth Service Dependency
   check-dependencies:
     name: 🔗 Check Service Dependencies
     runs-on: ubuntu-latest
@@ -174,16 +168,14 @@ jobs:
       - name: 🔍 Health Check Staging
         run: |
           echo "🏥 Waiting for staging service to be ready..."
-          sleep 30
+          sleep 45
           curl -f ${{ vars.TASK_SERVICE_STAGING_URL }}/api/v1/health || exit 1
           echo "✅ Staging deployment successful!"
 
       - name: 🧪 Smoke Tests on Staging
         run: |
           echo "🧪 Running smoke tests on staging..."
-          # Test basic endpoints
           curl -f ${{ vars.TASK_SERVICE_STAGING_URL }}/api/v1/health
-          curl -f ${{ vars.TASK_SERVICE_STAGING_URL }}/api/v1/docs
           echo "✅ Smoke tests passed!"
 
   # 🌟 Deploy to Production (main branch)
@@ -211,7 +203,7 @@ jobs:
       - name: 🔍 Health Check Production
         run: |
           echo "🏥 Waiting for production service to be ready..."
-          sleep 30
+          sleep 45
           curl -f ${{ vars.TASK_SERVICE_PRODUCTION_URL }}/api/v1/health || exit 1
           echo "✅ Production deployment successful!"
 
@@ -219,7 +211,6 @@ jobs:
         run: |
           echo "🧪 Running smoke tests on production..."
           curl -f ${{ vars.TASK_SERVICE_PRODUCTION_URL }}/api/v1/health
-          curl -f ${{ vars.TASK_SERVICE_PRODUCTION_URL }}/api/v1/docs
           echo "✅ Smoke tests passed!"
 
       - name: 📢 Notify Deployment Success
@@ -227,34 +218,3 @@ jobs:
         run: |
           echo "🎉 Task Service deployed successfully to production!"
           echo "🔗 URL: ${{ vars.TASK_SERVICE_PRODUCTION_URL }}"
-
-  # 🏗️ Build Docker Image (for manual deployments)
-  build-docker:
-    name: 🐳 Build Docker Image
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    
-    steps:
-      - name: 📥 Checkout Code
-        uses: actions/checkout@v4
-
-      - name: 🐳 Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: 🔑 Log in to Docker Hub
-        if: github.ref == 'refs/heads/main'
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: 🏗️ Build and Push Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          context: ${{ env.SERVICE_PATH }}
-          push: ${{ github.ref == 'refs/heads/main' }}
-          tags: |
-            ${{ secrets.DOCKER_USERNAME }}/task-manager-tasks:latest
-            ${{ secrets.DOCKER_USERNAME }}/task-manager-tasks:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max

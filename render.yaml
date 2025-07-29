@@ -1,13 +1,27 @@
+# Render Blueprint for Task Manager MonoRepo
+# Repository: Jonathangoz/task-manager-monorepo
+# Branches: main (production), develop (staging)
+
+previewsEnabled: true
+previewsExpireAfterDays: 7
+
 services:
-  # 🔐 Auth Service
+  # 🔐 Auth Service - Production
   - type: web
     name: task-manager-auth-service
     runtime: node
     plan: free
+    region: oregon
+    branch: main
     rootDir: ./services/auth-service
-    buildCommand: pnpm install --frozen-lockfile && pnpm prisma:generate && pnpm build
+    buildCommand: |
+      echo "🏗️ Building Auth Service..."
+      pnpm install --frozen-lockfile
+      pnpm prisma:generate
+      pnpm build
     startCommand: pnpm start:prod
     healthCheckPath: /api/v1/health
+    autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
@@ -17,12 +31,12 @@ services:
         value: v1
       - key: DATABASE_URL
         fromDatabase:
-          name: auth-db
+          name: auth-db-prod
           property: connectionString
       - key: REDIS_URL
         fromService:
           type: redis
-          name: task-manager-cache
+          name: task-manager-cache-prod
           property: connectionString
       - key: REDIS_PREFIX
         value: "auth:"
@@ -43,7 +57,7 @@ services:
       - key: JWE_ENCRYPTION
         value: "A256GCM"
       - key: CORS_ORIGIN
-        value: "https://task-manager-frontend-xxx.onrender.com" # Reemplazar con URL real
+        value: "*" # Configurar con dominio específico en producción
       - key: LOG_LEVEL
         value: "info"
       - key: LOG_PRETTY
@@ -52,16 +66,88 @@ services:
         value: "900000"
       - key: RATE_LIMIT_MAX_REQUESTS
         value: "100"
+      - key: HELMET_ENABLED
+        value: "true"
+      - key: HEALTH_CHECK_ENABLED
+        value: "true"
+      - key: SWAGGER_ENABLED
+        value: "true"
 
-  # ✅ Task Service
+  # 🔐 Auth Service - Staging
+  - type: web
+    name: task-manager-auth-service-staging
+    runtime: node
+    plan: free
+    region: oregon
+    branch: develop
+    rootDir: ./services/auth-service
+    buildCommand: |
+      echo "🏗️ Building Auth Service (Staging)..."
+      pnpm install --frozen-lockfile
+      pnpm prisma:generate
+      pnpm build
+    startCommand: pnpm start:prod
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: staging
+      - key: PORT
+        value: 3001
+      - key: API_VERSION
+        value: v1
+      - key: DATABASE_URL
+        fromDatabase:
+          name: auth-db-staging
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: task-manager-cache-staging
+          property: connectionString
+      - key: REDIS_PREFIX
+        value: "auth:staging:"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: "15m"
+      - key: JWT_ISSUER
+        value: "task-manager-auth-staging"
+      - key: REFRESH_TOKEN_SECRET
+        generateValue: true
+      - key: REFRESH_TOKEN_EXPIRES_IN
+        value: "7d"
+      - key: JWE_SECRET
+        generateValue: true
+      - key: JWE_ALGORITHM
+        value: "dir"
+      - key: JWE_ENCRYPTION
+        value: "A256GCM"
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: LOG_LEVEL
+        value: "debug"
+      - key: LOG_PRETTY
+        value: "false"
+      - key: SWAGGER_ENABLED
+        value: "true"
+
+  # ✅ Task Service - Production
   - type: web
     name: task-manager-task-service
     runtime: node
     plan: free
+    region: oregon
+    branch: main
     rootDir: ./services/task-service
-    buildCommand: pnpm install --frozen-lockfile && pnpm prisma:generate && pnpm build
+    buildCommand: |
+      echo "🏗️ Building Task Service..."
+      pnpm install --frozen-lockfile
+      pnpm prisma:generate
+      pnpm build
     startCommand: pnpm start:prod
     healthCheckPath: /api/v1/health
+    autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
@@ -71,12 +157,12 @@ services:
         value: v1
       - key: DATABASE_URL
         fromDatabase:
-          name: task-db
+          name: task-db-prod
           property: connectionString
       - key: REDIS_URL
         fromService:
           type: redis
-          name: task-manager-cache
+          name: task-manager-cache-prod
           property: connectionString
       - key: REDIS_PREFIX
         value: "tasks:"
@@ -89,9 +175,11 @@ services:
         value: "/api/v1/auth/verify-token"
       - key: JWT_SECRET
         sync: false
-        value: "" # ⚠️ DEBES COPIAR MANUALMENTE desde auth-service
+        generateValue: true # Debe ser el mismo que auth-service
+      - key: JWT_ISSUER
+        value: "task-manager-auth"
       - key: CORS_ORIGIN
-        value: "https://task-manager-frontend-xxx.onrender.com" # Reemplazar con URL real
+        value: "*" # Configurar con dominio específico
       - key: LOG_LEVEL
         value: "info"
       - key: LOG_PRETTY
@@ -104,47 +192,105 @@ services:
         value: "20"
       - key: MAX_PAGE_SIZE
         value: "100"
+      - key: HELMET_ENABLED
+        value: "true"
+      - key: HEALTH_CHECK_ENABLED
+        value: "true"
+      - key: SWAGGER_ENABLED
+        value: "true"
 
-  # 🎨 Frontend
+  # ✅ Task Service - Staging
   - type: web
-    name: task-manager-frontend
+    name: task-manager-task-service-staging
     runtime: node
     plan: free
-    rootDir: ./frontend/task-frontend
-    buildCommand: pnpm install --frozen-lockfile && pnpm build
-    startCommand: pnpm start
+    region: oregon
+    branch: develop
+    rootDir: ./services/task-service
+    buildCommand: |
+      echo "🏗️ Building Task Service (Staging)..."
+      pnpm install --frozen-lockfile
+      pnpm prisma:generate
+      pnpm build
+    startCommand: pnpm start:prod
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
     envVars:
       - key: NODE_ENV
-        value: production
-      - key: NEXT_PUBLIC_AUTH_SERVICE_URL
+        value: staging
+      - key: PORT
+        value: 3002
+      - key: API_VERSION
+        value: v1
+      - key: DATABASE_URL
+        fromDatabase:
+          name: task-db-staging
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: task-manager-cache-staging
+          property: connectionString
+      - key: REDIS_PREFIX
+        value: "tasks:staging:"
+      - key: AUTH_SERVICE_URL
         fromService:
           type: web
-          name: task-manager-auth-service
+          name: task-manager-auth-service-staging
           property: url
-      - key: NEXT_PUBLIC_TASK_SERVICE_URL
-        fromService:
-          type: web
-          name: task-manager-task-service
-          property: url
-      - key: NEXT_PUBLIC_APP_NAME
-        value: "Task Manager Pro"
-      - key: NEXT_PUBLIC_APP_VERSION
-        value: "1.0.0"
-      - key: NEXT_PUBLIC_API_VERSION
-        value: "v1"
+      - key: AUTH_SERVICE_VERIFY_ENDPOINT
+        value: "/api/v1/auth/verify-token"
+      - key: JWT_SECRET
+        sync: false
+        generateValue: true
+      - key: JWT_ISSUER
+        value: "task-manager-auth-staging"
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: LOG_LEVEL
+        value: "debug"
+      - key: LOG_PRETTY
+        value: "false"
+      - key: SWAGGER_ENABLED
+        value: "true"
 
 databases:
-  - name: auth-db
+  # Production Databases
+  - name: auth-db-prod
     databaseName: auth_db
     user: auth_user
     plan: free
+    region: oregon
 
-  - name: task-db
+  - name: task-db-prod
     databaseName: task_db
     user: task_user
     plan: free
+    region: oregon
 
-redis:
-  - name: task-manager-cache
+  # Staging Databases
+  - name: auth-db-staging
+    databaseName: auth_db_staging
+    user: auth_user_staging
     plan: free
+    region: oregon
+
+  - name: task-db-staging
+    databaseName: task_db_staging
+    user: task_user_staging
+    plan: free
+    region: oregon
+
+# Redis instances
+redis:
+  # Production Redis
+  - name: task-manager-cache-prod
+    plan: free
+    region: oregon
+    maxmemoryPolicy: allkeys-lru
+    
+  # Staging Redis
+  - name: task-manager-cache-staging
+    plan: free
+    region: oregon
     maxmemoryPolicy: allkeys-lru

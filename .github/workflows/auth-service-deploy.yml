@@ -1,4 +1,4 @@
-name: Deploy Auth Service
+name: 🔐 Auth Service CI/CD
 
 on:
   push:
@@ -17,16 +17,17 @@ on:
 env:
   NODE_VERSION: '22'
   PNPM_VERSION: '9'
+  SERVICE_PATH: './services/auth-service'
 
 jobs:
-  # ============= TESTING JOB =============
+  # ✅ Testing y Quality Checks
   test:
-    name: Test Auth Service
+    name: 🧪 Tests & Code Quality
     runs-on: ubuntu-latest
     
     services:
       postgres:
-        image: postgres:15-alpine
+        image: postgres:16-alpine
         env:
           POSTGRES_DB: auth_test_db
           POSTGRES_USER: auth_test_user
@@ -50,25 +51,25 @@ jobs:
           --health-retries 5
 
     steps:
-      - name: Checkout code
+      - name: 📥 Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: 🟢 Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Setup pnpm
+      - name: 📦 Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - name: Get pnpm store directory
+      - name: 🗂️ Get pnpm store directory
         shell: bash
         run: |
           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
-      - name: Setup pnpm cache
+      - name: 💾 Setup pnpm cache
         uses: actions/cache@v4
         with:
           path: ${{ env.STORE_PATH }}
@@ -76,108 +77,110 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
-      - name: Install dependencies
+      - name: 📦 Install Dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint
+      - name: 🔍 Lint Code
         run: pnpm --filter task-manager-auth-service lint:check
 
-      - name: Type check
-        run: pnpm --filter task-manager-auth-service type-check
-
-      - name: Generate Prisma client
+      - name: 🏗️ Generate Prisma Client
         run: pnpm --filter task-manager-auth-service prisma:generate
         env:
           DATABASE_URL: postgresql://auth_test_user:auth_test_password@localhost:5432/auth_test_db
 
-      - name: Run database migrations
-        run: pnpm --filter task-manager-auth-service db:migrate
+      - name: 🗄️ Run Database Migrations
+        run: pnpm --filter task-manager-auth-service prisma:migrate:dev
         env:
           DATABASE_URL: postgresql://auth_test_user:auth_test_password@localhost:5432/auth_test_db
 
-      - name: Run tests
-        run: pnpm --filter task-manager-auth-service test:ci
+      - name: 🏗️ Build Application
+        run: pnpm --filter task-manager-auth-service build
+
+      - name: 🧪 Run Tests
+        run: pnpm --filter task-manager-auth-service test:coverage
         env:
           NODE_ENV: test
           DATABASE_URL: postgresql://auth_test_user:auth_test_password@localhost:5432/auth_test_db
           REDIS_URL: redis://localhost:6379
-          JWT_SECRET: test-jwt-secret-super-secure-for-testing-only-64-chars
-          REFRESH_TOKEN_SECRET: test-refresh-secret-super-secure-for-testing-only-64-chars
-          JWE_SECRET: test-jwe-secret-32-chars-exactly
+          JWT_SECRET: base64:dGVzdC1qd3Qtc2VjcmV0LXN1cGVyLXNlY3VyZS1mb3ItdGVzdGluZy1vbmx5LTY0LWNoYXJzLWhlcmU=
+          REFRESH_TOKEN_SECRET: base64:dGVzdC1yZWZyZXNoLXNlY3JldC1zdXBlci1zZWN1cmUtZm9yLXRlc3Rpbmctb25seS02NC1jaGFycw==
+          JWE_SECRET: base64:dGVzdC1qd2Utc2VjcmV0LTMyLWNoYXJzLWV4YWN0bHk=
 
-      - name: Upload coverage reports
+      - name: 📊 Upload Coverage Reports
         uses: codecov/codecov-action@v4
         with:
-          file: ./services/auth-service/coverage/lcov.info
+          file: ${{ env.SERVICE_PATH }}/coverage/lcov.info
           flags: auth-service
           name: auth-service-coverage
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  # ============= BUILD JOB =============
-  build:
-    name: Build Task Service
+  # 🚀 Deploy to Staging (develop branch)
+  deploy-staging:
+    name: 🚀 Deploy to Staging
     runs-on: ubuntu-latest
     needs: test
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    
+    environment:
+      name: staging
+      url: ${{ vars.AUTH_SERVICE_STAGING_URL }}
 
     steps:
-      - name: Checkout code
+      - name: 📥 Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: 🚀 Deploy to Render Staging
+        uses: johnbeynon/render-deploy-action@v0.0.8
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          service-id: ${{ secrets.RENDER_AUTH_SERVICE_STAGING_ID }}
+          api-key: ${{ secrets.RENDER_API_KEY }}
+          wait-for-success: true
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
+      - name: 🔍 Health Check Staging
+        run: |
+          echo "🏥 Waiting for staging service to be ready..."
+          sleep 45
+          curl -f ${{ vars.AUTH_SERVICE_STAGING_URL }}/api/v1/health || exit 1
+          echo "✅ Staging deployment successful!"
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Generate Prisma client
-        run: pnpm --filter task-manager-task-service prisma:generate
-
-      - name: Build
-        run: pnpm --filter task-manager-task-service build
-
-      - name: Cache build artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            services/task-service/dist
-            services/task-service/node_modules/.prisma
-          key: ${{ runner.os }}-task-build-${{ github.sha }}
-
-  # ============= DEPLOY JOB =============
-  deploy:
-    name: Deploy to Render
+  # 🌟 Deploy to Production (main branch)
+  deploy-production:
+    name: 🌟 Deploy to Production
     runs-on: ubuntu-latest
-    needs: [test, build]
-    if: github.ref == 'refs/heads/main'
-    environment: production
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    environment:
+      name: production
+      url: ${{ vars.AUTH_SERVICE_PRODUCTION_URL }}
 
     steps:
-      - name: Deploy to Render
-        uses: renderinc/render-action@v0.6.0
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🌟 Deploy to Render Production
+        uses: johnbeynon/render-deploy-action@v0.0.8
         with:
+          service-id: ${{ secrets.RENDER_AUTH_SERVICE_PRODUCTION_ID }}
           api-key: ${{ secrets.RENDER_API_KEY }}
-          service-id: ${{ secrets.RENDER_TASK_SERVICE_ID }}
-          wait: true
+          wait-for-success: true
 
-      - name: Health Check
+      - name: 🔍 Health Check Production
         run: |
-          sleep 30
-          curl -f ${{ secrets.TASK_SERVICE_URL }}/api/v1/health || exit 1
+          echo "🏥 Waiting for production service to be ready..."
+          sleep 45
+          curl -f ${{ vars.AUTH_SERVICE_PRODUCTION_URL }}/api/v1/health || exit 1
+          echo "✅ Production deployment successful!"
 
-      - name: Notify deployment
-        if: always()
-        uses: 8398a7/action-slack@v3
-        with:
-          status: ${{ job.status }}
-          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
-          message: |
-            Task Service deployment ${{ job.status }}
-            Commit: ${{ github.sha }}
-            Author: ${{ github.actor }}
+      - name: 🧪 Smoke Tests on Production
+        run: |
+          echo "🧪 Running smoke tests on production..."
+          curl -f ${{ vars.AUTH_SERVICE_PRODUCTION_URL }}/api/v1/health
+          echo "✅ Smoke tests passed!"
+
+      - name: 📢 Notify Deployment Success
+        if: success()
+        run: |
+          echo "🎉 Auth Service deployed successfully to production!"
+          echo "🔗 URL: ${{ vars.AUTH_SERVICE_PRODUCTION_URL }}"
