@@ -1,20 +1,24 @@
 version: 2
 updates:
-  # Enable version updates for npm (package.json)
+  # Root package.json dependencies
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
       time: "09:00"
+      timezone: "America/Bogota"
     open-pull-requests-limit: 10
     reviewers:
-      - "task-manager-team"
+      - "Jonathangoz"
     assignees:
-      - "task-manager-team"
+      - "Jonathangoz"
     commit-message:
-      prefix: "chore"
+      prefix: "chore(deps)"
       include: "scope"
+    labels:
+      - "dependencies"
+      - "automerge"
 
   # Auth Service dependencies
   - package-ecosystem: "npm"
@@ -22,8 +26,19 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-      time: "09:00"
+      time: "09:30"
+      timezone: "America/Bogota"
     open-pull-requests-limit: 5
+    reviewers:
+      - "Jonathangoz"
+    assignees:
+      - "Jonathangoz"
+    commit-message:
+      prefix: "chore(auth-service)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "auth-service"
 
   # Task Service dependencies
   - package-ecosystem: "npm"
@@ -31,30 +46,73 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-      time: "09:00"
+      time: "10:00"
+      timezone: "America/Bogota"
     open-pull-requests-limit: 5
-
-  # Frontend dependencies
-  - package-ecosystem: "npm"
-    directory: "/frontend/task-frontend"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 5
+    reviewers:
+      - "Jonathangoz"
+    assignees:
+      - "Jonathangoz"
+    commit-message:
+      prefix: "chore(task-service)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "task-service"
 
   # Docker updates
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "monday"
-      time: "10:00"
+      day: "tuesday"
+      time: "09:00"
+      timezone: "America/Bogota"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "Jonathangoz"
+    assignees:
+      - "Jonathangoz"
+    commit-message:
+      prefix: "chore(docker)"
+    labels:
+      - "docker"
+      - "infrastructure"
 
   # GitHub Actions updates
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "tuesday"
       time: "10:00"
+      timezone: "America/Bogota"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "Jonathangoz"
+    assignees:
+      - "Jonathangoz"
+    commit-message:
+      prefix: "chore(ci)"
+    labels:
+      - "github-actions"
+      - "ci-cd"
+
+  # Shared dependencies (if exists)
+  - package-ecosystem: "npm"
+    directory: "/shared"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "11:00"
+      timezone: "America/Bogota"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "Jonathangoz"
+    assignees:
+      - "Jonathangoz"
+    commit-message:
+      prefix: "chore(shared)"
+    labels:
+      - "dependencies"
+      - "shared"

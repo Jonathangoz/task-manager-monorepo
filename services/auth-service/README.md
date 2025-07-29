@@ -148,7 +148,7 @@ Para ejecutar el servicio individualmente en desarrollo (asumiendo que las depen
     ```bash
     pnpm prisma generate
     pnpm prisma migrate dev --name init
-    pnpm prisma db seed
+    pnpm prisma db seed (opcional)
     ```
 3.  Iniciar el servicio:
     ```bash
