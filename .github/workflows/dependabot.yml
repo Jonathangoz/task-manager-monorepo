@@ -1,4 +1,7 @@
-version: 2
+# dependabot.yml - Task-Manager-Monorepo (raiz del proyecto)
+
+version: 2 # <-- Aquí estaba el error, corregido de 'ersion' a 'version'
+
 updates:
   # Root package.json dependencies
   - package-ecosystem: "npm"

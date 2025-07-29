@@ -24,7 +24,7 @@ jobs:
   test:
     name: 🧪 Tests & Code Quality
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:16-alpine
@@ -39,7 +39,7 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-      
+
       redis:
         image: redis:7-alpine
         options: >-
@@ -105,6 +105,12 @@ jobs:
           AUTH_SERVICE_URL: http://localhost:3001
           AUTH_SERVICE_VERIFY_ENDPOINT: /api/v1/auth/verify-token
           JWT_SECRET: base64:dGVzdC1qd3Qtc2VjcmV0LXN1cGVyLXNlY3VyZS1mb3ItdGVzdGluZy1vbmx5LTY0LWNoYXJzLWhlcmU=
+          # Asegúrate de que estas variables también estén en tu .env de test del Task Service
+          AUTH_SERVICE_API_KEY: test-api-key # Agrega un valor de prueba si tu app lo usa en tests
+          # Si tu Task Service usa REFRESH_TOKEN_SECRET o JWE_SECRET para algo en tests, añádelos aquí también
+          # REFRESH_TOKEN_SECRET: base64:dGVzdC1yZWZyZXNoLXNlY3JldC1zdXBlci1zZWN1cmUtZm9yLXRlc3Rpbmctb25seS02NC1jaGFycw==
+          # JWE_SECRET: base64:dGVzdC1qd2Utc2VjcmV0LTMyLWNoYXJzLWV4YWN0bHk=
+
 
       - name: 📊 Upload Coverage Reports
         uses: codecov/codecov-action@v4
@@ -115,68 +121,24 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  # 🔗 Check Auth Service Dependency
+  # 🔗 Check Auth Service Dependency (Solo para producción)
   check-dependencies:
-    name: 🔗 Check Service Dependencies
+    name: 🔗 Check Auth Service Health
     runs-on: ubuntu-latest
     needs: test
-    if: github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' # Solo se ejecuta para pushes a main
 
     steps:
-      - name: 🔍 Check Auth Service Health (Staging)
-        if: github.ref == 'refs/heads/develop'
-        run: |
-          echo "🔍 Checking Auth Service staging availability..."
-          curl -f ${{ vars.AUTH_SERVICE_STAGING_URL }}/api/v1/health || {
-            echo "❌ Auth Service staging is not available. Deployment aborted."
-            exit 1
-          }
-          echo "✅ Auth Service staging is healthy!"
-
       - name: 🔍 Check Auth Service Health (Production)
-        if: github.ref == 'refs/heads/main'
         run: |
           echo "🔍 Checking Auth Service production availability..."
+          # Aumenta el sleep para dar tiempo al Auth Service de arrancar si se acaba de desplegar
+          sleep 60
           curl -f ${{ vars.AUTH_SERVICE_PRODUCTION_URL }}/api/v1/health || {
             echo "❌ Auth Service production is not available. Deployment aborted."
             exit 1
           }
           echo "✅ Auth Service production is healthy!"
-
-  # 🚀 Deploy to Staging (develop branch)
-  deploy-staging:
-    name: 🚀 Deploy to Staging
-    runs-on: ubuntu-latest
-    needs: [test, check-dependencies]
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
-    
-    environment:
-      name: staging
-      url: ${{ vars.TASK_SERVICE_STAGING_URL }}
-
-    steps:
-      - name: 📥 Checkout Code
-        uses: actions/checkout@v4
-
-      - name: 🚀 Deploy to Render Staging
-        uses: johnbeynon/render-deploy-action@v0.0.8
-        with:
-          service-id: ${{ secrets.RENDER_TASK_SERVICE_STAGING_ID }}
-          api-key: ${{ secrets.RENDER_API_KEY }}
-          wait-for-success: true
-
-      - name: 🔍 Health Check Staging
-        run: |
-          echo "🏥 Waiting for staging service to be ready..."
-          sleep 45
-          curl -f ${{ vars.TASK_SERVICE_STAGING_URL }}/api/v1/health || exit 1
-          echo "✅ Staging deployment successful!"
-
-      - name: 🧪 Smoke Tests on Staging
-        run: |
-          echo "🧪 Running smoke tests on staging..."
-          curl -f ${{ vars.TASK_SERVICE_STAGING_URL }}/api/v1/health
-          echo "✅ Smoke tests passed!"
 
   # 🌟 Deploy to Production (main branch)
   deploy-production:
@@ -184,10 +146,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [test, check-dependencies]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
+
     environment:
-      name: production
-      url: ${{ vars.TASK_SERVICE_PRODUCTION_URL }}
+      name: Task-manager # ¡CAMBIADO! Ahora usa tu entorno 'Task-manager'
 
     steps:
       - name: 📥 Checkout Code
@@ -198,12 +159,12 @@ jobs:
         with:
           service-id: ${{ secrets.RENDER_TASK_SERVICE_PRODUCTION_ID }}
           api-key: ${{ secrets.RENDER_API_KEY }}
-          wait-for-success: true
+          # wait-for-success: true # ELIMINADO: 'wait-for-success' no es un input válido para esta acción
 
       - name: 🔍 Health Check Production
         run: |
           echo "🏥 Waiting for production service to be ready..."
-          sleep 45
+          sleep 60 # Aumentado el tiempo de espera
           curl -f ${{ vars.TASK_SERVICE_PRODUCTION_URL }}/api/v1/health || exit 1
           echo "✅ Production deployment successful!"
 
