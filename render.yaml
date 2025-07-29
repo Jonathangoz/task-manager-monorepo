@@ -1,3 +1,5 @@
+# render.yaml
+
 # Render Blueprint for Task Manager MonoRepo
 # Repository: Jonathangoz/task-manager-monorepo
 # Branches: main (production), develop (staging)
@@ -10,8 +12,8 @@ services:
   - type: web
     name: task-manager-auth-service
     runtime: node
-    plan: free
-    region: oregon
+    plan: free # Puedes cambiar a 'starter' o superior si lo necesitas
+    region: oregon # Mantén la región consistente para todos los servicios
     branch: main
     rootDir: ./services/auth-service
     buildCommand: |
@@ -40,24 +42,27 @@ services:
           property: connectionString
       - key: REDIS_PREFIX
         value: "auth:"
+      # secreto global de GitHub
       - key: JWT_SECRET
-        generateValue: true
+        fromSecret: JWT_GLOBAL_SECRET
       - key: JWT_EXPIRES_IN
         value: "15m"
       - key: JWT_ISSUER
         value: "task-manager-auth"
+      # secreto global de GitHub
       - key: REFRESH_TOKEN_SECRET
-        generateValue: true
+        fromSecret: REFRESH_TOKEN_GLOBAL_SECRET
       - key: REFRESH_TOKEN_EXPIRES_IN
         value: "7d"
+      # secreto global de GitHub
       - key: JWE_SECRET
-        generateValue: true
+        fromSecret: JWE_GLOBAL_SECRET
       - key: JWE_ALGORITHM
         value: "dir"
       - key: JWE_ENCRYPTION
         value: "A256GCM"
       - key: CORS_ORIGIN
-        value: "*" # Configurar con dominio específico en producción
+        value: "*" # Configurar con dominio específico en producción DESPUÉS del despliegue
       - key: LOG_LEVEL
         value: "info"
       - key: LOG_PRETTY
@@ -108,17 +113,17 @@ services:
       - key: REDIS_PREFIX
         value: "auth:staging:"
       - key: JWT_SECRET
-        generateValue: true
+        fromSecret: JWT_GLOBAL_SECRET 
       - key: JWT_EXPIRES_IN
         value: "15m"
       - key: JWT_ISSUER
         value: "task-manager-auth-staging"
       - key: REFRESH_TOKEN_SECRET
-        generateValue: true
+        fromSecret: REFRESH_TOKEN_GLOBAL_SECRET 
       - key: REFRESH_TOKEN_EXPIRES_IN
         value: "7d"
       - key: JWE_SECRET
-        generateValue: true
+        fromSecret: JWE_GLOBAL_SECRET 
       - key: JWE_ALGORITHM
         value: "dir"
       - key: JWE_ENCRYPTION
@@ -173,13 +178,16 @@ services:
           property: url
       - key: AUTH_SERVICE_VERIFY_ENDPOINT
         value: "/api/v1/auth/verify-token"
+      # Usamos el mismo secreto global para JWT
       - key: JWT_SECRET
-        sync: false
-        generateValue: true # Debe ser el mismo que auth-service
+        fromSecret: JWT_GLOBAL_SECRET
       - key: JWT_ISSUER
         value: "task-manager-auth"
+      # clave API para comunicación interna
+      - key: AUTH_SERVICE_API_KEY
+        fromSecret: AUTH_SERVICE_API_KEY
       - key: CORS_ORIGIN
-        value: "*" # Configurar con dominio específico
+        value: "*" # Configurar con dominio específico DESPUÉS del despliegue
       - key: LOG_LEVEL
         value: "info"
       - key: LOG_PRETTY
@@ -198,6 +206,13 @@ services:
         value: "true"
       - key: SWAGGER_ENABLED
         value: "true"
+      # TTL de caché para Task Service
+      - key: CACHE_TTL_TASKS
+        value: "300"
+      - key: CACHE_TTL_CATEGORIES
+        value: "600"
+      - key: CACHE_TTL_USER_TASKS
+        value: "180"
 
   # ✅ Task Service - Staging
   - type: web
@@ -241,10 +256,11 @@ services:
       - key: AUTH_SERVICE_VERIFY_ENDPOINT
         value: "/api/v1/auth/verify-token"
       - key: JWT_SECRET
-        sync: false
-        generateValue: true
+        fromSecret: JWT_GLOBAL_SECRET # Mismo secreto global
       - key: JWT_ISSUER
         value: "task-manager-auth-staging"
+      - key: AUTH_SERVICE_API_KEY
+        fromSecret: AUTH_SERVICE_API_KEY # Mismo secreto global
       - key: CORS_ORIGIN
         value: "*"
       - key: LOG_LEVEL
@@ -253,6 +269,16 @@ services:
         value: "false"
       - key: SWAGGER_ENABLED
         value: "true"
+      - key: DEFAULT_PAGE_SIZE
+        value: "20"
+      - key: MAX_PAGE_SIZE
+        value: "100"
+      - key: CACHE_TTL_TASKS
+        value: "300"
+      - key: CACHE_TTL_CATEGORIES
+        value: "600"
+      - key: CACHE_TTL_USER_TASKS
+        value: "180"
 
 databases:
   # Production Databases
