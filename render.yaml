@@ -1,8 +1,9 @@
 # Render Blueprint for Task Manager MonoRepo
 # Repository: Jonathangoz/task-manager-monorepo
 # Branches: main (production)
+version: 2
 
-previewsEnabled: false 
+previewsEnabled: false # Deshabilitar si solo vas a usar el branch main
 
 services:
   # 🔐 Auth Service - Production
@@ -11,7 +12,7 @@ services:
     runtime: node
     plan: free
     region: oregon
-    branch: main 
+    branch: main # Solo se despliega desde la rama 'main' para producción
     rootDir: ./services/auth-service
     buildCommand: |
       echo "🏗️ Building Auth Service..."
@@ -21,6 +22,7 @@ services:
     startCommand: pnpm start:prod
     healthCheckPath: /api/v1/health
     autoDeploy: true
+    envGroup: task-manager-shared-env # Aquí se adjunta el Environment Group
     envVars:
       - key: NODE_ENV
         value: production
@@ -30,33 +32,15 @@ services:
         value: v1
       - key: DATABASE_URL
         fromDatabase:
-          name: auth-db-prod 
+          name: task-manager-unified-db-prod # Apunta a la base de datos UNIFICADA
           property: connectionString
       - key: REDIS_URL
         fromService:
           type: keyvalue
-          name: task-manager-cache-prod 
+          name: task-manager-cache-prod # Apunta a tu Redis de producción
           property: connectionString
       - key: REDIS_PREFIX
         value: "auth:"
-      - key: JWT_SECRET
-        value: JWT_GLOBAL_SECRET
-      - key: JWT_EXPIRES_IN
-        value: "15m"
-      - key: JWT_ISSUER
-        value: "task-manager-auth"
-      - key: REFRESH_TOKEN_SECRET
-        value: REFRESH_TOKEN_GLOBAL_SECRET
-      - key: REFRESH_TOKEN_EXPIRES_IN
-        value: "7d"
-      - key: JWE_SECRET
-        value: JWE_GLOBAL_SECRET
-      - key: JWE_ALGORITHM
-        value: "dir"
-      - key: JWE_ENCRYPTION
-        value: "A256GCM"
-      - key: CORS_ORIGIN
-        value: "*" 
       - key: LOG_LEVEL
         value: "info"
       - key: LOG_PRETTY
@@ -78,7 +62,7 @@ services:
     runtime: node
     plan: free
     region: oregon
-    branch: main
+    branch: main # Solo se despliega desde la rama 'main' para producción
     rootDir: ./services/task-service
     buildCommand: |
       echo "🏗️ Building Task Service..."
@@ -88,6 +72,7 @@ services:
     startCommand: pnpm start:prod
     healthCheckPath: /api/v1/health
     autoDeploy: true
+    envGroup: task-manager-shared-env # Aquí se adjunta el Environment Group
     envVars:
       - key: NODE_ENV
         value: production
@@ -97,30 +82,19 @@ services:
         value: v1
       - key: DATABASE_URL
         fromDatabase:
-          name: task-db-prod 
+          name: task-manager-unified-db-prod # Apunta a la base de datos UNIFICADA
           property: connectionString
       - key: REDIS_URL
         fromService:
           type: keyvalue
-          name: task-manager-cache-prod 
+          name: task-manager-cache-prod # Apunta a tu Redis de producción
           property: connectionString
       - key: REDIS_PREFIX
         value: "tasks:"
-      # Nota: AUTH_SERVICE_URL apunta al nombre de servicio interno de Render para Auth
-      # Esto solo funciona para comunicación interna entre servicios en Render.
-      # Si el Task Service necesita contactar al Auth Service desde fuera de Render, necesitarías la URL pública.
       - key: AUTH_SERVICE_URL
         value: "http://task-manager-auth-service:3001" # Comunicación interna Render
       - key: AUTH_SERVICE_VERIFY_ENDPOINT
         value: "/api/v1/auth/verify-token"
-      - key: JWT_SECRET
-        value: JWT_GLOBAL_SECRET
-      - key: JWT_ISSUER
-        value: "task-manager-auth"
-      - key: AUTH_SERVICE_API_KEY
-        value: AUTH_SERVICE_API_KEY
-      - key: CORS_ORIGIN
-        value: "*" 
       - key: LOG_LEVEL
         value: "info"
       - key: LOG_PRETTY
@@ -155,15 +129,8 @@ services:
     maxmemoryPolicy: allkeys-lru
 
 databases:
-  # Production Databases
-  - name: auth-db-prod
-    databaseName: auth_db
-    user: auth_user
-    plan: free 
-    region: oregon
-
-  - name: task-db-prod
-    databaseName: task_db
-    user: task_user
-    plan: free 
+  - name: task-manager-unified-db-prod 
+    databaseName: task_manager_db_prod 
+    user: task_manager_user_prod 
+    plan: free
     region: oregon
