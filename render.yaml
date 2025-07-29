@@ -124,6 +124,9 @@ services:
         value: "7d"
       - key: JWE_SECRET
         fromSecret: JWE_GLOBAL_SECRET 
+      - key: REFRESH_TOKEN_EXPIRES_IN
+        value: "7d"
+      - key: JWE_SECRET
       - key: JWE_ALGORITHM
         value: "dir"
       - key: JWE_ENCRYPTION
@@ -181,6 +184,7 @@ services:
       # Usamos el mismo secreto global para JWT
       - key: JWT_SECRET
         fromSecret: JWT_GLOBAL_SECRET
+        sync: false
       - key: JWT_ISSUER
         value: "task-manager-auth"
       # clave API para comunicación interna
@@ -257,6 +261,7 @@ services:
         value: "/api/v1/auth/verify-token"
       - key: JWT_SECRET
         fromSecret: JWT_GLOBAL_SECRET # Mismo secreto global
+        sync: false
       - key: JWT_ISSUER
         value: "task-manager-auth-staging"
       - key: AUTH_SERVICE_API_KEY

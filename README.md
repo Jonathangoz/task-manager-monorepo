@@ -1,6 +1,6 @@
 # Task-Manager-MonoRepo
 
-Este es el monorepo principal para el proyecto **Task Manager**, una aplicación de gestión de tareas construida con una arquitectura de microservicios. Contiene los servicios de backend, el frontend y las configuraciones compartidas.
+Este es el monorepo principal para el proyecto **Task Manager**, una aplicación de gestión de tareas construida con una arquitectura de microservicios. Contiene los servicios de backend, y las configuraciones compartidas.
 
 ## 🏗️ Estructura del Proyecto
 
