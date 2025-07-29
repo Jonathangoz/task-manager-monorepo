@@ -1,10 +1,8 @@
-# render.yaml
-
 # Render Blueprint for Task Manager MonoRepo
 # Repository: Jonathangoz/task-manager-monorepo
-# Branches: main (production), develop (staging)
+# Branches: main (production)
 
-previewsEnabled: false
+previewsEnabled: false 
 
 services:
   # 🔐 Auth Service - Production
@@ -13,7 +11,7 @@ services:
     runtime: node
     plan: free
     region: oregon
-    branch: main
+    branch: main 
     rootDir: ./services/auth-service
     buildCommand: |
       echo "🏗️ Building Auth Service..."
@@ -32,12 +30,12 @@ services:
         value: v1
       - key: DATABASE_URL
         fromDatabase:
-          name: task-manager-db-prod # Apuntando a la única base de datos consolidada
+          name: auth-db-prod 
           property: connectionString
       - key: REDIS_URL
         fromService:
           type: keyvalue
-          name: task-manager-cache-prod
+          name: task-manager-cache-prod 
           property: connectionString
       - key: REDIS_PREFIX
         value: "auth:"
@@ -58,7 +56,7 @@ services:
       - key: JWE_ENCRYPTION
         value: "A256GCM"
       - key: CORS_ORIGIN
-        value: "*" # Configurar con dominio específico en producción DESPUÉS del despliegue
+        value: "*" 
       - key: LOG_LEVEL
         value: "info"
       - key: LOG_PRETTY
@@ -99,17 +97,20 @@ services:
         value: v1
       - key: DATABASE_URL
         fromDatabase:
-          name: task-manager-db-prod # Apuntando a la única base de datos consolidada
+          name: task-db-prod 
           property: connectionString
       - key: REDIS_URL
         fromService:
           type: keyvalue
-          name: task-manager-cache-prod
+          name: task-manager-cache-prod 
           property: connectionString
       - key: REDIS_PREFIX
         value: "tasks:"
+      # Nota: AUTH_SERVICE_URL apunta al nombre de servicio interno de Render para Auth
+      # Esto solo funciona para comunicación interna entre servicios en Render.
+      # Si el Task Service necesita contactar al Auth Service desde fuera de Render, necesitarías la URL pública.
       - key: AUTH_SERVICE_URL
-        value: "http://task-manager-auth-service:3001"
+        value: "http://task-manager-auth-service:3001" # Comunicación interna Render
       - key: AUTH_SERVICE_VERIFY_ENDPOINT
         value: "/api/v1/auth/verify-token"
       - key: JWT_SECRET
@@ -119,7 +120,7 @@ services:
       - key: AUTH_SERVICE_API_KEY
         value: AUTH_SERVICE_API_KEY
       - key: CORS_ORIGIN
-        value: "*" # Configurar con dominio específico DESPUÉS del despliegue
+        value: "*" 
       - key: LOG_LEVEL
         value: "info"
       - key: LOG_PRETTY
@@ -145,18 +146,24 @@ services:
       - key: CACHE_TTL_USER_TASKS
         value: "180"
 
-  # Production Redis
+  # Production Redis Cache
   - type: keyvalue
     name: task-manager-cache-prod
-    plan: free
+    plan: free 
     region: oregon
-    ipAllowList: []
+    ipAllowList: [] 
     maxmemoryPolicy: allkeys-lru
 
 databases:
-  # Única base de datos consolidada para producción (Auth y Tasks)
-  - name: task-manager-db-prod
-    databaseName: task_manager_db # Un nombre de DB más genérico
-    user: task_manager_user # Un usuario más genérico
-    plan: free
+  # Production Databases
+  - name: auth-db-prod
+    databaseName: auth_db
+    user: auth_user
+    plan: free 
+    region: oregon
+
+  - name: task-db-prod
+    databaseName: task_db
+    user: task_user
+    plan: free 
     region: oregon
