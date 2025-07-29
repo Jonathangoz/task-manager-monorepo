@@ -12,7 +12,7 @@ services:
   - type: web
     name: task-manager-auth-service
     runtime: node
-    plan: free 
+    plan: free
     region: oregon # Manténer la región consistente para todos los servicios
     branch: main
     rootDir: ./services/auth-service
@@ -77,6 +77,8 @@ services:
         value: "true"
       - key: SWAGGER_ENABLED
         value: "true"
+      # Se asume AUTH_SERVICE_API_KEY no es necesario en Auth Service, sino en Task Service.
+      # Si Auth Service mismo lo necesita para alguna integración, añádelo.
 
   # 🔐 Auth Service - Staging
   - type: web
@@ -113,20 +115,17 @@ services:
       - key: REDIS_PREFIX
         value: "auth:staging:"
       - key: JWT_SECRET
-        fromSecret: JWT_GLOBAL_SECRET 
+        fromSecret: JWT_GLOBAL_SECRET
       - key: JWT_EXPIRES_IN
         value: "15m"
       - key: JWT_ISSUER
         value: "task-manager-auth-staging"
       - key: REFRESH_TOKEN_SECRET
-        fromSecret: REFRESH_TOKEN_GLOBAL_SECRET 
+        fromSecret: REFRESH_TOKEN_GLOBAL_SECRET
       - key: REFRESH_TOKEN_EXPIRES_IN
         value: "7d"
       - key: JWE_SECRET
-        fromSecret: JWE_GLOBAL_SECRET 
-      - key: REFRESH_TOKEN_EXPIRES_IN
-        value: "7d"
-      - key: JWE_SECRET
+        fromSecret: JWE_GLOBAL_SECRET # Corregido: Asegurado que usa fromSecret
       - key: JWE_ALGORITHM
         value: "dir"
       - key: JWE_ENCRYPTION
@@ -138,6 +137,15 @@ services:
       - key: LOG_PRETTY
         value: "false"
       - key: SWAGGER_ENABLED
+        value: "true"
+      # Añadidas para coherencia con producción y buena práctica
+      - key: RATE_LIMIT_WINDOW_MS
+        value: "900000"
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: "100"
+      - key: HELMET_ENABLED
+        value: "true"
+      - key: HEALTH_CHECK_ENABLED
         value: "true"
 
   # ✅ Task Service - Production
@@ -175,16 +183,12 @@ services:
       - key: REDIS_PREFIX
         value: "tasks:"
       - key: AUTH_SERVICE_URL
-        fromService:
-          type: web
-          name: task-manager-auth-service
-          property: url
+        value: "http://task-manager-auth-service:3001" # Corregido
       - key: AUTH_SERVICE_VERIFY_ENDPOINT
         value: "/api/v1/auth/verify-token"
       # Usamos el mismo secreto global para JWT
       - key: JWT_SECRET
         fromSecret: JWT_GLOBAL_SECRET
-        sync: false
       - key: JWT_ISSUER
         value: "task-manager-auth"
       # clave API para comunicación interna
@@ -253,15 +257,11 @@ services:
       - key: REDIS_PREFIX
         value: "tasks:staging:"
       - key: AUTH_SERVICE_URL
-        fromService:
-          type: web
-          name: task-manager-auth-service-staging
-          property: url
+        value: "http://task-manager-auth-service-staging:3001" # Corregido
       - key: AUTH_SERVICE_VERIFY_ENDPOINT
         value: "/api/v1/auth/verify-token"
       - key: JWT_SECRET
         fromSecret: JWT_GLOBAL_SECRET # Mismo secreto global
-        sync: false
       - key: JWT_ISSUER
         value: "task-manager-auth-staging"
       - key: AUTH_SERVICE_API_KEY
@@ -284,6 +284,15 @@ services:
         value: "600"
       - key: CACHE_TTL_USER_TASKS
         value: "180"
+      # Añadidas para coherencia con producción y buena práctica
+      - key: RATE_LIMIT_WINDOW_MS
+        value: "900000"
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: "200"
+      - key: HELMET_ENABLED
+        value: "true"
+      - key: HEALTH_CHECK_ENABLED
+        value: "true"
 
   # Production Redis
   - type: keyvalue
@@ -292,7 +301,7 @@ services:
     region: oregon
     ipAllowList: []
     maxmemoryPolicy: allkeys-lru
-    
+
   # Staging Redis
   - type: keyvalue
     name: task-manager-cache-staging
