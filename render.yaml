@@ -13,7 +13,7 @@ services:
     name: task-manager-auth-service
     runtime: node
     plan: free
-    region: oregon # Manténer la región consistente para todos los servicios
+    region: oregon
     branch: main
     rootDir: ./services/auth-service
     buildCommand: |
@@ -42,27 +42,24 @@ services:
           property: connectionString
       - key: REDIS_PREFIX
         value: "auth:"
-      # secreto global de GitHub
       - key: JWT_SECRET
-        fromSecret: JWT_GLOBAL_SECRET
+        value: JWT_GLOBAL_SECRET
       - key: JWT_EXPIRES_IN
         value: "15m"
       - key: JWT_ISSUER
         value: "task-manager-auth"
-      # secreto global de GitHub
       - key: REFRESH_TOKEN_SECRET
-        fromSecret: REFRESH_TOKEN_GLOBAL_SECRET
+        value: REFRESH_TOKEN_GLOBAL_SECRET
       - key: REFRESH_TOKEN_EXPIRES_IN
         value: "7d"
-      # secreto global de GitHub
       - key: JWE_SECRET
-        fromSecret: JWE_GLOBAL_SECRET
+        value: JWE_GLOBAL_SECRET
       - key: JWE_ALGORITHM
         value: "dir"
       - key: JWE_ENCRYPTION
         value: "A256GCM"
       - key: CORS_ORIGIN
-        value: "*" # Configurar con dominio específico en producción DESPUÉS del despliegue
+        value: "*"
       - key: LOG_LEVEL
         value: "info"
       - key: LOG_PRETTY
@@ -77,8 +74,6 @@ services:
         value: "true"
       - key: SWAGGER_ENABLED
         value: "true"
-      # Se asume AUTH_SERVICE_API_KEY no es necesario en Auth Service, sino en Task Service.
-      # Si Auth Service mismo lo necesita para alguna integración, añádelo.
 
   # 🔐 Auth Service - Staging
   - type: web
@@ -115,17 +110,17 @@ services:
       - key: REDIS_PREFIX
         value: "auth:staging:"
       - key: JWT_SECRET
-        fromSecret: JWT_GLOBAL_SECRET
+        value: JWT_GLOBAL_SECRET
       - key: JWT_EXPIRES_IN
         value: "15m"
       - key: JWT_ISSUER
         value: "task-manager-auth-staging"
       - key: REFRESH_TOKEN_SECRET
-        fromSecret: REFRESH_TOKEN_GLOBAL_SECRET
+        value: REFRESH_TOKEN_GLOBAL_SECRET
       - key: REFRESH_TOKEN_EXPIRES_IN
         value: "7d"
       - key: JWE_SECRET
-        fromSecret: JWE_GLOBAL_SECRET # Corregido: Asegurado que usa fromSecret
+        value: JWE_GLOBAL_SECRET
       - key: JWE_ALGORITHM
         value: "dir"
       - key: JWE_ENCRYPTION
@@ -138,7 +133,6 @@ services:
         value: "false"
       - key: SWAGGER_ENABLED
         value: "true"
-      # Añadidas para coherencia con producción y buena práctica
       - key: RATE_LIMIT_WINDOW_MS
         value: "900000"
       - key: RATE_LIMIT_MAX_REQUESTS
@@ -183,19 +177,17 @@ services:
       - key: REDIS_PREFIX
         value: "tasks:"
       - key: AUTH_SERVICE_URL
-        value: "http://task-manager-auth-service:3001" # Corregido
+        value: "http://task-manager-auth-service:3001"
       - key: AUTH_SERVICE_VERIFY_ENDPOINT
         value: "/api/v1/auth/verify-token"
-      # Usamos el mismo secreto global para JWT
       - key: JWT_SECRET
-        fromSecret: JWT_GLOBAL_SECRET
+        value: JWT_GLOBAL_SECRET
       - key: JWT_ISSUER
         value: "task-manager-auth"
-      # clave API para comunicación interna
       - key: AUTH_SERVICE_API_KEY
-        fromSecret: AUTH_SERVICE_API_KEY
+        value: AUTH_SERVICE_API_KEY
       - key: CORS_ORIGIN
-        value: "*" # Configurar con dominio específico DESPUÉS del despliegue
+        value: "*"
       - key: LOG_LEVEL
         value: "info"
       - key: LOG_PRETTY
@@ -214,7 +206,6 @@ services:
         value: "true"
       - key: SWAGGER_ENABLED
         value: "true"
-      # TTL de caché para Task Service
       - key: CACHE_TTL_TASKS
         value: "300"
       - key: CACHE_TTL_CATEGORIES
@@ -257,15 +248,15 @@ services:
       - key: REDIS_PREFIX
         value: "tasks:staging:"
       - key: AUTH_SERVICE_URL
-        value: "http://task-manager-auth-service-staging:3001" # Corregido
+        value: "http://task-manager-auth-service-staging:3001"
       - key: AUTH_SERVICE_VERIFY_ENDPOINT
         value: "/api/v1/auth/verify-token"
       - key: JWT_SECRET
-        fromSecret: JWT_GLOBAL_SECRET # Mismo secreto global
+        value: JWT_GLOBAL_SECRET
       - key: JWT_ISSUER
         value: "task-manager-auth-staging"
       - key: AUTH_SERVICE_API_KEY
-        fromSecret: AUTH_SERVICE_API_KEY # Mismo secreto global
+        value: AUTH_SERVICE_API_KEY
       - key: CORS_ORIGIN
         value: "*"
       - key: LOG_LEVEL
@@ -284,7 +275,6 @@ services:
         value: "600"
       - key: CACHE_TTL_USER_TASKS
         value: "180"
-      # Añadidas para coherencia con producción y buena práctica
       - key: RATE_LIMIT_WINDOW_MS
         value: "900000"
       - key: RATE_LIMIT_MAX_REQUESTS
