@@ -1,0 +1,20 @@
+# Ignorar directorios de node_modules en la raíz del monorepo
+node_modules/
+
+# Ignorar los directorios node_modules dentro de los servicios
+services/*/node_modules/
+
+# Ignorar los directorios dist (salida de compilación) en la raíz y dentro de los servicios
+dist/
+services/*/dist/
+
+# Ignorar archivos y directorios comunes de desarrollo
+.env
+.git/
+.vscode/
+*.log
+logs/
+.DS_Store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

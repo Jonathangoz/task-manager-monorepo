@@ -1,27 +1,30 @@
-# services/auth-service/Dockerfile.dev
 FROM node:22-alpine
 
 # Instalar pnpm globalmente
 RUN npm install -g pnpm@latest
 
-# Crear directorio de trabajo
+# Instala curl, postgresql-client Y redis
+RUN apk add --no-cache curl postgresql-client redis netcat-openbsd
+
+# Crear directorio de trabajo dentro del contenedor
 WORKDIR /app
 
-# Instalar herramientas necesarias
-RUN apk add --no-cache curl
-
-# Copiar archivos de configuración
-COPY package.json pnpm-lock.yaml* ./
-COPY prisma ./prisma
+# Copiar archivos de dependencias para instalar
+# Las RUTAS son ahora RELATIVAS a la RAÍZ de tu monorepo.
+COPY services/auth-service/package.json ./package.json       
+COPY pnpm-lock.yaml ./pnpm-lock.yaml                        
 
 # Instalar dependencias (incluyendo dev)
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
+
+# Copiar el resto del código fuente después de que las dependencias estén instaladas
+COPY services/auth-service/. .      
+# a la raíz del sistema de archivos del contenedor (la carpeta "/")
+COPY tsconfig.base.json /
 
 # Generar cliente de Prisma
+COPY services/auth-service/prisma ./prisma                   
 RUN pnpm prisma:generate
-
-# Copiar código fuente
-COPY . .
 
 # Exponer puerto
 EXPOSE 3001
@@ -30,7 +33,7 @@ EXPOSE 3001
 ENV NODE_ENV=development
 
 # Script de inicio que incluye migraciones
-COPY docker-entrypoint.sh /usr/local/bin/
+COPY services/auth-service/docker-entrypoint.sh /usr/local/bin/ 
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Comando de desarrollo

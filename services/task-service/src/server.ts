@@ -508,6 +508,8 @@ class TaskServiceBootstrap {
   private async startHttpServer(): Promise<ServerInfo> {
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
+      const app = express();
+      console.log('Express app created:', !!app); 
       
       try {
         // Verificar que app sea una aplicación Express válida

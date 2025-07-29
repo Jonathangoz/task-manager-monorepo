@@ -1,27 +1,35 @@
-# services/task-service/Dockerfile.dev
 FROM node:22-alpine
+
+# task-service
 
 # Instalar pnpm globalmente
 RUN npm install -g pnpm@latest
 
+# Instala nodemon y ts-node globalmente para el desarrollo
+# Estos son necesarios para ejecutar el script 'dev'
+RUN npm install -g nodemon ts-node
+
+# Instalar herramientas necesarias (incluyendo redis-cli si es necesaria para el contenedor, curl)
+RUN apk add --no-cache curl postgresql-client redis # Esto instalará el paquete 'redis' que incluye redis-cli 
+
 # Crear directorio de trabajo
 WORKDIR /app
+# Copiar el resto del código fuente después de que las dependencias estén instaladas
+COPY services/task-service/. .      
+# a la raíz del sistema de archivos del contenedor (la carpeta "/")
+COPY tsconfig.base.json /
 
-# Instalar herramientas necesarias
-RUN apk add --no-cache curl redis
-
-# Copiar archivos de configuración
-COPY package.json pnpm-lock.yaml* ./
-COPY prisma ./prisma
+# Copiar archivos de dependencias para instalar
+# Las RUTAS son ahora RELATIVAS a la RAÍZ de tu monorepo.
+COPY services/task-service/package.json ./package.json
+COPY pnpm-lock.yaml ./pnpm-lock.yaml
 
 # Instalar dependencias (incluyendo dev)
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # Generar cliente de Prisma
+COPY services/task-service/prisma ./prisma
 RUN pnpm prisma:generate
-
-# Copiar código fuente
-COPY . .
 
 # Exponer puerto
 EXPOSE 3002
@@ -30,7 +38,7 @@ EXPOSE 3002
 ENV NODE_ENV=development
 
 # Script de inicio que incluye migraciones
-COPY docker-entrypoint.sh /usr/local/bin/
+COPY services/task-service/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Comando de desarrollo
