@@ -5,7 +5,6 @@
 # Branches: main (production), develop (staging)
 
 previewsEnabled: false
-previewsExpireAfterDays: 7
 
 services:
   # 🔐 Auth Service - Production
@@ -33,7 +32,7 @@ services:
         value: v1
       - key: DATABASE_URL
         fromDatabase:
-          name: auth-db-prod
+          name: task-manager-db-prod # Apuntando a la única base de datos consolidada
           property: connectionString
       - key: REDIS_URL
         fromService:
@@ -59,7 +58,7 @@ services:
       - key: JWE_ENCRYPTION
         value: "A256GCM"
       - key: CORS_ORIGIN
-        value: "*"
+        value: "*" # Configurar con dominio específico en producción DESPUÉS del despliegue
       - key: LOG_LEVEL
         value: "info"
       - key: LOG_PRETTY
@@ -73,73 +72,6 @@ services:
       - key: HEALTH_CHECK_ENABLED
         value: "true"
       - key: SWAGGER_ENABLED
-        value: "true"
-
-  # 🔐 Auth Service - Staging
-  - type: web
-    name: task-manager-auth-service-staging
-    runtime: node
-    plan: free
-    region: oregon
-    branch: develop
-    rootDir: ./services/auth-service
-    buildCommand: |
-      echo "🏗️ Building Auth Service (Staging)..."
-      pnpm install --frozen-lockfile
-      pnpm prisma:generate
-      pnpm build
-    startCommand: pnpm start:prod
-    healthCheckPath: /api/v1/health
-    autoDeploy: true
-    envVars:
-      - key: NODE_ENV
-        value: staging
-      - key: PORT
-        value: 3001
-      - key: API_VERSION
-        value: v1
-      - key: DATABASE_URL
-        fromDatabase:
-          name: auth-db-staging
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: task-manager-cache-staging
-          property: connectionString
-      - key: REDIS_PREFIX
-        value: "auth:staging:"
-      - key: JWT_SECRET
-        value: JWT_GLOBAL_SECRET
-      - key: JWT_EXPIRES_IN
-        value: "15m"
-      - key: JWT_ISSUER
-        value: "task-manager-auth-staging"
-      - key: REFRESH_TOKEN_SECRET
-        value: REFRESH_TOKEN_GLOBAL_SECRET
-      - key: REFRESH_TOKEN_EXPIRES_IN
-        value: "7d"
-      - key: JWE_SECRET
-        value: JWE_GLOBAL_SECRET
-      - key: JWE_ALGORITHM
-        value: "dir"
-      - key: JWE_ENCRYPTION
-        value: "A256GCM"
-      - key: CORS_ORIGIN
-        value: "*"
-      - key: LOG_LEVEL
-        value: "debug"
-      - key: LOG_PRETTY
-        value: "false"
-      - key: SWAGGER_ENABLED
-        value: "true"
-      - key: RATE_LIMIT_WINDOW_MS
-        value: "900000"
-      - key: RATE_LIMIT_MAX_REQUESTS
-        value: "100"
-      - key: HELMET_ENABLED
-        value: "true"
-      - key: HEALTH_CHECK_ENABLED
         value: "true"
 
   # ✅ Task Service - Production
@@ -167,7 +99,7 @@ services:
         value: v1
       - key: DATABASE_URL
         fromDatabase:
-          name: task-db-prod
+          name: task-manager-db-prod # Apuntando a la única base de datos consolidada
           property: connectionString
       - key: REDIS_URL
         fromService:
@@ -187,7 +119,7 @@ services:
       - key: AUTH_SERVICE_API_KEY
         value: AUTH_SERVICE_API_KEY
       - key: CORS_ORIGIN
-        value: "*"
+        value: "*" # Configurar con dominio específico DESPUÉS del despliegue
       - key: LOG_LEVEL
         value: "info"
       - key: LOG_PRETTY
@@ -213,77 +145,6 @@ services:
       - key: CACHE_TTL_USER_TASKS
         value: "180"
 
-  # ✅ Task Service - Staging
-  - type: web
-    name: task-manager-task-service-staging
-    runtime: node
-    plan: free
-    region: oregon
-    branch: develop
-    rootDir: ./services/task-service
-    buildCommand: |
-      echo "🏗️ Building Task Service (Staging)..."
-      pnpm install --frozen-lockfile
-      pnpm prisma:generate
-      pnpm build
-    startCommand: pnpm start:prod
-    healthCheckPath: /api/v1/health
-    autoDeploy: true
-    envVars:
-      - key: NODE_ENV
-        value: staging
-      - key: PORT
-        value: 3002
-      - key: API_VERSION
-        value: v1
-      - key: DATABASE_URL
-        fromDatabase:
-          name: task-db-staging
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: task-manager-cache-staging
-          property: connectionString
-      - key: REDIS_PREFIX
-        value: "tasks:staging:"
-      - key: AUTH_SERVICE_URL
-        value: "http://task-manager-auth-service-staging:3001"
-      - key: AUTH_SERVICE_VERIFY_ENDPOINT
-        value: "/api/v1/auth/verify-token"
-      - key: JWT_SECRET
-        value: JWT_GLOBAL_SECRET
-      - key: JWT_ISSUER
-        value: "task-manager-auth-staging"
-      - key: AUTH_SERVICE_API_KEY
-        value: AUTH_SERVICE_API_KEY
-      - key: CORS_ORIGIN
-        value: "*"
-      - key: LOG_LEVEL
-        value: "debug"
-      - key: LOG_PRETTY
-        value: "false"
-      - key: SWAGGER_ENABLED
-        value: "true"
-      - key: DEFAULT_PAGE_SIZE
-        value: "20"
-      - key: MAX_PAGE_SIZE
-        value: "100"
-      - key: CACHE_TTL_TASKS
-        value: "300"
-      - key: CACHE_TTL_CATEGORIES
-        value: "600"
-      - key: CACHE_TTL_USER_TASKS
-        value: "180"
-      - key: RATE_LIMIT_WINDOW_MS
-        value: "900000"
-      - key: RATE_LIMIT_MAX_REQUESTS
-        value: "200"
-      - key: HELMET_ENABLED
-        value: "true"
-      - key: HEALTH_CHECK_ENABLED
-        value: "true"
-
   # Production Redis
   - type: keyvalue
     name: task-manager-cache-prod
@@ -292,37 +153,10 @@ services:
     ipAllowList: []
     maxmemoryPolicy: allkeys-lru
 
-  # Staging Redis
-  - type: keyvalue
-    name: task-manager-cache-staging
-    plan: free
-    region: oregon
-    ipAllowList: []
-    maxmemoryPolicy: allkeys-lru
-
 databases:
-  # Production Databases
-  - name: auth-db-prod
-    databaseName: auth_db
-    user: auth_user
-    plan: free
-    region: oregon
-
-  - name: task-db-prod
-    databaseName: task_db
-    user: task_user
-    plan: free
-    region: oregon
-
-  # Staging Databases
-  - name: auth-db-staging
-    databaseName: auth_db_staging
-    user: auth_user_staging
-    plan: free
-    region: oregon
-
-  - name: task-db-staging
-    databaseName: task_db_staging
-    user: task_user_staging
+  # Única base de datos consolidada para producción (Auth y Tasks)
+  - name: task-manager-db-prod
+    databaseName: task_manager_db # Un nombre de DB más genérico
+    user: task_manager_user # Un usuario más genérico
     plan: free
     region: oregon
