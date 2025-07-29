@@ -16,7 +16,7 @@ services:
     rootDir: ./services/auth-service
     buildCommand: |
       echo "🏗️ Building Auth Service..."
-      pnpm install --frozen-lockfile
+      cd ../.. && pnpm install --frozen-lockfile && cd ./services/auth-service
       pnpm prisma:generate
       pnpm build
     startCommand: pnpm start:prod
@@ -66,7 +66,7 @@ services:
     rootDir: ./services/task-service
     buildCommand: |
       echo "🏗️ Building Task Service..."
-      pnpm install --frozen-lockfile
+      cd ../.. && pnpm install --frozen-lockfile && cd ./services/task-service
       pnpm prisma:generate
       pnpm build
     startCommand: pnpm start:prod
