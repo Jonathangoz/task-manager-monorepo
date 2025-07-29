@@ -24,7 +24,7 @@ jobs:
   test:
     name: 🧪 Tests & Code Quality
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:16-alpine
@@ -115,45 +115,15 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  # 🚀 Deploy to Staging (develop branch)
-  deploy-staging:
-    name: 🚀 Deploy to Staging
-    runs-on: ubuntu-latest
-    needs: test
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
-    
-    environment:
-      name: staging
-      url: ${{ vars.AUTH_SERVICE_STAGING_URL }}
-
-    steps:
-      - name: 📥 Checkout Code
-        uses: actions/checkout@v4
-
-      - name: 🚀 Deploy to Render Staging
-        uses: johnbeynon/render-deploy-action@v0.0.8
-        with:
-          service-id: ${{ secrets.RENDER_AUTH_SERVICE_STAGING_ID }}
-          api-key: ${{ secrets.RENDER_API_KEY }}
-          wait-for-success: true
-
-      - name: 🔍 Health Check Staging
-        run: |
-          echo "🏥 Waiting for staging service to be ready..."
-          sleep 45
-          curl -f ${{ vars.AUTH_SERVICE_STAGING_URL }}/api/v1/health || exit 1
-          echo "✅ Staging deployment successful!"
-
   # 🌟 Deploy to Production (main branch)
   deploy-production:
     name: 🌟 Deploy to Production
     runs-on: ubuntu-latest
     needs: test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
+
     environment:
-      name: production
-      url: ${{ vars.AUTH_SERVICE_PRODUCTION_URL }}
+      name: Task-manager # ¡CAMBIADO! Ahora usa tu entorno 'Task-manager'
 
     steps:
       - name: 📥 Checkout Code
@@ -164,12 +134,11 @@ jobs:
         with:
           service-id: ${{ secrets.RENDER_AUTH_SERVICE_PRODUCTION_ID }}
           api-key: ${{ secrets.RENDER_API_KEY }}
-          wait-for-success: true
 
       - name: 🔍 Health Check Production
         run: |
           echo "🏥 Waiting for production service to be ready..."
-          sleep 45
+          sleep 60
           curl -f ${{ vars.AUTH_SERVICE_PRODUCTION_URL }}/api/v1/health || exit 1
           echo "✅ Production deployment successful!"
 
