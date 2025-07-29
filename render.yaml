@@ -1,8 +1,6 @@
 # Render Blueprint for Task Manager MonoRepo
 # Repository: Jonathangoz/task-manager-monorepo
 # Branches: main (production)
-version: 2
-
 previewsEnabled: false # Deshabilitar si solo vas a usar el branch main
 
 services:
@@ -22,25 +20,55 @@ services:
     startCommand: pnpm start:prod
     healthCheckPath: /api/v1/health
     autoDeploy: true
-    envGroup: task-manager-shared-env # Aquí se adjunta el Environment Group
     envVars:
+      # Variables específicas del servicio
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 3001
       - key: API_VERSION
         value: v1
+        
+      # Variables de base de datos y cache
       - key: DATABASE_URL
         fromDatabase:
-          name: task-manager-unified-db-prod # Apunta a la base de datos UNIFICADA
+          name: task-manager-unified-db-prod
           property: connectionString
       - key: REDIS_URL
         fromService:
           type: keyvalue
-          name: task-manager-cache-prod # Apunta a tu Redis de producción
+          name: task-manager-cache-prod
           property: connectionString
       - key: REDIS_PREFIX
         value: "auth:"
+        
+      # Variables del Environment Group
+      - key: JWT_SECRET
+        value: task-manager-shared-env
+      - key: JWT_ISSUER
+        value: task-manager-shared-env
+      - key: REFRESH_TOKEN_SECRET
+        value: task-manager-shared-env
+      - key: REFRESH_TOKEN_EXPIRES_IN
+        value: task-manager-shared-env
+      - key: JWE_SECRET
+        value: task-manager-shared-env
+      - key: JWE_ALGORITHM
+        value: task-manager-shared-env
+      - key: JWE_ENCRYPTION
+        value: task-manager-shared-env
+      - key: CORS_ORIGIN
+        value: task-manager-shared-env
+      - key: AUTH_SERVICE_API_KEY
+        value: task-manager-shared-env
+        
+      # Variables de configuración específicas
+      - key: JWT_EXPIRES_IN
+        value: "24h"
+      - key: BCRYPT_SALT_ROUNDS
+        value: "12"
+        
+      # Variables de logging y configuración
       - key: LOG_LEVEL
         value: "info"
       - key: LOG_PRETTY
@@ -72,29 +100,57 @@ services:
     startCommand: pnpm start:prod
     healthCheckPath: /api/v1/health
     autoDeploy: true
-    envGroup: task-manager-shared-env # Aquí se adjunta el Environment Group
     envVars:
+      # Variables específicas del servicio
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 3002
       - key: API_VERSION
         value: v1
+        
+      # Variables de base de datos y cache
       - key: DATABASE_URL
         fromDatabase:
-          name: task-manager-unified-db-prod # Apunta a la base de datos UNIFICADA
+          name: task-manager-unified-db-prod
           property: connectionString
       - key: REDIS_URL
         fromService:
           type: keyvalue
-          name: task-manager-cache-prod # Apunta a tu Redis de producción
+          name: task-manager-cache-prod
           property: connectionString
       - key: REDIS_PREFIX
         value: "tasks:"
+        
+      # Comunicación entre servicios
       - key: AUTH_SERVICE_URL
-        value: "http://task-manager-auth-service:3001" # Comunicación interna Render
+        value: "http://task-manager-auth-service:3001"
       - key: AUTH_SERVICE_VERIFY_ENDPOINT
         value: "/api/v1/auth/verify-token"
+        
+      # Variables del Environment Group
+      - key: JWT_SECRET
+        value: task-manager-shared-env
+      - key: JWT_ISSUER
+        value: task-manager-shared-env
+      - key: CORS_ORIGIN
+        value: task-manager-shared-env
+      - key: AUTH_SERVICE_API_KEY
+        value: task-manager-shared-env
+        
+      # Variables específicas de tareas
+      - key: DEFAULT_PAGE_SIZE
+        value: "20"
+      - key: MAX_PAGE_SIZE
+        value: "100"
+      - key: CACHE_TTL_TASKS
+        value: "300"
+      - key: CACHE_TTL_CATEGORIES
+        value: "600"
+      - key: CACHE_TTL_USER_TASKS
+        value: "180"
+        
+      # Variables de logging y configuración
       - key: LOG_LEVEL
         value: "info"
       - key: LOG_PRETTY
@@ -103,22 +159,12 @@ services:
         value: "900000"
       - key: RATE_LIMIT_MAX_REQUESTS
         value: "200"
-      - key: DEFAULT_PAGE_SIZE
-        value: "20"
-      - key: MAX_PAGE_SIZE
-        value: "100"
       - key: HELMET_ENABLED
         value: "true"
       - key: HEALTH_CHECK_ENABLED
         value: "true"
       - key: SWAGGER_ENABLED
         value: "true"
-      - key: CACHE_TTL_TASKS
-        value: "300"
-      - key: CACHE_TTL_CATEGORIES
-        value: "600"
-      - key: CACHE_TTL_USER_TASKS
-        value: "180"
 
   # Production Redis Cache
   - type: keyvalue
