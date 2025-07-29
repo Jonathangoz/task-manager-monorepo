@@ -4,7 +4,7 @@
 # Repository: Jonathangoz/task-manager-monorepo
 # Branches: main (production), develop (staging)
 
-previewsEnabled: true
+previewsEnabled: false
 previewsExpireAfterDays: 7
 
 services:
