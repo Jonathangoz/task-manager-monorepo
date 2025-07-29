@@ -12,8 +12,8 @@ services:
   - type: web
     name: task-manager-auth-service
     runtime: node
-    plan: free # Puedes cambiar a 'starter' o superior si lo necesitas
-    region: oregon # Mantén la región consistente para todos los servicios
+    plan: free 
+    region: oregon # Manténer la región consistente para todos los servicios
     branch: main
     rootDir: ./services/auth-service
     buildCommand: |
@@ -37,7 +37,7 @@ services:
           property: connectionString
       - key: REDIS_URL
         fromService:
-          type: redis
+          type: keyvalue
           name: task-manager-cache-prod
           property: connectionString
       - key: REDIS_PREFIX
@@ -107,7 +107,7 @@ services:
           property: connectionString
       - key: REDIS_URL
         fromService:
-          type: redis
+          type: keyvalue
           name: task-manager-cache-staging
           property: connectionString
       - key: REDIS_PREFIX
@@ -169,7 +169,7 @@ services:
           property: connectionString
       - key: REDIS_URL
         fromService:
-          type: redis
+          type: keyvalue
           name: task-manager-cache-prod
           property: connectionString
       - key: REDIS_PREFIX
@@ -247,7 +247,7 @@ services:
           property: connectionString
       - key: REDIS_URL
         fromService:
-          type: redis
+          type: keyvalue
           name: task-manager-cache-staging
           property: connectionString
       - key: REDIS_PREFIX
@@ -285,6 +285,22 @@ services:
       - key: CACHE_TTL_USER_TASKS
         value: "180"
 
+  # Production Redis
+  - type: keyvalue
+    name: task-manager-cache-prod
+    plan: free
+    region: oregon
+    ipAllowList: []
+    maxmemoryPolicy: allkeys-lru
+    
+  # Staging Redis
+  - type: keyvalue
+    name: task-manager-cache-staging
+    plan: free
+    region: oregon
+    ipAllowList: []
+    maxmemoryPolicy: allkeys-lru
+
 databases:
   # Production Databases
   - name: auth-db-prod
@@ -311,17 +327,3 @@ databases:
     user: task_user_staging
     plan: free
     region: oregon
-
-# Redis instances
-redis:
-  # Production Redis
-  - name: task-manager-cache-prod
-    plan: free
-    region: oregon
-    maxmemoryPolicy: allkeys-lru
-    
-  # Staging Redis
-  - name: task-manager-cache-staging
-    plan: free
-    region: oregon
-    maxmemoryPolicy: allkeys-lru
