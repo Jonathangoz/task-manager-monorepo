@@ -19,7 +19,7 @@
     "dev:auth": "pnpm --filter=task-manager-auth-service dev",
     "dev:tasks": "pnpm --filter=task-manager-task-service dev",
     "dev:frontend": "pnpm --filter=task-manager-frontend dev",
-    "lint": "pnpm -r lint",
+    "lint:check": "pnpm -r lint:check",
     "lint:fix": "pnpm -r lint:fix",
     "format": "prettier --write .",
     "test": "pnpm -r test",
@@ -29,6 +29,7 @@
     "docker:down": "docker-compose -f docker-compose.dev.yml down"
   },
   "devDependencies": {
+    "@eslint/js": "^9.32.0",
     "@types/compression": "^1.7.5",
     "@types/connect-timeout": "^1.9.0",
     "@types/cookie-parser": "^1.4.7",
