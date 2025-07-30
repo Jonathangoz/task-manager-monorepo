@@ -5,7 +5,7 @@ class TestRedis {
   private static instance: TestRedis;
 
   constructor() {
-    this.client = new Redis(process.env.REDIS_URL || 'redis://localhost:6379/1', {
+    this.client = new Redis(process.env.REDIS_URL || 'redis://localhost/1', {
       keyPrefix: 'test:task:',
       lazyConnect: true,
     });
