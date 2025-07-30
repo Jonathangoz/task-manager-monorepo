@@ -1,6 +1,8 @@
 # Multi-stage Dockerfile para Auth Service
 FROM node:22-alpine AS base
 
+# auth-service - Dockerfile
+
 # Instalar pnpm globalmente
 RUN npm install -g pnpm@latest
 

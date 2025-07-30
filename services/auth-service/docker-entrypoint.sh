@@ -2,7 +2,7 @@
 set -e
 
 # =============================================
-# Helper function to wait for a service
+# Helper function to wait for a service - auth-service
 # =============================================
 wait_for_service() {
   SERVICE_NAME=$1

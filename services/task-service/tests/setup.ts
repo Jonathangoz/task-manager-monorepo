@@ -34,6 +34,6 @@ beforeEach(async () => {
 // Configurar variables de entorno para tests
 process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL = 'postgresql://test_user:test_password@localhost:5432/task_test_db';
-process.env.REDIS_URL = 'redis://localhost:6379/1';
+process.env.REDIS_URL = 'redis://localhost:/1';
 process.env.JWT_SECRET = 'test-jwt-secret-key';
 process.env.LOG_LEVEL = 'silent';

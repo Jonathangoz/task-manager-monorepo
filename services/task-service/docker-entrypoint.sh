@@ -3,7 +3,7 @@ set -e
 
 # task-service
 # =============================================
-# Helper function to wait for a service
+# Helper function to wait for a service - task-service
 # =============================================
 wait_for_service() {
   SERVICE_NAME=$1

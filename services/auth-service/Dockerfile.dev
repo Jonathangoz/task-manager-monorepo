@@ -1,5 +1,7 @@
 FROM node:22-alpine
 
+# auth-service - Dockerfile.dev
+
 # Instalar pnpm globalmente
 RUN npm install -g pnpm@latest
 
