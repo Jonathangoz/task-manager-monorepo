@@ -1,8 +1,5 @@
-// ==============================================
 // src/app.ts - Task Service Application
 // Aplicación Express con arquitectura modular, principios SOLID y logging estructurado
-// ==============================================
-
 import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -40,10 +37,7 @@ import {
   REQUEST_HEADERS,
 } from '@/utils/constants';
 
-// ==============================================
 // INTERFACES Y TIPOS
-// ==============================================
-
 interface AppDependencies {
   categoryService: CategoryService;
   cacheService: RedisCache;
@@ -91,10 +85,7 @@ interface ServerOptions {
   shutdownTimeout: number;
 }
 
-// ==============================================
 // CLASE PRINCIPAL DE LA APLICACIÓN
-// ==============================================
-
 /**
  * TaskServiceApp
  * 
@@ -140,10 +131,7 @@ export class TaskServiceApp {
     }, '✅ TaskServiceApp inicializada correctamente');
   }
 
-  // ==============================================
   // INICIALIZACIÓN DE DEPENDENCIAS
-  // ==============================================
-
   /**
    * Inicializa las dependencias de la aplicación con inyección de dependencias
    * Implementa el patrón Factory y Dependency Injection
@@ -185,10 +173,7 @@ export class TaskServiceApp {
     }
   }
 
-  // ==============================================
   // CONFIGURACIÓN DE MIDDLEWARES
-  // ==============================================
-
   /**
    * Crea la configuración de middlewares basada en el entorno
    */
@@ -452,10 +437,7 @@ export class TaskServiceApp {
     };
   }
 
-  // ==============================================
   // CONFIGURACIÓN DE RUTAS
-  // ==============================================
-
   /**
    * Configuración centralizada de todas las rutas de la API
    */
@@ -592,10 +574,7 @@ export class TaskServiceApp {
     return routes;
   }
 
-  // ==============================================
   // CONFIGURACIÓN DE MANEJO DE ERRORES
-  // ==============================================
-
   /**
    * Configuración centralizada del manejo de errores
    */
@@ -645,10 +624,7 @@ export class TaskServiceApp {
     });
   }
 
-  // ==============================================
   // MÉTODOS PÚBLICOS
-  // ==============================================
-
   /**
    * Obtiene la instancia de Express para testing
    */
@@ -811,10 +787,7 @@ export class TaskServiceApp {
     });
   }
 
-  // ==============================================
   // MÉTODOS DE UTILIDAD Y DEBUGGING
-  // ==============================================
-
   /**
    * Obtiene información de la aplicación para debugging
    */
@@ -897,10 +870,7 @@ export class TaskServiceApp {
   }
 }
 
-// ==============================================
 // FACTORY FUNCTION
-// ==============================================
-
 /**
  * Factory function para crear la instancia de la aplicación
  * Facilita la inyección de dependencias y el testing
@@ -929,11 +899,8 @@ export const createTaskServiceApp = (
   }
 };
 
-// ==============================================
 // EXPORTACIÓN POR DEFECTO
-// ==============================================
-
 // Crear instancia singleton para uso normal
 const taskServiceApp = new TaskServiceApp();
-
+//export { TaskServiceApp };
 export default taskServiceApp;

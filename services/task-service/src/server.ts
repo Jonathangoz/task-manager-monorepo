@@ -1,20 +1,14 @@
-// ==============================================
 // src/server.ts - Task Service Bootstrap & Connection Manager
 // Inicialización de servicios y conexiones
-// ==============================================
-
 import 'dotenv/config';
 import * as http from 'http';
-import express from 'express';
 import { logger, startup, logError, healthCheck } from '@/utils/logger';
 import { config } from '@/config/environment';
 import { connectDatabase, disconnectDatabase, cleanupOldCompletedTasks } from '@/config/database';
 import { taskRedisConnection } from '@/config/redis';
-import app from '@/app';
+import { TaskServiceApp } from '@/app'; 
 
-// ==============================================
 // TIPOS E INTERFACES
-// ==============================================
 interface HealthCheckResult {
   service: string;
   status: 'healthy' | 'unhealthy';
@@ -33,15 +27,14 @@ interface ServerInfo {
   startupTime: number;
 }
 
-// ==============================================
 // CLASE PRINCIPAL DE BOOTSTRAP
-// ==============================================
 class TaskServiceBootstrap {
   private server?: http.Server;
   private cleanupInterval?: NodeJS.Timeout;
   private statsInterval?: NodeJS.Timeout;
   private isShuttingDown = false;
   private readonly gracefulShutdownTimeout = 30000; // 30 segundos
+  private taskApp?: TaskServiceApp; // ✅ NUEVO: Instancia de la aplicación
 
   constructor() {
     this.validateEnvironment();
@@ -74,7 +67,7 @@ class TaskServiceBootstrap {
     logger.info({
       environment: config.app.env,
       nodeVersion: process.version,
-      port: config.app.port,
+      port: config.app.port, // ✅ VERIFICAR: Debe ser 3002
       apiVersion: config.app.apiVersion,
       event: 'environment_validation_passed'
     }, '✅ Environment validation passed');
@@ -84,8 +77,18 @@ class TaskServiceBootstrap {
    * Log de información inicial del servicio
    */
   private logStartupInfo(): void {
+    // ✅ CAMBIO: Log específico para task-service
+    console.log('🔧 Task Service Configuration Loaded:');
+    console.log(`   Environment: ${config.app.env}`);
+    console.log(`   Port: ${config.app.port}`); // ✅ DEBE MOSTRAR 3002
+    console.log(`   Auth Service: ${config.authService.url}`);
+    console.log(`   Redis Prefix: ${config.redis.prefix}`);
+    console.log(`   Log Level: ${config.logging.level}`);
+    console.log(`   Jobs Enabled: cleanup=${config.jobs.cleanup.enabled}, stats=${config.jobs.statsUpdate.enabled}`);
+    console.log(`   Swagger: ${config.swagger.enabled ? 'enabled' : 'disabled'}`);
+
     startup.configLoaded({
-      service: 'task-service',
+      service: 'task-service', // ✅ CAMBIO: Especificar task-service
       environment: config.app.env,
       port: config.app.port,
       redis: {
@@ -503,27 +506,36 @@ class TaskServiceBootstrap {
   }
 
   /**
-   * Inicia el servidor HTTP usando Express
+   * Inicia el servidor HTTP usando la aplicación TaskServiceApp correcta
    */
   private async startHttpServer(): Promise<ServerInfo> {
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
-      const app = express();
-      console.log('Express app created:', !!app); 
       
       try {
+        // ✅ CAMBIO CRÍTICO: Crear la aplicación TaskServiceApp correcta
+        console.log('Creating TaskServiceApp with correct configuration...');
+        this.taskApp = new TaskServiceApp();
+        const app = this.taskApp.getApp();
+        
+        console.log('TaskServiceApp created successfully:', !!app); 
+        
         // Verificar que app sea una aplicación Express válida
         if (!app || typeof app !== 'function') {
-          throw new Error('Invalid Express application');
+          throw new Error('Invalid TaskServiceApp Express application');
         }
 
-        // Crear servidor HTTP con la aplicación Express
+        // ✅ CAMBIO CRÍTICO: Usar el puerto correcto desde la configuración
+        const targetPort = config.app.port; // DEBE SER 3002
+        console.log(`Starting server on port: ${targetPort}`);
+
+        // Crear servidor HTTP con la aplicación Express correcta
         this.server = http.createServer(app);
         
         // Configurar event listeners
         this.server.on('listening', () => {
           const address = this.server!.address();
-          const port = typeof address === 'string' ? parseInt(address) : address?.port || config.app.port;
+          const port = typeof address === 'string' ? parseInt(address) : address?.port || targetPort;
           
           const serverInfo: ServerInfo = {
             port,
@@ -541,24 +553,27 @@ class TaskServiceBootstrap {
           logger.info({
             ...serverInfo,
             event: 'http_server_started',
-            component: 'server'
-          }, `🚀 HTTP server listening on port ${port}`);
+            component: 'server',
+            service: 'task-service' // ✅ ESPECIFICAR task-service
+          }, `🚀 TASK SERVICE HTTP server listening on port ${port}`); // ✅ ACLARAR QUE ES TASK SERVICE
           
           resolve(serverInfo);
         });
 
         this.server.on('error', (error: NodeJS.ErrnoException) => {
           if (error.code === 'EADDRINUSE') {
-            logError.critical(new Error(`Port ${config.app.port} is already in use`), {
+            logError.critical(new Error(`Port ${targetPort} is already in use`), {
               context: 'http_server_port_in_use',
-              port: config.app.port,
-              code: error.code
+              port: targetPort,
+              code: error.code,
+              service: 'task-service' // ✅ ESPECIFICAR task-service
             });
           } else {
             logError.critical(error, {
               context: 'http_server_start_error',
-              port: config.app.port,
-              code: error.code
+              port: targetPort,
+              code: error.code,
+              service: 'task-service' // ✅ ESPECIFICAR task-service
             });
           }
           reject(error);
@@ -569,13 +584,15 @@ class TaskServiceBootstrap {
         this.server.keepAliveTimeout = 5000; // 5 segundos
         this.server.headersTimeout = 6000; // 6 segundos
 
-        // Iniciar el servidor
-        this.server.listen(config.app.port, '0.0.0.0');
+        // ✅ CAMBIO CRÍTICO: Iniciar el servidor en el puerto correcto
+        this.server.listen(targetPort, '0.0.0.0');
+        console.log(`Server.listen called with port: ${targetPort}`);
 
       } catch (error) {
         logError.critical(error as Error, {
           context: 'http_server_setup_error',
-          port: config.app.port
+          port: config.app.port,
+          service: 'task-service' // ✅ ESPECIFICAR task-service
         });
         reject(error);
       }
@@ -589,7 +606,7 @@ class TaskServiceBootstrap {
     try {
       logger.info({
         event: 'service_bootstrap_started',
-        service: 'task-service'
+        service: 'task-service' // ✅ ESPECIFICAR task-service
       }, '🚀 Starting Task Service bootstrap process...');
 
       // 1. Configurar manejo de cierre graceful
@@ -612,6 +629,7 @@ class TaskServiceBootstrap {
       logger.info({
         ...serverInfo,
         event: 'service_started_successfully',
+        service: 'task-service', // ✅ ESPECIFICAR task-service
         features: {
           swagger: config.swagger.enabled,
           rateLimit: config.rateLimit.enabled,
@@ -623,18 +641,19 @@ class TaskServiceBootstrap {
             stats: !!this.statsInterval
           }
         }
-      }, '🎉 Task Service started successfully and ready to accept connections');
+      }, '🎉 TASK SERVICE started successfully and ready to accept connections'); // ✅ ACLARAR QUE ES TASK SERVICE
 
     } catch (error) {
       logError.critical(error as Error, {
         context: 'service_bootstrap_failed',
-        service: 'task-service'
+        service: 'task-service' // ✅ ESPECIFICAR task-service
       });
       
       logger.fatal({
         error: error instanceof Error ? error.message : String(error),
-        event: 'service_bootstrap_failed'
-      }, '💀 Failed to start Task Service');
+        event: 'service_bootstrap_failed',
+        service: 'task-service' // ✅ ESPECIFICAR task-service
+      }, '💀 Failed to start TASK SERVICE'); // ✅ ACLARAR QUE ES TASK SERVICE
       
       process.exit(1);
     }
@@ -645,7 +664,7 @@ class TaskServiceBootstrap {
    */
   public getServiceInfo() {
     return {
-      service: 'task-service',
+      service: 'task-service', // ✅ ESPECIFICAR task-service
       version: config.app.apiVersion,
       environment: config.app.env,
       port: config.app.port,
@@ -684,13 +703,15 @@ class TaskServiceBootstrap {
   public async stop(): Promise<void> {
     if (this.isShuttingDown) {
       logger.warn({
-        event: 'stop_already_in_progress'
+        event: 'stop_already_in_progress',
+        service: 'task-service' // ✅ ESPECIFICAR task-service
       }, '⚠️ Service stop already in progress');
       return;
     }
 
     logger.info({
-      event: 'service_stop_requested'
+      event: 'service_stop_requested',
+      service: 'task-service' // ✅ ESPECIFICAR task-service
     }, '🛑 Service stop requested');
 
     // Usar el método de shutdown existente
@@ -701,10 +722,7 @@ class TaskServiceBootstrap {
   }
 }
 
-// ==============================================
 // INICIALIZACIÓN Y ARRANQUE
-// ==============================================
-
 // Crear instancia del bootstrap
 const bootstrap = new TaskServiceBootstrap();
 
@@ -713,16 +731,13 @@ if (process.env.NODE_ENV !== 'test') {
   bootstrap.start().catch((error) => {
     logger.fatal({
       error: error instanceof Error ? error.message : String(error),
-      event: 'bootstrap_startup_failed'
-    }, '💀 Bootstrap failed during startup');
+      event: 'bootstrap_startup_failed',
+      service: 'task-service' // ✅ ESPECIFICAR task-service
+    }, '💀 TASK SERVICE Bootstrap failed during startup'); // ✅ ACLARAR QUE ES TASK SERVICE
     
     process.exit(1);
   });
 }
-
-// ==============================================
-// EXPORTACIONES
-// ==============================================
 
 // Exportar para testing y uso externo
 export { TaskServiceBootstrap };

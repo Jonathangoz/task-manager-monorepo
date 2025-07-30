@@ -1,8 +1,5 @@
-// ==============================================
 // src/config/environment.ts - Task Service Configuration
 // Gestión centralizada de variables de entorno con validación Zod
-// ==============================================
-
 import { config as dotenvConfig } from 'dotenv';
 import { z } from 'zod';
 
@@ -11,51 +8,43 @@ dotenvConfig();
 
 // Schema de validación para variables de entorno usando Zod
 const envSchema = z.object({
-  // ==============================================
+
   // APP CONFIGURATION
-  // ==============================================
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(3002),
   API_VERSION: z.string().default('v1'),
 
-  // ==============================================
+
   // DATABASE CONFIGURATION
-  // ==============================================
   DATABASE_URL: z.string().min(1, 'Database URL is required'),
 
-  // ==============================================
+
   // REDIS CONFIGURATION
-  // ==============================================
   REDIS_URL: z.string().min(1, 'Redis URL is required'),
   REDIS_PREFIX: z.string().default('tasks:'),
 
-  // ==============================================
+
   // AUTH SERVICE CONFIGURATION
-  // ==============================================
   AUTH_SERVICE_URL: z.string().url('Invalid Auth Service URL'),
   AUTH_SERVICE_VERIFY_ENDPOINT: z.string().default('/api/v1/auth/verify-token'),
   AUTH_SERVICE_API_KEY: z.string().min(1, 'Auth Service API Key is required'),
   AUTH_SERVICE_TIMEOUT: z.coerce.number().default(10000),
 
-  // ==============================================
+
   // JWT CONFIGURATION (para validación local)
-  // ==============================================
   JWT_SECRET: z.string().min(32, 'JWT Secret must be at least 32 characters'),
   JWT_ISSUER: z.string().default('task-manager-auth'),
 
-  // ==============================================
+
   // CORS CONFIGURATION
-  // ==============================================
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
 
-  // ==============================================
+
   // SECURITY CONFIGURATION
-  // ==============================================
   HELMET_ENABLED: z.coerce.boolean().default(true),
 
-  // ==============================================
+
   // RATE LIMITING CONFIGURATION
-  // ==============================================
   RATE_LIMIT_ENABLED: z.coerce.boolean().default(true),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(900000), // 15 minutos
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(200),
@@ -78,21 +67,18 @@ const envSchema = z.object({
   RATE_LIMIT_SKIP_SUCCESSFUL: z.coerce.boolean().default(false),
   RATE_LIMIT_SKIP_FAILED: z.coerce.boolean().default(false),
 
-  // ==============================================
+
   // LOGGING CONFIGURATION
-  // ==============================================
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   LOG_PRETTY: z.coerce.boolean().default(true),
 
-  // ==============================================
+
   // PAGINATION CONFIGURATION
-  // ==============================================
   DEFAULT_PAGE_SIZE: z.coerce.number().default(20),
   MAX_PAGE_SIZE: z.coerce.number().default(100),
 
-  // ==============================================
+
   // CACHE TTL CONFIGURATION (segundos)
-  // ==============================================
   CACHE_TTL_TASKS: z.coerce.number().default(300),           // 5 minutos
   CACHE_TTL_CATEGORIES: z.coerce.number().default(600),      // 10 minutos
   CACHE_TTL_USER_TASKS: z.coerce.number().default(180),      // 3 minutos
@@ -102,9 +88,8 @@ const envSchema = z.object({
   CACHE_TTL_CATEGORY_DETAIL: z.coerce.number().default(600), // 10 minutos
   CACHE_TTL_SEARCH_RESULTS: z.coerce.number().default(120),  // 2 minutos
 
-  // ==============================================
+
   // BACKGROUND JOBS CONFIGURATION
-  // ==============================================
   JOBS_CLEANUP_ENABLED: z.coerce.boolean().default(true),
   JOBS_CLEANUP_INTERVAL_MS: z.coerce.number().default(86400000), // 24 horas
   JOBS_CLEANUP_RETENTION_DAYS: z.coerce.number().default(90),
@@ -112,16 +97,14 @@ const envSchema = z.object({
   JOBS_STATS_UPDATE_ENABLED: z.coerce.boolean().default(true),
   JOBS_STATS_UPDATE_INTERVAL_MS: z.coerce.number().default(300000), // 5 minutos
 
-  // ==============================================
+
   // HEALTH CHECK & SWAGGER
-  // ==============================================
   HEALTH_CHECK_ENABLED: z.coerce.boolean().default(true),
   SWAGGER_ENABLED: z.coerce.boolean().default(true),
   SWAGGER_PATH: z.string().default('/docs'),
 
-  // ==============================================
+
   // SECURITY HEADERS
-  // ==============================================
   CSP_ENABLED: z.coerce.boolean().default(true),
   HSTS_ENABLED: z.coerce.boolean().default(true),
   HSTS_MAX_AGE: z.coerce.number().default(31536000), // 1 año
@@ -151,9 +134,7 @@ function validateEnvironment() {
 // Validar y parsear variables de entorno
 const env = validateEnvironment();
 
-// ==============================================
 // CONFIGURACIÓN EXPORTADA
-// ==============================================
 export const config = {
   // Configuración de la aplicación
   app: {
@@ -296,16 +277,11 @@ export const config = {
   },
 } as const;
 
-// ==============================================
 // TIPOS TYPESCRIPT EXPORTADOS
-// ==============================================
 export type AppConfig = typeof config;
 export type Environment = typeof env.NODE_ENV;
 
-// ==============================================
 // VALIDACIONES ADICIONALES
-// ==============================================
-
 // Validar que las URLs del auth service sean correctas
 if (config.app.isProduction && !config.authService.url.startsWith('https://')) {
   console.warn('⚠️  Warning: Auth Service URL should use HTTPS in production');

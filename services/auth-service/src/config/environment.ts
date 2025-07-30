@@ -1,103 +1,83 @@
-// ==============================================
 // src/config/environment.ts - Auth Service Configuration
 // Gestión centralizada de variables de entorno con validación Zod
-// ==============================================
-
 import { config as dotenvConfig } from 'dotenv';
 import { z } from 'zod';
 
 // Cargar variables de entorno
 dotenvConfig();
 
-// ==============================================
 // SCHEMA DE VALIDACIÓN CON ZOD
-// ==============================================
 const envSchema = z.object({
-  // ==============================================
+
   // APP CONFIGURATION
-  // ==============================================
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.string().transform((val) => parseInt(val, 10)).pipe(z.number().positive()).default('3001'),
   API_VERSION: z.string().default('v1'),
 
-  // ==============================================
-  // DATABASE CONFIGURATION
-  // ==============================================
-  DATABASE_URL: z.string().min(1, 'Database URL is required'),
 
-  // ==============================================
+  // DATABASE CONFIGURATION
+  DATABASE_URL: z.string().min(1, 'URL de la Base de Datos es Requerida'),
+
+
   // REDIS CONFIGURATION
-  // ==============================================
-  REDIS_URL: z.string().min(1, 'Redis URL is required'),
+  REDIS_URL: z.string().min(1, 'URL de Redis es Requerida'),
   REDIS_PREFIX: z.string().default('auth:'),
 
-  // ==============================================
+
   // JWT CONFIGURATION
-  // ==============================================
-  JWT_SECRET: z.string().min(32, 'JWT Secret must be at least 32 characters'),
+  JWT_SECRET: z.string().min(32, 'JWT Secret debe tener al menos 32 caracteres'),
   JWT_EXPIRES_IN: z.string().default('15m'),
   JWT_ISSUER: z.string().default('task-manager-auth'),
 
-  // ==============================================
+
   // REFRESH TOKEN CONFIGURATION
-  // ==============================================
   REFRESH_TOKEN_SECRET: z.string().min(32, 'Refresh Token Secret must be at least 32 characters'),
   REFRESH_TOKEN_EXPIRES_IN: z.string().default('7d'),
 
-  // ==============================================
+
   // JWE CONFIGURATION
-  // ==============================================
   JWE_SECRET: z.string().min(32, 'JWE Secret must be at least 32 characters'),
   JWE_ALGORITHM: z.string().default('dir'),
   JWE_ENCRYPTION: z.string().default('A256GCM'),
 
-  // ==============================================
+
   // CORS CONFIGURATION
-  // ==============================================
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
 
-  // ==============================================
+
   // SECURITY CONFIGURATION
-  // ==============================================
   HELMET_ENABLED: z.string().transform((val) => val === 'true').default('true'),
 
-  // ==============================================
+
   // RATE LIMITING CONFIGURATION
-  // ==============================================
   RATE_LIMIT_WINDOW_MS: z.string().transform((val) => parseInt(val, 10)).pipe(z.number().positive()).default('900000'), // 15 minutos
   RATE_LIMIT_MAX_REQUESTS: z.string().transform((val) => parseInt(val, 10)).pipe(z.number().positive()).default('100'),
 
-  // ==============================================
+
   // ACCOUNT SECURITY
-  // ==============================================
   MAX_LOGIN_ATTEMPTS: z.string().transform((val) => parseInt(val, 10)).pipe(z.number().positive()).default('5'),
   ACCOUNT_LOCK_TIME: z.string().transform((val) => parseInt(val, 10)).pipe(z.number().positive()).default('1800000'), // 30 minutos
   PASSWORD_RESET_TOKEN_EXPIRES: z.string().transform((val) => parseInt(val, 10)).pipe(z.number().positive()).default('3600000'), // 1 hora
 
-  // ==============================================
+
   // LOGGING CONFIGURATION
-  // ==============================================
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
   LOG_PRETTY: z.string().transform((val) => val === 'true').default('true'),
 
-  // ==============================================
+
   // CACHE TTL CONFIGURATION (segundos)
-  // ==============================================
   CACHE_TTL_USER_SESSIONS: z.string().transform((val) => parseInt(val, 10)).pipe(z.number().positive()).default('900'), // 15 minutos
   CACHE_TTL_USER_DATA: z.string().transform((val) => parseInt(val, 10)).pipe(z.number().positive()).default('300'),     // 5 minutos
   CACHE_TTL_BLACKLIST: z.string().transform((val) => parseInt(val, 10)).pipe(z.number().positive()).default('86400'),   // 24 horas
 
-  // ==============================================
+
   // FEATURES & HEALTH CHECK
-  // ==============================================
   HEALTH_CHECK_ENABLED: z.string().transform((val) => val === 'true').default('true'),
   SWAGGER_ENABLED: z.string().transform((val) => val === 'true').default('true'),
   EMAIL_VERIFICATION_ENABLED: z.string().transform((val) => val === 'true').default('false'),
 });
 
-// ==============================================
 // VALIDACIÓN CON MANEJO DE ERRORES
-// ==============================================
 function validateEnvironment() {
   try {
     return envSchema.parse(process.env);
@@ -117,9 +97,7 @@ function validateEnvironment() {
 // Validar y parsear variables de entorno
 const env = validateEnvironment();
 
-// ==============================================
 // CONFIGURACIÓN EXPORTADA
-// ==============================================
 export const environment = {
   // Configuración de la aplicación
   app: {
@@ -215,16 +193,11 @@ export const environment = {
   SWAGGER_ENABLED: env.SWAGGER_ENABLED,
 } as const;
 
-// ==============================================
 // TIPOS TYPESCRIPT EXPORTADOS
-// ==============================================
 export type AppConfig = typeof environment;
 export type Environment = typeof env.NODE_ENV;
 
-// ==============================================
 // VALIDACIONES ADICIONALES
-// ==============================================
-
 // Validar secretos en producción
 if (environment.app.isProduction) {
   // Validar que las URLs no contengan localhost
@@ -241,8 +214,8 @@ if (environment.app.isProduction) {
     console.warn('⚠️  Warning: Refresh Token Secret debería tener al menos 64 caracteres en producción');
   }
 
-  if (environment.jwe.secret.length < 64) {
-    console.warn('⚠️  Warning: JWE Secret debería tener al menos 64 caracteres en producción');
+  if (environment.jwe.secret.length < 32) {
+    console.warn('⚠️  Warning: JWE Secret debería tener al menos 32 caracteres en producción');
   }
 }
 
@@ -270,9 +243,7 @@ if (environment.app.isDevelopment) {
   console.log(`   Rate Limit: ${environment.rateLimit.maxRequests}/${environment.rateLimit.windowMs / 1000}s`);
 }
 
-// ==============================================
 // FUNCIÓN PARA OBTENER RESUMEN DE CONFIGURACIÓN (sin secretos)
-// ==============================================
 export const getConfigSummary = () => ({
   service: 'auth-service',
   environment: environment.app.env,
