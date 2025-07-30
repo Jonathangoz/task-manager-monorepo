@@ -2,7 +2,7 @@
 import { PrismaClient } from '@prisma/client';
 import { db } from '@/config/database';
 import { loggers, dbLogger } from '@/utils/logger';
-import { User } from '@/core/domain/entities/User';
+import { User } from '@/core/entities/User';
 import { 
   IUserRepository, 
   CreateUserData, 
