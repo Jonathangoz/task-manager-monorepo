@@ -119,24 +119,32 @@ const createDevelopmentLogger = (): pino.Logger => {
 // CONFIGURACIÓN PARA PRODUCCIÓN
 // ==============================================
 const createProductionLogger = (): pino.Logger => {
-  const productionConfig = { ...baseLoggerConfig };
+  const productionConfig: pino.LoggerOptions = {
+    level: getLogLevel(),
+    base: {
+      service: 'auth-service',
+      version: process.env.npm_package_version || '1.0.0',
+      env: process.env.NODE_ENV || 'development',
+      timezone: BOGOTA_TIMEZONE,
+    },
+  };
 
   // En producción, escribimos a múltiples destinos
   const destinations = [
     // Archivo general (todos los logs)
     {
       level: getLogLevel(),
-      dest: path.join(LOG_DIR, 'auth.log'),
+      dest: path.join(LOG_DIR, 'auth-service.log'),
     },
     // Archivo de errores (solo errores y fatales)
     {
       level: 'error',
-      dest: path.join(LOG_DIR, 'auth-error.log'),
+      dest: path.join(LOG_DIR, 'auth-service-error.log'),
     },
-    // Archivo de seguridad (eventos de autenticación)
+    // Archivo de seguridad (eventos de autenticación y autorización)
     {
       level: 'info',
-      dest: path.join(LOG_DIR, 'auth-security.log'),
+      dest: path.join(LOG_DIR, 'auth-service-security.log'),
     },
     // Stdout para contenedores/PM2
     {
@@ -630,35 +638,38 @@ export const reconfigureLogger = (envConfig: any) => {
   const isDev = envConfig.app?.isDevelopment ?? envConfig.NODE_ENV === 'development';
   const isProd = envConfig.app?.isProduction ?? envConfig.NODE_ENV === 'production';
 
-const reconfiguredConfig: pino.LoggerOptions = {
-  level: logLevel,
-  base: {
-    service: 'auth-service',
-    version: process.env.npm_package_version || '1.0.0',
-    env: envConfig.app?.env || envConfig.NODE_ENV || 'development',
-    timezone: BOGOTA_TIMEZONE,
-  },
-  // Removemos el timestamp personalizado para evitar conflictos con pino-pretty
-  formatters: {
-    level: (label) => ({ level: label }),
-    log: (object) => {
-      if (object.err) {
-        const err = object.err as any;
-        return {
-          ...object,
-          error: {
-            type: err.constructor.name,
-            message: err.message,
-            stack: isDev ? err.stack : undefined,
-            code: err.code,
-            statusCode: err.statusCode,
-          },
-        };
-      }
-      return object;
+  const reconfiguredConfig: pino.LoggerOptions = {
+    level: logLevel,
+    base: {
+      service: 'auth-service',
+      version: process.env.npm_package_version || '1.0.0',
+      env: envConfig.app?.env || envConfig.NODE_ENV || 'development',
+      timezone: BOGOTA_TIMEZONE,
     },
-  },
-};
+  };
+
+  // Solo agregar formatters si NO estás en producción con transport.targets
+  if (isDev) {
+    reconfiguredConfig.formatters = {
+      level: (label) => ({ level: label }),
+      log: (object) => {
+        if (object.err) {
+          const err = object.err as any;
+          return {
+            ...object,
+            error: {
+              type: err.constructor.name,
+              message: err.message,
+              stack: isDev ? err.stack : undefined,
+              code: err.code,
+              statusCode: err.statusCode,
+            },
+          };
+        }
+        return object;
+      },
+    };
+  }
 
   if (isDev && logPretty) {
     reconfiguredConfig.transport = {
@@ -666,26 +677,25 @@ const reconfiguredConfig: pino.LoggerOptions = {
       options: {
         colorize: true,
         ignore: 'pid,hostname,timezone',
-        translateTime: 'SYS:yyyy-mm-dd HH:MM:ss', // Dejamos que pino-pretty maneje el timestamp
+        translateTime: 'SYS:yyyy-mm-dd HH:MM:ss',
         messageFormat: '[{service}] {msg}',
         singleLine: false,
-        // Sin customPrettifiers para evitar DataCloneError
       },
     };
   } else if (isProd) {
-    // Configuración de producción con múltiples destinos
+    // Configuración de producción con múltiples destinos - SIN formatters
     const destinations = [
       {
         level: logLevel,
-        dest: path.join(LOG_DIR, 'auth.log'),
+        dest: path.join(LOG_DIR, 'auth-service.log'),
       },
       {
         level: 'error',
-        dest: path.join(LOG_DIR, 'auth-error.log'),
+        dest: path.join(LOG_DIR, 'auth-service-error.log'),
       },
       {
         level: 'warn',
-        dest: path.join(LOG_DIR, 'auth-security.log'),
+        dest: path.join(LOG_DIR, 'auth-service-security.log'),
       },
       {
         level: logLevel,
@@ -714,7 +724,7 @@ const reconfiguredConfig: pino.LoggerOptions = {
     logDir: LOG_DIR,
     prettyPrint: isDev && logPretty,
     reconfigured: true,
-  }, '🔧 Auth Logger reconfigurado con environment cargado');
+  }, '🔧 auth Service Logger reconfigurado con environment cargado');
 
   return reconfiguredLogger;
 };
