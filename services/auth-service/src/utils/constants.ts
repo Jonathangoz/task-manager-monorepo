@@ -1,5 +1,4 @@
 // src/utils/constants.ts - Auth-Service
-import 
 
 // HTTP Status Codes
 export const HTTP_STATUS = {
@@ -380,22 +379,6 @@ export interface PaginatedResult<T> {
   page: number;
   limit: number;
   totalPages: number;
-}
-
-// Tipos para el middleware de autenticación
-declare global {
-  namespace Express {
-    interface Request {
-      user?: {
-        id: string;
-        email: string;
-        username: string;
-        sessionId: string;
-        iat: number;
-        exp: number;
-      };
-    }
-  }
 }
 
 // Headers de request adicionales

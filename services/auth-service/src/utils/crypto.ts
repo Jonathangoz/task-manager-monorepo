@@ -10,7 +10,6 @@ import { logger } from './logger';
 import {
   SECURITY_CONFIG,
   PASSWORD_VALIDATION,
-  ERROR_CODES,
   VALIDATION_MESSAGES,
 } from './constants';
 

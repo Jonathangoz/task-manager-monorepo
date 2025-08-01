@@ -1,9 +1,9 @@
 // src/utils/swagger.ts - Auth Service
-import swaggerJsdoc, { Options } from 'swagger-jsdoc';
+import swaggerJsdoc from 'swagger-jsdoc';
 import { SwaggerUiOptions } from 'swagger-ui-express';
 import { OpenAPIV3 } from 'openapi-types';
 import { environment } from '@/config/environment';
-import { ValidationResult, SwaggerInfo } from '@/types/swaggerTypes';
+import { ValidationResult } from '@/types/swaggerTypes';
 
 // ==============================================
 // CONFIGURACIÓN PRINCIPAL DE SWAGGER
