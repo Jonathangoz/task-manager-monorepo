@@ -4,14 +4,14 @@ import { AuthenticatedRequest } from '@/typeExpress/express';
 import { RedisCache } from '@/core/cache/RedisCache';
 import { securityLogger, logger } from '@/utils/logger';
 import { environment } from '@/config/environment';
-import { 
-  HTTP_STATUS, 
-  ERROR_CODES, 
-  ERROR_MESSAGES, 
-  CACHE_KEYS, 
-  CACHE_TTL, 
+import {
+  HTTP_STATUS,
+  ERROR_CODES,
+  ERROR_MESSAGES,
+  CACHE_KEYS,
+  CACHE_TTL,
   SECURITY_CONFIG,
-  RATE_LIMIT_CONFIG
+  RATE_LIMIT_CONFIG,
 } from '@/utils/constants';
 
 interface RateLimitRequest extends Request {
@@ -58,7 +58,11 @@ export class RateLimitMiddleware {
 
     const finalOptions = { ...defaultOptions, ...options };
 
-    return async (req: RateLimitRequest, res: Response, next: NextFunction): Promise<void> => {
+    return async (
+      req: RateLimitRequest,
+      res: Response,
+      next: NextFunction,
+    ): Promise<void> => {
       try {
         // Generar correlation ID si no existe
         if (!req.correlationId) {
@@ -74,11 +78,15 @@ export class RateLimitMiddleware {
         const rateLimitInfo = await RateLimitMiddleware.checkRateLimit(
           key,
           finalOptions.windowMs,
-          finalOptions.maxRequests
+          finalOptions.maxRequests,
         );
 
         // Agregar headers de rate limit
-        RateLimitMiddleware.setRateLimitHeaders(res, rateLimitInfo, finalOptions.maxRequests);
+        RateLimitMiddleware.setRateLimitHeaders(
+          res,
+          rateLimitInfo,
+          finalOptions.maxRequests,
+        );
 
         // Log de la petición
         securityLogger.debug('Rate limit check completed', {
@@ -119,10 +127,12 @@ export class RateLimitMiddleware {
               correlationId: req.correlationId,
               rateLimitExceeded: true,
               resetTime: new Date(rateLimitInfo.resetTime).toISOString(),
-              retryAfter: Math.ceil((rateLimitInfo.resetTime - Date.now()) / 1000),
+              retryAfter: Math.ceil(
+                (rateLimitInfo.resetTime - Date.now()) / 1000,
+              ),
               timestamp: new Date().toISOString(),
               path: req.path,
-              method: req.method
+              method: req.method,
             },
           });
         }
@@ -135,7 +145,7 @@ export class RateLimitMiddleware {
           correlationId: req.correlationId,
           ip: req.ip,
         });
-        
+
         // En caso de error, permitir la petición pero logear
         next();
       }
@@ -156,15 +166,18 @@ export class RateLimitMiddleware {
         return `auth:${email}`;
       },
       onLimitReached: (req, rateLimitInfo) => {
-        securityLogger.error('Authentication rate limit exceeded - potential brute force attack', {
-          correlationId: req.correlationId,
-          ip: req.ip,
-          email: (req.body as { email?: string })?.email,
-          userAgent: req.get('User-Agent'),
-          count: rateLimitInfo.count,
-          event: 'AUTH_RATE_LIMIT_EXCEEDED',
-          severity: 'HIGH',
-        });
+        securityLogger.error(
+          'Authentication rate limit exceeded - potential brute force attack',
+          {
+            correlationId: req.correlationId,
+            ip: req.ip,
+            email: (req.body as { email?: string })?.email,
+            userAgent: req.get('User-Agent'),
+            count: rateLimitInfo.count,
+            event: 'AUTH_RATE_LIMIT_EXCEEDED',
+            severity: 'HIGH',
+          },
+        );
       },
     };
 
@@ -255,7 +268,7 @@ export class RateLimitMiddleware {
   private static async checkRateLimit(
     key: string,
     windowMs: number,
-    maxRequests: number
+    maxRequests: number,
   ): Promise<RateLimitInfo> {
     const now = Date.now();
     const windowStart = now - windowMs;
@@ -263,17 +276,31 @@ export class RateLimitMiddleware {
     try {
       const isHealthy = await RateLimitMiddleware.cache.healthCheck();
       if (isHealthy) {
-        return await RateLimitMiddleware.checkRateLimitRedis(key, windowMs, maxRequests, now);
+        return await RateLimitMiddleware.checkRateLimitRedis(
+          key,
+          windowMs,
+          maxRequests,
+          now,
+        );
       }
     } catch (error) {
-      securityLogger.warn('Redis unavailable for rate limiting, falling back to memory store', {
-        error: error instanceof Error ? error.message : 'Error desconocido',
-        key
-      });
+      securityLogger.warn(
+        'Redis unavailable for rate limiting, falling back to memory store',
+        {
+          error: error instanceof Error ? error.message : 'Error desconocido',
+          key,
+        },
+      );
     }
 
     // Fallback a store en memoria
-    return RateLimitMiddleware.checkRateLimitMemory(key, windowMs, maxRequests, now, windowStart);
+    return RateLimitMiddleware.checkRateLimitMemory(
+      key,
+      windowMs,
+      maxRequests,
+      now,
+      windowStart,
+    );
   }
 
   /**
@@ -283,7 +310,7 @@ export class RateLimitMiddleware {
     key: string,
     windowMs: number,
     maxRequests: number,
-    now: number
+    now: number,
   ): Promise<RateLimitInfo> {
     const redisKey = CACHE_KEYS.RATE_LIMIT(key);
     const result = await RateLimitMiddleware.cache.client
@@ -292,7 +319,8 @@ export class RateLimitMiddleware {
       .expire(redisKey, Math.ceil(windowMs / 1000), 'NX') // Set expiration only if key is new
       .exec();
 
-    const count = result && result[0] && result[0][1] ? Number(result[0][1]) : 1;
+    const count =
+      result && result[0] && result[0][1] ? Number(result[0][1]) : 1;
 
     return {
       count,
@@ -310,14 +338,14 @@ export class RateLimitMiddleware {
     windowMs: number,
     maxRequests: number,
     now: number,
-    windowStart: number
+    windowStart: number,
   ): RateLimitInfo {
     // Limpiar entradas expiradas
     RateLimitMiddleware.cleanExpiredEntries(windowStart);
 
     // Obtener o crear info de rate limit
     let limitInfo = rateLimitStore.get(key);
-    
+
     if (!limitInfo || limitInfo.firstRequest < windowStart) {
       // Nueva ventana de tiempo
       limitInfo = {
@@ -353,7 +381,7 @@ export class RateLimitMiddleware {
   private static setRateLimitHeaders(
     res: Response,
     rateLimitInfo: RateLimitInfo,
-    maxRequests: number
+    maxRequests: number,
   ): void {
     res.set({
       'X-RateLimit-Limit': maxRequests.toString(),
@@ -364,7 +392,9 @@ export class RateLimitMiddleware {
 
     // Header adicional si se excedió el límite
     if (rateLimitInfo.count > maxRequests) {
-      const retryAfter = Math.ceil((rateLimitInfo.resetTime - Date.now()) / 1000);
+      const retryAfter = Math.ceil(
+        (rateLimitInfo.resetTime - Date.now()) / 1000,
+      );
       res.set('Retry-After', retryAfter.toString());
     }
   }
@@ -373,7 +403,11 @@ export class RateLimitMiddleware {
    * Middleware para limpiar todos los rate limits (útil para testing)
    */
   static clearAll() {
-    return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    return async (
+      req: Request,
+      res: Response,
+      next: NextFunction,
+    ): Promise<void> => {
       try {
         // Limpiar store en memoria
         rateLimitStore.clear();
@@ -386,14 +420,14 @@ export class RateLimitMiddleware {
 
         securityLogger.info('All rate limits cleared', {
           correlationId: req.correlationId || `clear-${Date.now()}`,
-          clearedBy: (req as RateLimitRequest).user?.id || req.ip
+          clearedBy: (req as RateLimitRequest).user?.id || req.ip,
         });
-        
+
         next();
       } catch (error) {
         securityLogger.error('Failed to clear all rate limits', {
           error: error instanceof Error ? error.message : 'Error desconocido',
-          stack: error instanceof Error ? error.stack : undefined
+          stack: error instanceof Error ? error.stack : undefined,
         });
         next();
       }
@@ -404,7 +438,11 @@ export class RateLimitMiddleware {
    * Middleware para limpiar rate limits específicos
    */
   static clearRateLimit(keyPattern: string) {
-    return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    return async (
+      req: Request,
+      res: Response,
+      next: NextFunction,
+    ): Promise<void> => {
       try {
         // Limpiar de memoria
         for (const [key] of rateLimitStore.entries()) {
@@ -420,18 +458,18 @@ export class RateLimitMiddleware {
           await RateLimitMiddleware.cache.deleteByPattern(pattern);
         }
 
-        securityLogger.info('Rate limit cleared', { 
+        securityLogger.info('Rate limit cleared', {
           keyPattern,
           correlationId: req.correlationId || `clear-${Date.now()}`,
-          clearedBy: (req as RateLimitRequest).user?.id || req.ip
+          clearedBy: (req as RateLimitRequest).user?.id || req.ip,
         });
-        
+
         next();
       } catch (error) {
         securityLogger.error('Failed to clear rate limit', {
           error: error instanceof Error ? error.message : 'Error desconocido',
           stack: error instanceof Error ? error.stack : undefined,
-          keyPattern
+          keyPattern,
         });
         next();
       }
@@ -467,7 +505,8 @@ export class RateLimitMiddleware {
             };
           } catch (error) {
             securityLogger.warn('Error getting Redis stats', {
-              error: error instanceof Error ? error.message : 'Error desconocido'
+              error:
+                error instanceof Error ? error.message : 'Error desconocido',
             });
           }
         }
@@ -483,22 +522,21 @@ export class RateLimitMiddleware {
             correlationId,
             timestamp: new Date().toISOString(),
             path: req.path,
-            method: req.method
-          }
+            method: req.method,
+          },
         });
 
         logger.debug('Rate limit stats retrieved', {
           correlationId,
           memoryKeys: memoryStats.totalKeys,
-          redisAvailable: !!redisStats
+          redisAvailable: !!redisStats,
         });
-
       } catch (error) {
         securityLogger.error('Failed to get rate limit stats', {
           error: error instanceof Error ? error.message : 'Error desconocido',
-          stack: error instanceof Error ? error.stack : undefined
+          stack: error instanceof Error ? error.stack : undefined,
         });
-        
+
         res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
           success: false,
           error: {
@@ -508,8 +546,8 @@ export class RateLimitMiddleware {
           meta: {
             timestamp: new Date().toISOString(),
             path: req.path,
-            method: req.method
-          }
+            method: req.method,
+          },
         });
       }
     };
@@ -521,12 +559,12 @@ export class RateLimitMiddleware {
   static whitelist(whitelistedIPs: string[] = []) {
     return (req: Request, res: Response, next: NextFunction): void => {
       const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
-      
+
       // Si está en whitelist, skip rate limiting
       if (whitelistedIPs.includes(clientIP)) {
-        securityLogger.debug('IP whitelisted, skipping rate limit', { 
+        securityLogger.debug('IP whitelisted, skipping rate limit', {
           ip: clientIP,
-          path: req.path 
+          path: req.path,
         });
         return next();
       }
@@ -543,11 +581,11 @@ export class RateLimitMiddleware {
     return (req: Request, res: Response, next: NextFunction): void => {
       // Obtener métricas básicas del sistema
       const memUsage = process.memoryUsage();
-      
+
       // Calcular factor de ajuste basado en uso de memoria
       const memUsagePercent = (memUsage.heapUsed / memUsage.heapTotal) * 100;
       let adjustmentFactor = 1;
-      
+
       if (memUsagePercent > 80) {
         adjustmentFactor = 0.5; // Reducir límites si memoria alta
       } else if (memUsagePercent > 60) {
@@ -557,7 +595,9 @@ export class RateLimitMiddleware {
       // Aplicar factor de ajuste a las opciones
       const adaptedOptions = {
         ...baseOptions,
-        maxRequests: Math.floor((baseOptions.maxRequests || 100) * adjustmentFactor),
+        maxRequests: Math.floor(
+          (baseOptions.maxRequests || 100) * adjustmentFactor,
+        ),
       };
 
       securityLogger.debug('Adaptive rate limiting applied', {
@@ -566,7 +606,7 @@ export class RateLimitMiddleware {
         originalLimit: baseOptions.maxRequests || 100,
         adaptedLimit: adaptedOptions.maxRequests,
         ip: req.ip,
-        path: req.path
+        path: req.path,
       });
 
       // Aplicar rate limiting con opciones adaptadas
@@ -579,25 +619,26 @@ export class RateLimitMiddleware {
    */
   static byMethod(methodLimits: Record<string, Partial<RateLimitConfig>> = {}) {
     const defaultLimits: Record<string, Partial<RateLimitConfig>> = {
-      'GET': { maxRequests: 100, windowMs: 60000 },
-      'POST': { maxRequests: 20, windowMs: 60000 },
-      'PUT': { maxRequests: 20, windowMs: 60000 },
-      'PATCH': { maxRequests: 20, windowMs: 60000 },
-      'DELETE': { maxRequests: 10, windowMs: 60000 },
+      GET: { maxRequests: 100, windowMs: 60000 },
+      POST: { maxRequests: 20, windowMs: 60000 },
+      PUT: { maxRequests: 20, windowMs: 60000 },
+      PATCH: { maxRequests: 20, windowMs: 60000 },
+      DELETE: { maxRequests: 10, windowMs: 60000 },
     };
 
     return (req: Request, res: Response, next: NextFunction): void => {
       const method = req.method.toUpperCase();
-      const limits = methodLimits[method] || defaultLimits[method] || defaultLimits['GET'];
-      
+      const limits =
+        methodLimits[method] || defaultLimits[method] || defaultLimits['GET'];
+
       securityLogger.debug('Method-based rate limiting applied', {
         method,
         limits: {
           maxRequests: limits.maxRequests,
-          windowMs: limits.windowMs
+          windowMs: limits.windowMs,
         },
         ip: req.ip,
-        path: req.path
+        path: req.path,
       });
 
       RateLimitMiddleware.general(limits)(req, res, next);
@@ -612,7 +653,8 @@ export const rateLimitPerUser = RateLimitMiddleware.perUser();
 export const rateLimitRefreshToken = RateLimitMiddleware.refreshToken();
 export const rateLimitRegistration = RateLimitMiddleware.registration();
 export const rateLimitPasswordReset = RateLimitMiddleware.passwordReset();
-export const rateLimitEmailVerification = RateLimitMiddleware.emailVerification();
+export const rateLimitEmailVerification =
+  RateLimitMiddleware.emailVerification();
 
 // Exportar clase para uso avanzado
 export default RateLimitMiddleware;

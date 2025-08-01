@@ -2,20 +2,17 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { ICategoryService } from '@/core/domain/interfaces/ICategoryService';
-import { 
-  HTTP_STATUS, 
-  SUCCESS_MESSAGES, 
+import {
+  HTTP_STATUS,
+  SUCCESS_MESSAGES,
   ERROR_CODES,
-  ApiResponse
+  ApiResponse,
 } from '@/utils/constants';
 import { logger } from '@/utils/logger';
-import { 
-  extractPaginationParams, 
-  PaginationParams
-} from '@/utils/pagination';
-import { 
-  CreateCategoryData, 
-  UpdateCategoryData 
+import { extractPaginationParams, PaginationParams } from '@/utils/pagination';
+import {
+  CreateCategoryData,
+  UpdateCategoryData,
 } from '@/core/domain/interfaces/ICategoryRepository';
 
 // Validation Error for consistency
@@ -23,7 +20,7 @@ class ValidationError extends Error {
   constructor(
     message: string,
     public readonly code: string = ERROR_CODES.VALIDATION_ERROR,
-    public readonly statusCode: number = HTTP_STATUS.BAD_REQUEST
+    public readonly statusCode: number = HTTP_STATUS.BAD_REQUEST,
   ) {
     super(message);
     this.name = 'ValidationError';
@@ -76,29 +73,41 @@ export class CategoryController {
    * GET /api/v1/categories
    * Query params: ?includeTaskCount=true
    */
-  getCategories = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  getCategories = async (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const userId = req.user.id;
-      const includeTaskCount = this.parseIncludeTaskCountParam(req.query.includeTaskCount);
+      const includeTaskCount = this.parseIncludeTaskCountParam(
+        req.query.includeTaskCount,
+      );
 
       logger.info({ userId, includeTaskCount }, 'Fetching user categories');
 
-      const categories = await this.categoryService.getUserCategories(userId, includeTaskCount);
+      const categories = await this.categoryService.getUserCategories(
+        userId,
+        includeTaskCount,
+      );
 
       const response = this.createSuccessResponse(
         SUCCESS_MESSAGES.CATEGORIES_RETRIEVED,
         categories,
-        req
+        req,
       );
 
       res.status(HTTP_STATUS.OK).json(response);
 
       logger.info(
         { userId, categoriesCount: categories.length, includeTaskCount },
-        'Categories retrieved successfully'
+        'Categories retrieved successfully',
       );
     } catch (error) {
-      logger.error({ userId: req.user?.id, error }, 'Error retrieving categories');
+      logger.error(
+        { userId: req.user?.id, error },
+        'Error retrieving categories',
+      );
       next(error);
     }
   };
@@ -107,26 +116,39 @@ export class CategoryController {
    * Get single category by ID
    * GET /api/v1/categories/:id
    */
-  getCategoryById = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  getCategoryById = async (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const categoryId = this.validateAndExtractId(req.params.id);
       const userId = req.user.id;
 
       logger.info({ categoryId, userId }, 'Fetching category by ID');
 
-      const category = await this.categoryService.getCategoryById(categoryId, userId);
+      const category = await this.categoryService.getCategoryById(
+        categoryId,
+        userId,
+      );
 
       const response = this.createSuccessResponse(
         'Category retrieved successfully',
         category,
-        req
+        req,
       );
 
       res.status(HTTP_STATUS.OK).json(response);
 
-      logger.info({ categoryId, userId, categoryName: category.name }, 'Category retrieved by ID');
+      logger.info(
+        { categoryId, userId, categoryName: category.name },
+        'Category retrieved by ID',
+      );
     } catch (error) {
-      logger.error({ categoryId: req.params.id, userId: req.user?.id, error }, 'Error retrieving category');
+      logger.error(
+        { categoryId: req.params.id, userId: req.user?.id, error },
+        'Error retrieving category',
+      );
       next(error);
     }
   };
@@ -135,26 +157,36 @@ export class CategoryController {
    * Create new category
    * POST /api/v1/categories
    */
-  createCategory = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  createCategory = async (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const userId = req.user.id;
       const categoryData = this.validateCreateCategoryData(req.body);
 
-      logger.info({ userId, categoryName: categoryData.name }, 'Creating new category');
+      logger.info(
+        { userId, categoryName: categoryData.name },
+        'Creating new category',
+      );
 
-      const category = await this.categoryService.createCategory(userId, categoryData);
+      const category = await this.categoryService.createCategory(
+        userId,
+        categoryData,
+      );
 
       const response = this.createSuccessResponse(
         SUCCESS_MESSAGES.CATEGORY_CREATED,
         category,
-        req
+        req,
       );
 
       res.status(HTTP_STATUS.CREATED).json(response);
 
       logger.info(
         { categoryId: category.id, userId, name: category.name },
-        'Category created successfully'
+        'Category created successfully',
       );
     } catch (error) {
       logger.error({ userId: req.user?.id, error }, 'Error creating category');
@@ -166,33 +198,44 @@ export class CategoryController {
    * Update category
    * PUT /api/v1/categories/:id
    */
-  updateCategory = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  updateCategory = async (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const categoryId = this.validateAndExtractId(req.params.id);
       const userId = req.user.id;
       const updateData = this.validateUpdateCategoryData(req.body);
 
       logger.info(
-        { categoryId, userId, updateFields: Object.keys(updateData) }, 
-        'Updating category'
+        { categoryId, userId, updateFields: Object.keys(updateData) },
+        'Updating category',
       );
 
-      const category = await this.categoryService.updateCategory(categoryId, userId, updateData);
+      const category = await this.categoryService.updateCategory(
+        categoryId,
+        userId,
+        updateData,
+      );
 
       const response = this.createSuccessResponse(
         SUCCESS_MESSAGES.CATEGORY_UPDATED,
         category,
-        req
+        req,
       );
 
       res.status(HTTP_STATUS.OK).json(response);
 
       logger.info(
         { categoryId, userId, changes: Object.keys(updateData) },
-        'Category updated successfully'
+        'Category updated successfully',
       );
     } catch (error) {
-      logger.error({ categoryId: req.params.id, userId: req.user?.id, error }, 'Error updating category');
+      logger.error(
+        { categoryId: req.params.id, userId: req.user?.id, error },
+        'Error updating category',
+      );
       next(error);
     }
   };
@@ -201,7 +244,11 @@ export class CategoryController {
    * Delete category
    * DELETE /api/v1/categories/:id
    */
-  deleteCategory = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  deleteCategory = async (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const categoryId = this.validateAndExtractId(req.params.id);
       const userId = req.user.id;
@@ -213,14 +260,17 @@ export class CategoryController {
       const response = this.createSuccessResponse(
         SUCCESS_MESSAGES.CATEGORY_DELETED,
         undefined, // No data for delete operation
-        req
+        req,
       );
 
       res.status(HTTP_STATUS.OK).json(response);
 
       logger.info({ categoryId, userId }, 'Category deleted successfully');
     } catch (error) {
-      logger.error({ categoryId: req.params.id, userId: req.user?.id, error }, 'Error deleting category');
+      logger.error(
+        { categoryId: req.params.id, userId: req.user?.id, error },
+        'Error deleting category',
+      );
       next(error);
     }
   };
@@ -229,44 +279,51 @@ export class CategoryController {
    * Get tasks from a specific category with pagination
    * GET /api/v1/categories/:id/tasks
    */
-  getCategoryTasks = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  getCategoryTasks = async (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const categoryId = this.validateAndExtractId(req.params.id);
       const userId = req.user.id;
       const paginationParams = extractPaginationParams(req);
 
       logger.info(
-        { categoryId, userId, pagination: paginationParams }, 
-        'Fetching category tasks'
+        { categoryId, userId, pagination: paginationParams },
+        'Fetching category tasks',
       );
 
       const result = await this.categoryService.getCategoryTasks(
-        categoryId, 
-        userId, 
-        paginationParams.page, 
-        paginationParams.limit
+        categoryId,
+        userId,
+        paginationParams.page,
+        paginationParams.limit,
       );
 
       const response = this.createPaginatedResponse(
         'Category tasks retrieved successfully',
         result,
-        req
+        req,
       );
 
       res.status(HTTP_STATUS.OK).json(response);
 
       logger.info(
-        { 
-          categoryId, 
-          userId, 
-          page: paginationParams.page, 
-          limit: paginationParams.limit, 
-          total: result.total || result.meta?.total || 0
+        {
+          categoryId,
+          userId,
+          page: paginationParams.page,
+          limit: paginationParams.limit,
+          total: result.total || result.meta?.total || 0,
         },
-        'Category tasks retrieved successfully'
+        'Category tasks retrieved successfully',
       );
     } catch (error) {
-      logger.error({ categoryId: req.params.id, userId: req.user?.id, error }, 'Error retrieving category tasks');
+      logger.error(
+        { categoryId: req.params.id, userId: req.user?.id, error },
+        'Error retrieving category tasks',
+      );
       next(error);
     }
   };
@@ -275,7 +332,11 @@ export class CategoryController {
    * Get category statistics for the user
    * GET /api/v1/categories/stats
    */
-  getCategoryStats = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  getCategoryStats = async (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const userId = req.user.id;
 
@@ -286,14 +347,17 @@ export class CategoryController {
       const response = this.createSuccessResponse(
         SUCCESS_MESSAGES.STATS_RETRIEVED,
         stats,
-        req
+        req,
       );
 
       res.status(HTTP_STATUS.OK).json(response);
 
       logger.info({ userId, stats }, 'Category statistics retrieved');
     } catch (error) {
-      logger.error({ userId: req.user?.id, error }, 'Error retrieving category statistics');
+      logger.error(
+        { userId: req.user?.id, error },
+        'Error retrieving category statistics',
+      );
       next(error);
     }
   };
@@ -302,7 +366,11 @@ export class CategoryController {
    * Get active categories only
    * GET /api/v1/categories/active
    */
-  getActiveCategories = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  getActiveCategories = async (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const userId = req.user.id;
 
@@ -313,17 +381,20 @@ export class CategoryController {
       const response = this.createSuccessResponse(
         'Active categories retrieved successfully',
         categories,
-        req
+        req,
       );
 
       res.status(HTTP_STATUS.OK).json(response);
 
       logger.info(
         { userId, activeCategoriesCount: categories.length },
-        'Active categories retrieved successfully'
+        'Active categories retrieved successfully',
       );
     } catch (error) {
-      logger.error({ userId: req.user?.id, error }, 'Error retrieving active categories');
+      logger.error(
+        { userId: req.user?.id, error },
+        'Error retrieving active categories',
+      );
       next(error);
     }
   };
@@ -332,39 +403,44 @@ export class CategoryController {
    * Search categories - MÉTODO AGREGADO
    * GET /api/v1/categories/search
    */
-  searchCategories = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  searchCategories = async (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const userId = req.user.id;
       const searchParams = this.validateSearchCategoriesData(req.query);
       const paginationParams = extractPaginationParams(req);
 
       logger.info(
-        { userId, searchParams, pagination: paginationParams }, 
-        'Searching categories'
+        { userId, searchParams, pagination: paginationParams },
+        'Searching categories',
       );
 
       // Asumiendo que el servicio tiene un método getUserCategories
-      const result = await this.categoryService.getUserCategories(
-        userId
-      );
+      const result = await this.categoryService.getUserCategories(userId);
 
       const response = this.createPaginatedResponse(
         'Categories search completed successfully',
         result,
-        req
+        req,
       );
 
       res.status(HTTP_STATUS.OK).json(response);
 
       logger.info(
-        { 
-          userId, 
+        {
+          userId,
           query: searchParams.query,
         },
-        'Categories search completed successfully'
+        'Categories search completed successfully',
       );
     } catch (error) {
-      logger.error({ userId: req.user?.id, error }, 'Error searching categories');
+      logger.error(
+        { userId: req.user?.id, error },
+        'Error searching categories',
+      );
       next(error);
     }
   };
@@ -373,7 +449,11 @@ export class CategoryController {
    * Bulk delete categories
    * DELETE /api/v1/categories/bulk
    */
-  bulkDeleteCategories = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  bulkDeleteCategories = async (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const { categoryIds } = this.validateBulkDeleteData(req.body);
       const userId = req.user.id;
@@ -385,17 +465,20 @@ export class CategoryController {
       const response = this.createSuccessResponse(
         `${categoryIds.length} categories deleted successfully`,
         { deletedCount: categoryIds.length },
-        req
+        req,
       );
 
       res.status(HTTP_STATUS.OK).json(response);
 
       logger.info(
         { userId, deletedCount: categoryIds.length },
-        'Bulk category deletion completed'
+        'Bulk category deletion completed',
       );
     } catch (error) {
-      logger.error({ userId: req.user?.id, error }, 'Error in bulk delete categories');
+      logger.error(
+        { userId: req.user?.id, error },
+        'Error in bulk delete categories',
+      );
       next(error);
     }
   };
@@ -406,26 +489,39 @@ export class CategoryController {
    * Validate category ownership
    * GET /api/v1/categories/:id/validate
    */
-  validateCategoryOwnership = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  validateCategoryOwnership = async (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const categoryId = this.validateAndExtractId(req.params.id);
       const userId = req.user.id;
 
       logger.info({ categoryId, userId }, 'Validating category ownership');
 
-      const isOwner = await this.categoryService.validateCategoryOwnership(categoryId, userId);
+      const isOwner = await this.categoryService.validateCategoryOwnership(
+        categoryId,
+        userId,
+      );
 
       const response = this.createSuccessResponse(
         'Category ownership validation completed',
         { isOwner },
-        req
+        req,
       );
 
       res.status(HTTP_STATUS.OK).json(response);
 
-      logger.info({ categoryId, userId, isOwner }, 'Category ownership validated');
+      logger.info(
+        { categoryId, userId, isOwner },
+        'Category ownership validated',
+      );
     } catch (error) {
-      logger.error({ categoryId: req.params.id, userId: req.user?.id, error }, 'Error validating category ownership');
+      logger.error(
+        { categoryId: req.params.id, userId: req.user?.id, error },
+        'Error validating category ownership',
+      );
       next(error);
     }
   };
@@ -434,7 +530,11 @@ export class CategoryController {
    * Check if user can create more categories
    * GET /api/v1/categories/check-limit
    */
-  checkCategoryLimit = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  checkCategoryLimit = async (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const userId = req.user.id;
 
@@ -445,14 +545,20 @@ export class CategoryController {
       const response = this.createSuccessResponse(
         'Category limit check completed',
         { canCreateMore: canCreate },
-        req
+        req,
       );
 
       res.status(HTTP_STATUS.OK).json(response);
 
-      logger.info({ userId, canCreateMore: canCreate }, 'Category limit checked');
+      logger.info(
+        { userId, canCreateMore: canCreate },
+        'Category limit checked',
+      );
     } catch (error) {
-      logger.error({ userId: req.user?.id, error }, 'Error checking category limit');
+      logger.error(
+        { userId: req.user?.id, error },
+        'Error checking category limit',
+      );
       next(error);
     }
   };
@@ -465,8 +571,8 @@ export class CategoryController {
   private validateAndExtractId(id: string): string {
     if (!id || typeof id !== 'string' || !id.trim()) {
       throw new ValidationError(
-        'Invalid category ID', 
-        ERROR_CODES.VALIDATION_ERROR
+        'Invalid category ID',
+        ERROR_CODES.VALIDATION_ERROR,
       );
     }
     return id.trim();
@@ -482,21 +588,22 @@ export class CategoryController {
   /**
    * Validate create category request data
    */
-  private validateCreateCategoryData(body: any): Omit<CreateCategoryData, 'userId'> {
+  private validateCreateCategoryData(
+    body: any,
+  ): Omit<CreateCategoryData, 'userId'> {
     const { name, description, color, icon } = body;
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       throw new ValidationError(
-        'Category name is required and must be a non-empty string'
+        'Category name is required and must be a non-empty string',
       );
     }
 
     // Additional validations could be added here
     const trimmedName = name.trim();
-    if (trimmedName.length > 100) { // Based on CATEGORY_CONFIG.MAX_NAME_LENGTH
-      throw new ValidationError(
-        'Category name cannot exceed 100 characters'
-      );
+    if (trimmedName.length > 100) {
+      // Based on CATEGORY_CONFIG.MAX_NAME_LENGTH
+      throw new ValidationError('Category name cannot exceed 100 characters');
     }
 
     return {
@@ -517,15 +624,11 @@ export class CategoryController {
     // Validate name if provided
     if (name !== undefined) {
       if (typeof name !== 'string' || name.trim().length === 0) {
-        throw new ValidationError(
-          'Category name must be a non-empty string'
-        );
+        throw new ValidationError('Category name must be a non-empty string');
       }
       const trimmedName = name.trim();
       if (trimmedName.length > 100) {
-        throw new ValidationError(
-          'Category name cannot exceed 100 characters'
-        );
+        throw new ValidationError('Category name cannot exceed 100 characters');
       }
       updateData.name = trimmedName;
     }
@@ -546,9 +649,7 @@ export class CategoryController {
 
     // Check if there's something to update
     if (Object.keys(updateData).length === 0) {
-      throw new ValidationError(
-        'No valid fields to update'
-      );
+      throw new ValidationError('No valid fields to update');
     }
 
     return updateData;
@@ -562,13 +663,13 @@ export class CategoryController {
 
     if (!Array.isArray(categoryIds) || categoryIds.length === 0) {
       throw new ValidationError(
-        'Category IDs array is required and must not be empty'
+        'Category IDs array is required and must not be empty',
       );
     }
 
-    if (categoryIds.some(id => typeof id !== 'string' || !id.trim())) {
+    if (categoryIds.some((id) => typeof id !== 'string' || !id.trim())) {
       throw new ValidationError(
-        'All category IDs must be valid non-empty strings'
+        'All category IDs must be valid non-empty strings',
       );
     }
 
@@ -579,12 +680,7 @@ export class CategoryController {
    * Validate search categories request data - MÉTODO AGREGADO
    */
   private validateSearchCategoriesData(query: any): SearchCategoriesRequest {
-    const { 
-      query: searchQuery, 
-      includeInactive, 
-      sortBy, 
-      sortOrder 
-    } = query;
+    const { query: searchQuery, includeInactive, sortBy, sortOrder } = query;
 
     const searchParams: SearchCategoriesRequest = {};
 
@@ -595,7 +691,9 @@ export class CategoryController {
       }
       const trimmedQuery = searchQuery.trim();
       if (trimmedQuery.length < 1) {
-        throw new ValidationError('Search query must be at least 1 character long');
+        throw new ValidationError(
+          'Search query must be at least 1 character long',
+        );
       }
       if (trimmedQuery.length > 100) {
         throw new ValidationError('Search query cannot exceed 100 characters');
@@ -605,7 +703,8 @@ export class CategoryController {
 
     // Validate includeInactive
     if (includeInactive !== undefined) {
-      searchParams.includeInactive = includeInactive === 'true' || includeInactive === true;
+      searchParams.includeInactive =
+        includeInactive === 'true' || includeInactive === true;
     }
 
     // Validate sortBy
@@ -613,7 +712,7 @@ export class CategoryController {
       const validSortFields = ['name', 'createdAt', 'updatedAt'];
       if (!validSortFields.includes(sortBy)) {
         throw new ValidationError(
-          `Invalid sortBy field. Must be one of: ${validSortFields.join(', ')}`
+          `Invalid sortBy field. Must be one of: ${validSortFields.join(', ')}`,
         );
       }
       searchParams.sortBy = sortBy;
@@ -624,7 +723,7 @@ export class CategoryController {
       const validSortOrders = ['asc', 'desc'];
       if (!validSortOrders.includes(sortOrder)) {
         throw new ValidationError(
-          `Invalid sortOrder. Must be one of: ${validSortOrders.join(', ')}`
+          `Invalid sortOrder. Must be one of: ${validSortOrders.join(', ')}`,
         );
       }
       searchParams.sortOrder = sortOrder;
@@ -641,7 +740,7 @@ export class CategoryController {
   private createSuccessResponse<T>(
     message: string,
     data: T,
-    req: AuthenticatedRequest
+    req: AuthenticatedRequest,
   ): ApiResponse<T> {
     return {
       success: true,
@@ -660,18 +759,19 @@ export class CategoryController {
   private createPaginatedResponse(
     message: string,
     result: any,
-    req: AuthenticatedRequest
+    req: AuthenticatedRequest,
   ): ApiResponse {
     // Handle different result formats from service
     const data = result.data || result.tasks || result.categories || [];
-    const pagination = result.meta || result.pagination || {
-      page: 1,
-      limit: 20,
-      total: result.total || 0,
-      pages: Math.ceil((result.total || 0) / 20),
-      hasNext: false,
-      hasPrev: false,
-    };
+    const pagination = result.meta ||
+      result.pagination || {
+        page: 1,
+        limit: 20,
+        total: result.total || 0,
+        pages: Math.ceil((result.total || 0) / 20),
+        hasNext: false,
+        hasPrev: false,
+      };
 
     return {
       success: true,

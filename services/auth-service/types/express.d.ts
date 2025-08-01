@@ -151,12 +151,29 @@ export interface VerifyEmailParams {
 }
 
 // Middleware types
-export type AuthMiddleware = (req: Request, res: Response, next: NextFunction) => void | Promise<void>;
-export type ValidationMiddleware = (req: Request, res: Response, next: NextFunction) => void | Promise<void>;
-export type ErrorMiddleware = (error: Error, req: Request, res: Response, next: NextFunction) => void | Promise<void>;
+export type AuthMiddleware = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => void | Promise<void>;
+export type ValidationMiddleware = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => void | Promise<void>;
+export type ErrorMiddleware = (
+  error: Error,
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => void | Promise<void>;
 
 // Tipos para controladores
-export type ControllerMethod = (req: Request, res: Response, next: NextFunction) => Promise<void>;
+export type ControllerMethod = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => Promise<void>;
 
 // Tipos para el contexto de sesión
 export interface SessionContext {

@@ -14,19 +14,17 @@ describe('Middleware Integration Tests', () => {
   beforeEach(async () => {
     testDatabase = new TestDatabase(testDb);
     testRedis = new TestRedis();
-    
+
     await testDatabase.cleanAll();
     await testRedis.flush();
 
     // Crear usuario y obtener token para pruebas de autenticación
     testUser = await testDatabase.createTestUser();
-    
-    const loginResponse = await request(app)
-      .post('/api/v1/auth/login')
-      .send({
-        email: testUser.email,
-        password: 'Password123!'
-      });
+
+    const loginResponse = await request(app).post('/api/v1/auth/login').send({
+      email: testUser.email,
+      password: 'Password123!',
+    });
 
     accessToken = loginResponse.body.data.tokens.accessToken;
   });
@@ -39,7 +37,7 @@ describe('Middleware Integration Tests', () => {
           .post('/api/v1/auth/login')
           .send({
             email: 'test@example.com',
-            password: 'wrongpassword'
+            password: 'wrongpassword',
           })
           .expect(HTTP_STATUS.UNAUTHORIZED); // Error esperado por credenciales, no por rate limit
       }
@@ -47,20 +45,22 @@ describe('Middleware Integration Tests', () => {
 
     it('should block requests when rate limit exceeded', async () => {
       // Arrange - Simular muchos requests rápidos
-      const requests = Array(101).fill(null).map(() => 
-        request(app)
-          .post('/api/v1/auth/login')
-          .send({
+      const requests = Array(101)
+        .fill(null)
+        .map(() =>
+          request(app).post('/api/v1/auth/login').send({
             email: 'test@example.com',
-            password: 'wrongpassword'
-          })
-      );
+            password: 'wrongpassword',
+          }),
+        );
 
       // Act
       const responses = await Promise.all(requests);
 
       // Assert - Los últimos requests deberían ser bloqueados
-      const rateLimitedResponses = responses.filter(res => res.status === HTTP_STATUS.TOO_MANY_REQUESTS);
+      const rateLimitedResponses = responses.filter(
+        (res) => res.status === HTTP_STATUS.TOO_MANY_REQUESTS,
+      );
       expect(rateLimitedResponses.length).toBeGreaterThan(0);
     });
   });
@@ -87,8 +87,8 @@ describe('Middleware Integration Tests', () => {
       expect(response.body).toMatchObject({
         success: false,
         error: {
-          code: 'TOKEN_REQUIRED'
-        }
+          code: 'TOKEN_REQUIRED',
+        },
       });
     });
 
@@ -103,8 +103,8 @@ describe('Middleware Integration Tests', () => {
       expect(response.body).toMatchObject({
         success: false,
         error: {
-          code: 'TOKEN_INVALID'
-        }
+          code: 'TOKEN_INVALID',
+        },
       });
     });
   });
@@ -117,7 +117,7 @@ describe('Middleware Integration Tests', () => {
         .send({
           email: 'invalid-email',
           username: '', // Campo requerido vacío
-          password: '123' // Password muy corto
+          password: '123', // Password muy corto
         })
         .expect(HTTP_STATUS.BAD_REQUEST);
 
@@ -129,18 +129,18 @@ describe('Middleware Integration Tests', () => {
           details: expect.arrayContaining([
             expect.objectContaining({
               field: 'email',
-              message: expect.stringContaining('valid email')
+              message: expect.stringContaining('valid email'),
             }),
             expect.objectContaining({
               field: 'username',
-              message: expect.stringContaining('required')
+              message: expect.stringContaining('required'),
             }),
             expect.objectContaining({
               field: 'password',
-              message: expect.stringContaining('length')
-            })
-          ])
-        }
+              message: expect.stringContaining('length'),
+            }),
+          ]),
+        },
       });
     });
   });
@@ -152,7 +152,7 @@ describe('Middleware Integration Tests', () => {
         .post('/api/v1/auth/login')
         .send({
           email: 'nonexistent@example.com',
-          password: 'somepassword'
+          password: 'somepassword',
         })
         .expect(HTTP_STATUS.UNAUTHORIZED);
 
@@ -161,11 +161,11 @@ describe('Middleware Integration Tests', () => {
         success: false,
         message: expect.any(String),
         error: {
-          code: expect.any(String)
+          code: expect.any(String),
         },
         meta: {
-          timestamp: expect.any(String)
-        }
+          timestamp: expect.any(String),
+        },
       });
     });
   });

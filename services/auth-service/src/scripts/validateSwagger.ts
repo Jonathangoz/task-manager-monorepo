@@ -1,5 +1,9 @@
 // src/scripts/validate-swagger.ts
-import { swaggerSpec, validateSwaggerSpec, getSwaggerInfo } from '@/utils/swagger';
+import {
+  swaggerSpec,
+  validateSwaggerSpec,
+  getSwaggerInfo,
+} from '@/utils/swagger';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
@@ -8,10 +12,10 @@ async function main() {
 
   // Validar especificación
   const validation = validateSwaggerSpec();
-  
+
   if (!validation.isValid) {
     console.error('❌ Swagger validation failed:');
-    validation.errors.forEach(error => console.error(`  - ${error}`));
+    validation.errors.forEach((error) => console.error(`  - ${error}`));
     process.exit(1);
   }
 
@@ -39,14 +43,23 @@ async function main() {
 
     // Generar archivo de información
     const infoPath = join(docsDir, 'api-info.json');
-    writeFileSync(infoPath, JSON.stringify({
-      ...info,
-      generatedAt: new Date().toISOString(),
-      nodeVersion: process.version,
-    }, null, 2));
+    writeFileSync(
+      infoPath,
+      JSON.stringify(
+        {
+          ...info,
+          generatedAt: new Date().toISOString(),
+          nodeVersion: process.version,
+        },
+        null,
+        2,
+      ),
+    );
     console.log(`📋 API info generated: ${infoPath}`);
 
-    console.log('\n🎉 Documentation validation and generation completed successfully!');
+    console.log(
+      '\n🎉 Documentation validation and generation completed successfully!',
+    );
   } catch (error) {
     console.error('❌ Error generating documentation files:', error);
     process.exit(1);

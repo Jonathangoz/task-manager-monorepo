@@ -12,64 +12,124 @@ import {
   TASK_PRIORITIES,
   PRIORITY_WEIGHTS,
   ERROR_CODES,
-  TASK_STATUSES
+  TASK_STATUSES,
 } from './constants';
 
 // Zod schemas for validation
-const PageSchema = z.number().int().min(1).default(PAGINATION_CONFIG.DEFAULT_PAGE);
-const LimitSchema = z.number().int().min(PAGINATION_CONFIG.MIN_LIMIT).max(PAGINATION_CONFIG.MAX_LIMIT).default(PAGINATION_CONFIG.DEFAULT_LIMIT);
-const SortFieldSchema = z.enum([
-  SORT_FIELDS.CREATED_AT,
-  SORT_FIELDS.UPDATED_AT,
-  SORT_FIELDS.DUE_DATE,
-  SORT_FIELDS.PRIORITY,
-  SORT_FIELDS.STATUS,
-  SORT_FIELDS.TITLE,
-  SORT_FIELDS.NAME, // Added for categories
-  SORT_FIELDS.TASK_COUNT // Added for categories
-] as const).default(SORT_FIELDS.CREATED_AT);
-const SortOrderSchema = z.enum([SORT_ORDERS.ASC, SORT_ORDERS.DESC] as const).default(SORT_ORDERS.DESC);
+const PageSchema = z
+  .number()
+  .int()
+  .min(1)
+  .default(PAGINATION_CONFIG.DEFAULT_PAGE);
+const LimitSchema = z
+  .number()
+  .int()
+  .min(PAGINATION_CONFIG.MIN_LIMIT)
+  .max(PAGINATION_CONFIG.MAX_LIMIT)
+  .default(PAGINATION_CONFIG.DEFAULT_LIMIT);
+const SortFieldSchema = z
+  .enum([
+    SORT_FIELDS.CREATED_AT,
+    SORT_FIELDS.UPDATED_AT,
+    SORT_FIELDS.DUE_DATE,
+    SORT_FIELDS.PRIORITY,
+    SORT_FIELDS.STATUS,
+    SORT_FIELDS.TITLE,
+    SORT_FIELDS.NAME, // Added for categories
+    SORT_FIELDS.TASK_COUNT, // Added for categories
+  ] as const)
+  .default(SORT_FIELDS.CREATED_AT);
+const SortOrderSchema = z
+  .enum([SORT_ORDERS.ASC, SORT_ORDERS.DESC] as const)
+  .default(SORT_ORDERS.DESC);
 
 // Main pagination schema
 const PaginationQuerySchema = z.object({
-  page: z.string().optional().transform((val) => val ? parseInt(val) : PAGINATION_CONFIG.DEFAULT_PAGE).pipe(PageSchema),
-  limit: z.string().optional().transform((val) => val ? parseInt(val) : PAGINATION_CONFIG.DEFAULT_LIMIT).pipe(LimitSchema),
-  sortBy: z.string().optional().default(SORT_FIELDS.CREATED_AT).pipe(SortFieldSchema),
-  sortOrder: z.string().optional().default(SORT_ORDERS.DESC).transform((val) => val?.toLowerCase() as 'asc' | 'desc').pipe(SortOrderSchema)
+  page: z
+    .string()
+    .optional()
+    .transform((val) => (val ? parseInt(val) : PAGINATION_CONFIG.DEFAULT_PAGE))
+    .pipe(PageSchema),
+  limit: z
+    .string()
+    .optional()
+    .transform((val) => (val ? parseInt(val) : PAGINATION_CONFIG.DEFAULT_LIMIT))
+    .pipe(LimitSchema),
+  sortBy: z
+    .string()
+    .optional()
+    .default(SORT_FIELDS.CREATED_AT)
+    .pipe(SortFieldSchema),
+  sortOrder: z
+    .string()
+    .optional()
+    .default(SORT_ORDERS.DESC)
+    .transform((val) => val?.toLowerCase() as 'asc' | 'desc')
+    .pipe(SortOrderSchema),
 });
 
 // Multi-sort schema for advanced sorting
-const MultiSortSchema = z.string().optional().transform((sortQuery) => {
-  if (!sortQuery) return [];
+const MultiSortSchema = z
+  .string()
+  .optional()
+  .transform((sortQuery) => {
+    if (!sortQuery) return [];
 
-  const sortItems = sortQuery.split(',').filter(item => item.trim());
-  const validSorts: SortOptions[] = [];
-  const seenFields = new Set<string>();
+    const sortItems = sortQuery.split(',').filter((item) => item.trim());
+    const validSorts: SortOptions[] = [];
+    const seenFields = new Set<string>();
 
-  for (const sortItem of sortItems) {
-    const [field, order = SORT_ORDERS.DESC] = sortItem.trim().split(':');
+    for (const sortItem of sortItems) {
+      const [field, order = SORT_ORDERS.DESC] = sortItem.trim().split(':');
 
-    if (!field || seenFields.has(field)) continue;
+      if (!field || seenFields.has(field)) continue;
 
-    // Validate field: Ensure 'field' is one of the actual string values from SORT_FIELDS
-    if (!Object.values(SORT_FIELDS).includes(field as typeof SORT_FIELDS[keyof typeof SORT_FIELDS])) continue;
+      // Validate field: Ensure 'field' is one of the actual string values from SORT_FIELDS
+      if (
+        !Object.values(SORT_FIELDS).includes(
+          field as (typeof SORT_FIELDS)[keyof typeof SORT_FIELDS],
+        )
+      )
+        continue;
 
-    // Validate and normalize order
-    const normalizedOrder = order?.toLowerCase() === SORT_ORDERS.ASC ? SORT_ORDERS.ASC : SORT_ORDERS.DESC;
+      // Validate and normalize order
+      const normalizedOrder =
+        order?.toLowerCase() === SORT_ORDERS.ASC
+          ? SORT_ORDERS.ASC
+          : SORT_ORDERS.DESC;
 
-    validSorts.push({ field: field as typeof SORT_FIELDS[keyof typeof SORT_FIELDS], order: normalizedOrder }); // Assert field type
-    seenFields.add(field);
-  }
+      validSorts.push({
+        field: field as (typeof SORT_FIELDS)[keyof typeof SORT_FIELDS],
+        order: normalizedOrder,
+      }); // Assert field type
+      seenFields.add(field);
+    }
 
-  return validSorts;
-});
+    return validSorts;
+  });
 
 // Cursor pagination schema
 const CursorPaginationSchema = z.object({
-  limit: z.string().optional().transform((val) => val ? parseInt(val) : PAGINATION_CONFIG.DEFAULT_LIMIT).pipe(LimitSchema),
-  cursor: z.string().optional().transform((val) => val?.trim() || undefined),
-  sortBy: z.string().optional().default(SORT_FIELDS.CREATED_AT).pipe(SortFieldSchema),
-  sortOrder: z.string().optional().default(SORT_ORDERS.DESC).transform((val) => val?.toLowerCase() as 'asc' | 'desc').pipe(SortOrderSchema)
+  limit: z
+    .string()
+    .optional()
+    .transform((val) => (val ? parseInt(val) : PAGINATION_CONFIG.DEFAULT_LIMIT))
+    .pipe(LimitSchema),
+  cursor: z
+    .string()
+    .optional()
+    .transform((val) => val?.trim() || undefined),
+  sortBy: z
+    .string()
+    .optional()
+    .default(SORT_FIELDS.CREATED_AT)
+    .pipe(SortFieldSchema),
+  sortOrder: z
+    .string()
+    .optional()
+    .default(SORT_ORDERS.DESC)
+    .transform((val) => val?.toLowerCase() as 'asc' | 'desc')
+    .pipe(SortOrderSchema),
 });
 
 // Pagination parameters interface
@@ -120,7 +180,7 @@ export class PaginationError extends Error {
   constructor(
     message: string,
     public readonly code: string,
-    public readonly statusCode: number = 400
+    public readonly statusCode: number = 400,
   ) {
     super(message);
     this.name = 'PaginationError';
@@ -146,10 +206,12 @@ export const extractPaginationParams = (req: Request): PaginationParams => {
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const errorMessages = error.errors.map(err => `${err.path.join('.')}: ${err.message}`);
+      const errorMessages = error.errors.map(
+        (err) => `${err.path.join('.')}: ${err.message}`,
+      );
       throw new PaginationError(
         errorMessages.join(', '),
-        ERROR_CODES.INVALID_PAGINATION
+        ERROR_CODES.INVALID_PAGINATION,
       );
     }
     throw error;
@@ -163,7 +225,7 @@ export const extractSortOptions = (req: Request): SortOptions => {
   try {
     const { sortBy: field, sortOrder: order } = PaginationQuerySchema.pick({
       sortBy: true,
-      sortOrder: true
+      sortOrder: true,
     }).parse(req.query);
 
     return { field, order };
@@ -171,7 +233,7 @@ export const extractSortOptions = (req: Request): SortOptions => {
     if (error instanceof z.ZodError) {
       throw new PaginationError(
         'Invalid sort parameters',
-        ERROR_CODES.INVALID_SORT_FIELD
+        ERROR_CODES.INVALID_SORT_FIELD,
       );
     }
     throw error;
@@ -187,7 +249,9 @@ export const validatePaginationQuery = (query: any): ValidationResult => {
     return { isValid: true, errors: [] };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const errors = error.errors.map(err => `${err.path.join('.')}: ${err.message}`);
+      const errors = error.errors.map(
+        (err) => `${err.path.join('.')}: ${err.message}`,
+      );
       return { isValid: false, errors };
     }
     return { isValid: false, errors: ['Unknown validation error'] };
@@ -199,7 +263,9 @@ export const validatePaginationQuery = (query: any): ValidationResult => {
  */
 export const isValidSortField = (field: string): boolean => {
   // Fix: Assert 'field' as one of the actual string values from SORT_FIELDS
-  return Object.values(SORT_FIELDS).includes(field as typeof SORT_FIELDS[keyof typeof SORT_FIELDS]);
+  return Object.values(SORT_FIELDS).includes(
+    field as (typeof SORT_FIELDS)[keyof typeof SORT_FIELDS],
+  );
 };
 
 /**
@@ -207,14 +273,18 @@ export const isValidSortField = (field: string): boolean => {
  */
 export const isValidSortOrder = (order: string): boolean => {
   // Fix: Assert 'order?.toLowerCase()' as one of the actual string values from SORT_ORDERS
-  return Object.values(SORT_ORDERS).includes(order?.toLowerCase() as typeof SORT_ORDERS[keyof typeof SORT_ORDERS]);
+  return Object.values(SORT_ORDERS).includes(
+    order?.toLowerCase() as (typeof SORT_ORDERS)[keyof typeof SORT_ORDERS],
+  );
 };
 
 /**
  * Normalize sort order to ensure consistency
  */
 export const normalizeSortOrder = (order?: string): 'asc' | 'desc' => {
-  return order?.toLowerCase() === SORT_ORDERS.ASC ? SORT_ORDERS.ASC : SORT_ORDERS.DESC;
+  return order?.toLowerCase() === SORT_ORDERS.ASC
+    ? SORT_ORDERS.ASC
+    : SORT_ORDERS.DESC;
 };
 
 /**
@@ -223,7 +293,7 @@ export const normalizeSortOrder = (order?: string): 'asc' | 'desc' => {
 export const createPaginationMeta = (
   page: number,
   limit: number,
-  total: number
+  total: number,
 ): PaginationMeta => {
   const pages = Math.ceil(total / limit) || 1;
   const hasNext = page < pages;
@@ -246,14 +316,20 @@ export const createPaginatedResponse = <T>(
   data: T[],
   page: number,
   limit: number,
-  total: number
+  total: number,
 ): PaginatedResult<T> => {
   if (!Array.isArray(data)) {
-    throw new PaginationError('Data must be an array', ERROR_CODES.INTERNAL_ERROR);
+    throw new PaginationError(
+      'Data must be an array',
+      ERROR_CODES.INTERNAL_ERROR,
+    );
   }
 
   if (total < 0) {
-    throw new PaginationError('Total count cannot be negative', ERROR_CODES.INTERNAL_ERROR);
+    throw new PaginationError(
+      'Total count cannot be negative',
+      ERROR_CODES.INTERNAL_ERROR,
+    );
   }
 
   const meta = createPaginationMeta(page, limit, total);
@@ -334,9 +410,13 @@ export const buildPrismaOrderBy = (sort: SortOptions) => {
       [sort.field]: sort.order,
     },
     // Always add createdAt as secondary sort for consistency (except when already sorting by it)
-    ...(sort.field !== SORT_FIELDS.CREATED_AT ? [{
-      createdAt: SORT_ORDERS.DESC,
-    }] : []),
+    ...(sort.field !== SORT_FIELDS.CREATED_AT
+      ? [
+          {
+            createdAt: SORT_ORDERS.DESC,
+          },
+        ]
+      : []),
   ];
 };
 
@@ -379,7 +459,12 @@ export const buildMultiFieldSort = (sortOptions: SortOptions[]): any[] => {
  */
 export const extractCursorParams = (req: Request): CursorPaginationParams => {
   try {
-    const { limit, cursor, sortBy: field, sortOrder: order } = CursorPaginationSchema.parse(req.query);
+    const {
+      limit,
+      cursor,
+      sortBy: field,
+      sortOrder: order,
+    } = CursorPaginationSchema.parse(req.query);
 
     return {
       limit,
@@ -390,7 +475,7 @@ export const extractCursorParams = (req: Request): CursorPaginationParams => {
     if (error instanceof z.ZodError) {
       throw new PaginationError(
         'Invalid cursor pagination parameters',
-        ERROR_CODES.INVALID_PAGINATION
+        ERROR_CODES.INVALID_PAGINATION,
       );
     }
     throw error;
@@ -421,11 +506,12 @@ export const buildCursorPrismaOptions = (params: CursorPaginationParams) => {
  */
 export const processCursorResults = <T extends { id: string }>(
   results: T[],
-  limit: number
+  limit: number,
 ): { data: T[]; hasNext: boolean; nextCursor?: string } => {
   const hasNext = results.length > limit;
   const data = hasNext ? results.slice(0, limit) : results;
-  const nextCursor = hasNext && data.length > 0 ? data[data.length - 1].id : undefined;
+  const nextCursor =
+    hasNext && data.length > 0 ? data[data.length - 1].id : undefined;
 
   return { data, hasNext, nextCursor };
 };
@@ -446,7 +532,7 @@ export const generatePaginationLinks = (
   page: number,
   limit: number,
   total: number,
-  queryParams?: Record<string, string>
+  queryParams?: Record<string, string>,
 ): PaginationLinks => {
   const pages = Math.ceil(total / limit) || 1;
   const query = new URLSearchParams(queryParams);
@@ -489,7 +575,10 @@ export const calculateTotalPages = (total: number, limit: number): number => {
 /**
  * Validate page number against total pages
  */
-export const validatePageNumber = (page: number, totalPages: number): boolean => {
+export const validatePageNumber = (
+  page: number,
+  totalPages: number,
+): boolean => {
   return page >= 1 && page <= Math.max(1, totalPages);
 };
 
@@ -522,7 +611,10 @@ export const createEmptyPaginatedResult = <T>(): PaginatedResult<T> => {
 /**
  * Helper function to build complex Prisma where clauses for filtering
  */
-export const buildPrismaWhereClause = (filters: Record<string, any>, userId: string) => {
+export const buildPrismaWhereClause = (
+  filters: Record<string, any>,
+  userId: string,
+) => {
   const where: any = { userId };
 
   // Status filter
@@ -577,7 +669,9 @@ export const buildPrismaWhereClause = (filters: Record<string, any>, userId: str
 
   // Tags filter
   if (filters.tags) {
-    const tagsArray = Array.isArray(filters.tags) ? filters.tags : [filters.tags];
+    const tagsArray = Array.isArray(filters.tags)
+      ? filters.tags
+      : [filters.tags];
     where.tags = {
       hasSome: tagsArray,
     };

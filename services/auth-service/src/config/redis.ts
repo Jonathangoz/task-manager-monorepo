@@ -56,7 +56,7 @@ class RedisConnection {
   public async connect(): Promise<void> {
     try {
       await this.client.connect();
-      
+
       // Health check
       const pong = await this.client.ping();
       if (pong === 'PONG') {
@@ -88,7 +88,11 @@ class RedisConnection {
   }
 
   // Métodos de utilidad para operaciones comunes
-  public async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
+  public async set(
+    key: string,
+    value: string,
+    ttlSeconds?: number,
+  ): Promise<void> {
     try {
       if (ttlSeconds) {
         await this.client.setex(key, ttlSeconds, value);
@@ -129,7 +133,11 @@ class RedisConnection {
     }
   }
 
-  public async setJson(key: string, value: object, ttlSeconds?: number): Promise<void> {
+  public async setJson(
+    key: string,
+    value: object,
+    ttlSeconds?: number,
+  ): Promise<void> {
     await this.set(key, JSON.stringify(value), ttlSeconds);
   }
 

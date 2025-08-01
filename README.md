@@ -7,15 +7,15 @@ Este es el monorepo principal para el proyecto **Task Manager**, una aplicación
 El monorepo está organizado utilizando workspaces de `pnpm`, lo que facilita la gestión de múltiples paquetes en un solo repositorio.
 
 ├── services/
-│   ├── auth-service/      # 🔐 Microservicio de Autenticación y Usuarios
-│   └── task-service/      # ✅ Microservicio de Tareas y Categorías
+│ ├── auth-service/ # 🔐 Microservicio de Autenticación y Usuarios
+│ └── task-service/ # ✅ Microservicio de Tareas y Categorías
 ├── frontend/
-│   └── task-frontend/     # 🎨 Interfaz de usuario (Futuro)
+│ └── task-frontend/ # 🎨 Interfaz de usuario (Futuro)
 ├── shared/
-│   └── ...                # 📦 Paquetes compartidos (Tipos, utilidades)
+│ └── ... # 📦 Paquetes compartidos (Tipos, utilidades)
 ├── docker-compose.dev.yml # Orquestación de contenedores para desarrollo
-├── package.json           # Scripts y dependencias principales
-└── pnpm-workspace.yaml    # Definición de los workspaces
+├── package.json # Scripts y dependencias principales
+└── pnpm-workspace.yaml # Definición de los workspaces
 
 ## Prerrequisitos
 
@@ -28,6 +28,7 @@ Asegúrate de tener instaladas las siguientes herramientas en tu entorno de desa
 ## 🚀 Instalación
 
 1.  Clona el repositorio:
+
     ```bash
     git clone <tu-repositorio-url>
     cd task-manager-monorepo
@@ -51,16 +52,16 @@ La forma recomendada de levantar el entorno de desarrollo completo es utilizando
 
 2.  **Ver logs de los servicios:**
     Para monitorear los logs de un servicio específico en tiempo real, abre otra terminal y usa:
+    - **Logs de Auth Service:**
 
-    -   **Logs de Auth Service:**
-        ```bash
-        docker-compose -f docker-compose.dev.yml logs -f auth-service
-        ```
+      ```bash
+      docker-compose -f docker-compose.dev.yml logs -f auth-service
+      ```
 
-    -   **Logs de Task Service:**
-        ```bash
-        docker-compose -f docker-compose.dev.yml logs -f task-service
-        ```
+    - **Logs de Task Service:**
+      ```bash
+      docker-compose -f docker-compose.dev.yml logs -f task-service
+      ```
 
 3.  **Detener los servicios:**
     Para detener todos los contenedores, presiona `Ctrl + C` en la terminal donde ejecutaste el `up`, o ejecuta:
@@ -72,10 +73,9 @@ La forma recomendada de levantar el entorno de desarrollo completo es utilizando
 
 Puedes ejecutar los siguientes scripts desde la raíz del monorepo:
 
--   `pnpm setup`: Alias para `pnpm install`.
--   `pnpm build`: Compila todos los servicios del backend.
--   `pnpm dev`: Inicia todos los servicios en modo de desarrollo (sin Docker).
--   `pnpm lint`: Revisa el código de todos los paquetes con ESLint.
--   `pnpm test`: Ejecuta las pruebas para todos los paquetes.
--   `pnpm clean`: Elimina los directorios `dist` de todos los paquetes.
-
+- `pnpm setup`: Alias para `pnpm install`.
+- `pnpm build`: Compila todos los servicios del backend.
+- `pnpm dev`: Inicia todos los servicios en modo de desarrollo (sin Docker).
+- `pnpm lint`: Revisa el código de todos los paquetes con ESLint.
+- `pnpm test`: Ejecuta las pruebas para todos los paquetes.
+- `pnpm clean`: Elimina los directorios `dist` de todos los paquetes.

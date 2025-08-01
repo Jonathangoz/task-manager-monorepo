@@ -75,7 +75,7 @@ export interface AuthRateLimitConfig {
 /**
  * Tipos de eventos de autenticación para logging
  */
-export type AuthEventType = 
+export type AuthEventType =
   | 'user.registered'
   | 'user.login'
   | 'user.login.failed'
@@ -137,7 +137,7 @@ export class AuthError extends Error {
     message: string,
     public readonly code: AuthErrorCode,
     public readonly statusCode: number = 401,
-    public readonly context?: Record<string, any>
+    public readonly context?: Record<string, any>,
   ) {
     super(message);
     this.name = 'AuthError';
@@ -199,29 +199,39 @@ declare global {
 /**
  * Type guard para verificar si un request está autenticado
  */
-export const isAuthenticatedRequest = (req: Request): req is AuthenticatedRequest => {
-  return req.user !== undefined && 
-         typeof req.user.id === 'string' &&
-         typeof req.user.email === 'string' &&
-         typeof req.user.username === 'string';
+export const isAuthenticatedRequest = (
+  req: Request,
+): req is AuthenticatedRequest => {
+  return (
+    req.user !== undefined &&
+    typeof req.user.id === 'string' &&
+    typeof req.user.email === 'string' &&
+    typeof req.user.username === 'string'
+  );
 };
 
 /**
  * Type guard para verificar si un token payload es válido
  */
-export const isValidTokenPayload = (payload: any): payload is AccessTokenPayload => {
-  return payload &&
-         typeof payload.sub === 'string' &&
-         typeof payload.email === 'string' &&
-         typeof payload.username === 'string' &&
-         typeof payload.iat === 'number' &&
-         typeof payload.exp === 'number';
+export const isValidTokenPayload = (
+  payload: any,
+): payload is AccessTokenPayload => {
+  return (
+    payload &&
+    typeof payload.sub === 'string' &&
+    typeof payload.email === 'string' &&
+    typeof payload.username === 'string' &&
+    typeof payload.iat === 'number' &&
+    typeof payload.exp === 'number'
+  );
 };
 
 /**
  * Utilitario para extraer datos de usuario del token payload
  */
-export const extractUserFromTokenPayload = (payload: AccessTokenPayload): AuthUser => ({
+export const extractUserFromTokenPayload = (
+  payload: AccessTokenPayload,
+): AuthUser => ({
   id: payload.sub,
   email: payload.email,
   username: payload.username,
@@ -234,9 +244,9 @@ export const extractUserFromTokenPayload = (payload: AccessTokenPayload): AuthUs
  * Utilitario para crear un AuthUser mínimo
  */
 export const createMinimalAuthUser = (
-  id: string, 
-  email: string, 
-  username: string
+  id: string,
+  email: string,
+  username: string,
 ): MinimalAuthUser => ({
   id,
   email,
@@ -246,7 +256,9 @@ export const createMinimalAuthUser = (
 /**
  * Utilitario para sanitizar datos de usuario para respuestas
  */
-export const sanitizeUserForResponse = (user: AuthUser): Omit<AuthUser, 'sessionId'> => {
+export const sanitizeUserForResponse = (
+  user: AuthUser,
+): Omit<AuthUser, 'sessionId'> => {
   const { sessionId, ...sanitized } = user;
   return sanitized;
 };
@@ -306,7 +318,7 @@ export const AUTH_CONSTANTS = {
   REQUEST_ID_HEADER: 'X-Request-ID',
   DEFAULT_TOKEN_EXPIRY: '15m',
   DEFAULT_REFRESH_EXPIRY: '7d',
-} as const; 
+} as const;
 
 export interface AuthUser {
   id: string;
@@ -349,7 +361,7 @@ export interface ExtendedAuthUser extends AuthUser {
 /**
  * Interface unificada para requests autenticados
  * CORRIGE el problema de compatibilidad entre middlewares
- * 
+ *
  * IMPORTANTE: Esta interface debe ser consistente en:
  * - auth.middleware.ts
  * - category.routes.ts
@@ -362,7 +374,7 @@ export interface AuthenticatedRequest extends Request {
     email: string;
     username: string;
     firstName: string; // CORREGIDO: Requerido, no opcional
-    lastName: string;  // CORREGIDO: Requerido, no opcional
+    lastName: string; // CORREGIDO: Requerido, no opcional
     sessionId?: string;
   };
 }

@@ -3,11 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '@/typeExpress/express';
 import { logger } from '@/utils/logger';
 import { environment } from '@/config/environment';
-import { 
-  HTTP_STATUS, 
-  ERROR_CODES, 
-  ERROR_MESSAGES 
-} from '@/utils/constants';
+import { HTTP_STATUS, ERROR_CODES, ERROR_MESSAGES } from '@/utils/constants';
 
 interface ErrorRequest extends Request {
   correlationId?: string;
@@ -40,7 +36,7 @@ export class AppError extends Error {
     message: string,
     statusCode: number = HTTP_STATUS.INTERNAL_SERVER_ERROR,
     code: string = ERROR_CODES.INTERNAL_ERROR,
-    details?: any
+    details?: any,
   ) {
     super(message);
     this.name = 'AppError';
@@ -61,9 +57,11 @@ export class ErrorMiddleware {
     error: any,
     req: ErrorRequest,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): void {
-    const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const correlationId =
+      req.correlationId ||
+      `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     // Si ya se envió una respuesta, delegar al manejador de errores por defecto
     if (res.headersSent) {
@@ -123,7 +121,7 @@ export class ErrorMiddleware {
           message: error.message,
           stack: error.stack,
           name: error.name,
-          code: error.code
+          code: error.code,
         },
         request: {
           method: req.method,
@@ -131,8 +129,8 @@ export class ErrorMiddleware {
           headers: ErrorMiddleware.sanitizeHeaders(req.headers),
           body: ErrorMiddleware.sanitizeBody(req.body),
           params: req.params,
-          query: req.query
-        }
+          query: req.query,
+        },
       });
     } else if (statusCode >= 400) {
       logger.warn('Error de cliente', {
@@ -140,14 +138,14 @@ export class ErrorMiddleware {
         error: {
           message: error.message,
           name: error.name,
-          code: error.code
+          code: error.code,
         },
         request: {
           method: req.method,
           url: req.url,
           params: req.params,
-          query: req.query
-        }
+          query: req.query,
+        },
       });
     }
 
@@ -157,14 +155,14 @@ export class ErrorMiddleware {
       error: {
         code: errorCode,
         message,
-        ...(details && { details })
+        ...(details && { details }),
       },
       meta: {
         correlationId,
         timestamp: new Date().toISOString(),
         path: req.path,
-        method: req.method
-      }
+        method: req.method,
+      },
     };
 
     // Incluir stack trace solo en desarrollo
@@ -178,32 +176,30 @@ export class ErrorMiddleware {
   /**
    * Middleware para capturar errores 404
    */
-  static notFound(
-    req: ErrorRequest,
-    res: Response,
-    next: NextFunction
-  ): void {
-    const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  static notFound(req: ErrorRequest, res: Response, next: NextFunction): void {
+    const correlationId =
+      req.correlationId ||
+      `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     logger.warn('Ruta no encontrada', {
       correlationId,
       method: req.method,
       url: req.url,
-      userAgent: req.headers['user-agent']
+      userAgent: req.headers['user-agent'],
     });
 
     res.status(HTTP_STATUS.NOT_FOUND).json({
       success: false,
       error: {
         code: ERROR_CODES.NOT_FOUND || 'NOT_FOUND',
-        message: `Ruta ${req.method} ${req.url} no encontrada`
+        message: `Ruta ${req.method} ${req.url} no encontrada`,
       },
       meta: {
         correlationId,
         timestamp: new Date().toISOString(),
         path: req.path,
-        method: req.method
-      }
+        method: req.method,
+      },
     });
   }
 
@@ -233,8 +229,8 @@ export class ErrorMiddleware {
           message: 'El recurso ya existe',
           details: {
             field: error.meta?.target?.[0] || 'unknown',
-            constraint: 'unique_violation'
-          }
+            constraint: 'unique_violation',
+          },
         };
       case 'P2025':
         return {
@@ -247,21 +243,21 @@ export class ErrorMiddleware {
           statusCode: HTTP_STATUS.BAD_REQUEST,
           code: ERROR_CODES.VALIDATION_ERROR,
           message: 'Error de referencia en base de datos',
-          details: { constraint: 'foreign_key_violation' }
+          details: { constraint: 'foreign_key_violation' },
         };
       case 'P2011':
         return {
           statusCode: HTTP_STATUS.BAD_REQUEST,
           code: ERROR_CODES.VALIDATION_ERROR,
           message: 'Valor nulo en campo requerido',
-          details: { constraint: 'null_constraint_violation' }
+          details: { constraint: 'null_constraint_violation' },
         };
       default:
         return {
           statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
           code: ERROR_CODES.DATABASE_ERROR,
           message: ERROR_MESSAGES.DATABASE_CONNECTION_ERROR,
-          details: { prismaCode: error.code }
+          details: { prismaCode: error.code },
         };
     }
   }
@@ -271,9 +267,9 @@ export class ErrorMiddleware {
    */
   private static formatValidationError(error: any): any {
     const errors: any = {};
-    
+
     if (error.errors) {
-      Object.keys(error.errors).forEach(key => {
+      Object.keys(error.errors).forEach((key) => {
         errors[key] = error.errors[key].message;
       });
     }
@@ -288,9 +284,11 @@ export class ErrorMiddleware {
     error: any,
     req: ErrorRequest,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): void {
-    const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const correlationId =
+      req.correlationId ||
+      `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     if (error.type === 'entity.too.large') {
       logger.warn('Payload demasiado grande', {
@@ -298,7 +296,7 @@ export class ErrorMiddleware {
         limit: error.limit,
         length: error.length,
         method: req.method,
-        url: req.url
+        url: req.url,
       });
 
       res.status(HTTP_STATUS.UNPROCESSABLE_ENTITY).json({
@@ -308,15 +306,15 @@ export class ErrorMiddleware {
           message: 'El tamaño del payload excede el límite permitido',
           details: {
             limit: error.limit,
-            received: error.length
-          }
+            received: error.length,
+          },
         },
         meta: {
           correlationId,
           timestamp: new Date().toISOString(),
           path: req.path,
-          method: req.method
-        }
+          method: req.method,
+        },
       });
       return;
     }
@@ -330,14 +328,16 @@ export class ErrorMiddleware {
   static handleTimeout(
     req: ErrorRequest,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): void {
-    const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const correlationId =
+      req.correlationId ||
+      `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     logger.warn('Request timeout', {
       correlationId,
       method: req.method,
-      url: req.url
+      url: req.url,
     });
 
     if (!res.headersSent) {
@@ -345,14 +345,14 @@ export class ErrorMiddleware {
         success: false,
         error: {
           code: 'REQUEST_TIMEOUT',
-          message: 'Tiempo de espera de la petición agotado'
+          message: 'Tiempo de espera de la petición agotado',
         },
         meta: {
           correlationId,
           timestamp: new Date().toISOString(),
           path: req.path,
-          method: req.method
-        }
+          method: req.method,
+        },
       });
     }
   }
@@ -364,30 +364,32 @@ export class ErrorMiddleware {
     error: any,
     req: ErrorRequest,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): void {
-    const correlationId = req.correlationId || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const correlationId =
+      req.correlationId ||
+      `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     if (error instanceof SyntaxError && 'body' in error) {
       logger.warn('Error de sintaxis JSON', {
         correlationId,
         error: error.message,
         method: req.method,
-        url: req.url
+        url: req.url,
       });
 
       res.status(HTTP_STATUS.BAD_REQUEST).json({
         success: false,
         error: {
           code: 'INVALID_JSON',
-          message: 'JSON inválido en el cuerpo de la petición'
+          message: 'JSON inválido en el cuerpo de la petición',
         },
         meta: {
           correlationId,
           timestamp: new Date().toISOString(),
           path: req.path,
-          method: req.method
-        }
+          method: req.method,
+        },
       });
       return;
     }
@@ -401,8 +403,8 @@ export class ErrorMiddleware {
   private static sanitizeHeaders(headers: any): any {
     const sanitized = { ...headers };
     const sensitiveHeaders = ['authorization', 'cookie', 'x-api-key'];
-    
-    sensitiveHeaders.forEach(header => {
+
+    sensitiveHeaders.forEach((header) => {
       if (sanitized[header]) {
         sanitized[header] = '[REDACTED]';
       }
@@ -420,9 +422,15 @@ export class ErrorMiddleware {
     }
 
     const sanitized = { ...body };
-    const sensitiveFields = ['password', 'token', 'refreshToken', 'oldPassword', 'newPassword'];
-    
-    sensitiveFields.forEach(field => {
+    const sensitiveFields = [
+      'password',
+      'token',
+      'refreshToken',
+      'oldPassword',
+      'newPassword',
+    ];
+
+    sensitiveFields.forEach((field) => {
       if (sanitized[field]) {
         sanitized[field] = '[REDACTED]';
       }
@@ -438,24 +446,27 @@ process.on('uncaughtException', (error: Error) => {
     error: {
       message: error.message,
       stack: error.stack,
-      name: error.name
-    }
+      name: error.name,
+    },
   });
-  
+
   // Cerrar el servidor gracefully
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
   logger.error('Promesa rechazada no manejada', {
-    reason: reason instanceof Error ? {
-      message: reason.message,
-      stack: reason.stack,
-      name: reason.name
-    } : reason,
-    promise: promise.toString()
+    reason:
+      reason instanceof Error
+        ? {
+            message: reason.message,
+            stack: reason.stack,
+            name: reason.name,
+          }
+        : reason,
+    promise: promise.toString(),
   });
-  
+
   // Cerrar el servidor gracefully
   process.exit(1);
 });

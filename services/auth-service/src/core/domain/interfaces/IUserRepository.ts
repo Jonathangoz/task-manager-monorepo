@@ -1,6 +1,11 @@
 // src/core/domain/interfaces/IUserRepository.ts
 import { User } from '@/core/entities/User';
-import { UserSession, UserFilters, PaginationOptions, PaginatedUsers } from './IUserService';
+import {
+  UserSession,
+  UserFilters,
+  PaginationOptions,
+  PaginatedUsers,
+} from './IUserService';
 
 export interface CreateUserData {
   email: string;
@@ -52,31 +57,36 @@ export interface UserWithoutPassword {
 export interface IUserRepository {
   // Crear usuario
   create(data: CreateUserData): Promise<UserWithPassword>;
-  
+
   // Buscar usuarios - versiones sin password para uso general
   findById(id: string): Promise<UserWithoutPassword | null>;
   findByEmail(email: string): Promise<UserWithoutPassword | null>;
   findByUsername(username: string): Promise<UserWithoutPassword | null>;
-  
+
   // Buscar usuarios - versiones con password para autenticación
   findByIdWithPassword(id: string): Promise<UserWithPassword | null>;
   findByEmailWithPassword(email: string): Promise<UserWithPassword | null>;
-  findByUsernameWithPassword(username: string): Promise<UserWithPassword | null>;
-  
+  findByUsernameWithPassword(
+    username: string,
+  ): Promise<UserWithPassword | null>;
+
   // Actualizar usuario
   update(id: string, data: UpdateUserData): Promise<UserWithoutPassword>;
   updateLastLogin(id: string): Promise<void>;
   updatePassword(id: string, hashedPassword: string): Promise<void>;
-  
+
   // Listar usuarios con paginación
-  findMany(filters?: UserFilters, pagination?: PaginationOptions): Promise<PaginatedUsers>;
-  
+  findMany(
+    filters?: UserFilters,
+    pagination?: PaginationOptions,
+  ): Promise<PaginatedUsers>;
+
   // Verificar existencia
   exists(email: string, username?: string): Promise<boolean>;
-  
+
   // Sesiones
   getUserSessions(userId: string): Promise<UserSession[]>;
-  
+
   // Eliminar usuario (soft delete)
   deactivate(id: string): Promise<void>;
   activate(id: string): Promise<void>;

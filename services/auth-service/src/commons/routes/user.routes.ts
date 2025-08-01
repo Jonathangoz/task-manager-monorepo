@@ -1,20 +1,20 @@
 // src/commons/routes/user.routes.ts - Versión actualizada sin método deprecated
 import express, { Router } from 'express';
 import { UserController } from '@/commons/controllers/UserController';
-import { 
-  verifyToken, 
-  requireOwnership, 
-  extractSessionInfo 
+import {
+  verifyToken,
+  requireOwnership,
+  extractSessionInfo,
 } from '@/commons/middlewares/auth.middleware';
-import { 
+import {
   createValidator,
-  validatePagination, 
-  requireBody, 
-  validateCUID, 
-  sanitizeInput 
+  validatePagination,
+  requireBody,
+  validateCUID,
+  sanitizeInput,
 } from '@/commons/middlewares/validation.middleware';
 import RateLimitMiddleware from '@/commons/middlewares/rateLimit.middleware';
-import { 
+import {
   validateGetUsersQuery,
   validateUpdateUserBody,
   validateUpdateAvatarBody,
@@ -22,7 +22,7 @@ import {
   validateUserParams,
   validateVerifyEmailTokenParams,
   UserParamsSchema,
-  VerifyEmailTokenParamsSchema
+  VerifyEmailTokenParamsSchema,
 } from '@/commons/validators/user.validator';
 import { asyncHandler } from '@/commons/middlewares/error.middleware';
 
@@ -55,7 +55,7 @@ export class UserRoutes {
     router.get(
       '/',
       validateGetUsersQuery,
-      asyncHandler(this.userController.getUsers)
+      asyncHandler(this.userController.getUsers),
     );
 
     /**
@@ -65,7 +65,7 @@ export class UserRoutes {
     router.get(
       '/:id',
       validateUserParams,
-      asyncHandler(this.userController.getUserById)
+      asyncHandler(this.userController.getUserById),
     );
 
     /**
@@ -75,7 +75,7 @@ export class UserRoutes {
     router.get(
       '/:id/profile',
       validateUserParams,
-      asyncHandler(this.userController.getUserProfile)
+      asyncHandler(this.userController.getUserProfile),
     );
 
     // === RUTAS DE MODIFICACIÓN (requieren ownership) ===
@@ -91,7 +91,7 @@ export class UserRoutes {
       requireOwnership('id'),
       requireBody,
       validateUpdateUserBody,
-      asyncHandler(this.userController.updateUser)
+      asyncHandler(this.userController.updateUser),
     );
 
     /**
@@ -104,7 +104,7 @@ export class UserRoutes {
       requireOwnership('id'),
       requireBody,
       validateUpdateAvatarBody,
-      asyncHandler(this.userController.updateAvatar)
+      asyncHandler(this.userController.updateAvatar),
     );
 
     /**
@@ -117,7 +117,7 @@ export class UserRoutes {
       validateUserParams,
       requireOwnership('id'),
       validateDeactivateUserBody,
-      asyncHandler(this.userController.deactivateUser)
+      asyncHandler(this.userController.deactivateUser),
     );
 
     /**
@@ -129,7 +129,7 @@ export class UserRoutes {
       '/:id/activate',
       validateUserParams,
       requireOwnership('id'),
-      asyncHandler(this.userController.activateUser)
+      asyncHandler(this.userController.activateUser),
     );
 
     // === RUTAS DE VERIFICACIÓN ===
@@ -142,7 +142,7 @@ export class UserRoutes {
       '/:id/verify-email',
       validateUserParams,
       requireOwnership('id'),
-      asyncHandler(this.userController.sendEmailVerification)
+      asyncHandler(this.userController.sendEmailVerification),
     );
 
     /**
@@ -152,11 +152,11 @@ export class UserRoutes {
     router.patch(
       '/:id/verify-email/:token',
       createValidator(
-        UserParamsSchema.merge(VerifyEmailTokenParamsSchema), 
-        'params'
+        UserParamsSchema.merge(VerifyEmailTokenParamsSchema),
+        'params',
       ),
       requireOwnership('id'),
-      asyncHandler(this.userController.verifyEmail)
+      asyncHandler(this.userController.verifyEmail),
     );
 
     return router;

@@ -1,6 +1,12 @@
 'use client';
 
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useReducer,
+  useEffect,
+  ReactNode,
+} from 'react';
 import { authApi } from '@/lib/api/authApi';
 import { toast } from 'sonner';
 
@@ -43,7 +49,7 @@ interface RegisterData {
 interface AuthContextType {
   // State
   state: AuthState;
-  
+
   // Actions
   login: (credentials: LoginCredentials) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
@@ -56,7 +62,15 @@ interface AuthContextType {
 // Action types
 type AuthAction =
   | { type: 'AUTH_START' }
-  | { type: 'AUTH_SUCCESS'; payload: { user: User; token: string; refreshToken: string; sessionId: string } }
+  | {
+      type: 'AUTH_SUCCESS';
+      payload: {
+        user: User;
+        token: string;
+        refreshToken: string;
+        sessionId: string;
+      };
+    }
   | { type: 'AUTH_ERROR'; payload: string }
   | { type: 'AUTH_LOGOUT' }
   | { type: 'TOKEN_REFRESH'; payload: { token: string } }
@@ -149,12 +163,18 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Storage keys (from constants)
-const TOKEN_KEY = process.env.NEXT_PUBLIC_TOKEN_STORAGE_KEY || 'task_manager_token';
-const REFRESH_TOKEN_KEY = process.env.NEXT_PUBLIC_REFRESH_TOKEN_STORAGE_KEY || 'task_manager_refresh_token';
-const SESSION_KEY = process.env.NEXT_PUBLIC_SESSION_STORAGE_KEY || 'task_manager_session';
+const TOKEN_KEY =
+  process.env.NEXT_PUBLIC_TOKEN_STORAGE_KEY || 'task_manager_token';
+const REFRESH_TOKEN_KEY =
+  process.env.NEXT_PUBLIC_REFRESH_TOKEN_STORAGE_KEY ||
+  'task_manager_refresh_token';
+const SESSION_KEY =
+  process.env.NEXT_PUBLIC_SESSION_STORAGE_KEY || 'task_manager_session';
 
 // Provider component
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
   // Initialize auth state from localStorage
@@ -168,7 +188,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (token && refreshToken && sessionId) {
           // Verify token and get user data
           const userData = await authApi.getProfile();
-          
+
           dispatch({
             type: 'AUTH_SUCCESS',
             payload: {
@@ -202,7 +222,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   // Helper functions
-  const saveTokens = (token: string, refreshToken: string, sessionId: string) => {
+  const saveTokens = (
+    token: string,
+    refreshToken: string,
+    sessionId: string,
+  ) => {
     localStorage.setItem(TOKEN_KEY, token);
     localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
     localStorage.setItem(SESSION_KEY, sessionId);
@@ -231,7 +255,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       toast.success('¡Bienvenido de vuelta!');
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 'Error al iniciar sesión';
+      const errorMessage =
+        error.response?.data?.message || 'Error al iniciar sesión';
       dispatch({ type: 'AUTH_ERROR', payload: errorMessage });
       toast.error(errorMessage);
       throw error;
@@ -254,7 +279,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       toast.success('¡Cuenta creada exitosamente!');
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 'Error al crear la cuenta';
+      const errorMessage =
+        error.response?.data?.message || 'Error al crear la cuenta';
       dispatch({ type: 'AUTH_ERROR', payload: errorMessage });
       toast.error(errorMessage);
       throw error;
@@ -302,7 +328,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       dispatch({ type: 'USER_UPDATE', payload: updatedUser });
       toast.success('Perfil actualizado exitosamente');
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 'Error al actualizar el perfil';
+      const errorMessage =
+        error.response?.data?.message || 'Error al actualizar el perfil';
       toast.error(errorMessage);
       throw error;
     }
@@ -316,7 +343,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     if (!state.isAuthenticated || !state.token) return;
 
-    const REFRESH_THRESHOLD = parseInt(process.env.NEXT_PUBLIC_TOKEN_REFRESH_THRESHOLD || '300000'); // 5 minutes
+    const REFRESH_THRESHOLD = parseInt(
+      process.env.NEXT_PUBLIC_TOKEN_REFRESH_THRESHOLD || '300000',
+    ); // 5 minutes
     const refreshInterval = setInterval(async () => {
       try {
         await refreshAuth();
@@ -339,7 +368,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     clearError,
   };
 
-  return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>
+  );
 };
 
 // Hook to use auth context
@@ -352,7 +383,9 @@ export const useAuth = (): AuthContextType => {
 };
 
 // HOC for protected routes
-export const withAuth = <P extends object>(Component: React.ComponentType<P>) => {
+export const withAuth = <P extends object>(
+  Component: React.ComponentType<P>,
+) => {
   return function AuthenticatedComponent(props: P) {
     const { state } = useAuth();
 

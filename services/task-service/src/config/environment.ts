@@ -8,21 +8,19 @@ dotenvConfig();
 
 // Schema de validación para variables de entorno usando Zod
 const envSchema = z.object({
-
   // APP CONFIGURATION
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  NODE_ENV: z
+    .enum(['development', 'production', 'test'])
+    .default('development'),
   PORT: z.coerce.number().default(3002),
   API_VERSION: z.string().default('v1'),
-
 
   // DATABASE CONFIGURATION
   DATABASE_URL: z.string().min(1, 'Database URL is required'),
 
-
   // REDIS CONFIGURATION
   REDIS_URL: z.string().min(1, 'Redis URL is required'),
   REDIS_PREFIX: z.string().default('tasks:'),
-
 
   // AUTH SERVICE CONFIGURATION
   AUTH_SERVICE_URL: z.string().url('Invalid Auth Service URL'),
@@ -30,19 +28,15 @@ const envSchema = z.object({
   AUTH_SERVICE_API_KEY: z.string().min(1, 'Auth Service API Key is required'),
   AUTH_SERVICE_TIMEOUT: z.coerce.number().default(10000),
 
-
   // JWT CONFIGURATION (para validación local)
   JWT_SECRET: z.string().min(32, 'JWT Secret must be at least 32 characters'),
   JWT_ISSUER: z.string().default('task-manager-auth'),
 
-
   // CORS CONFIGURATION
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
 
-
   // SECURITY CONFIGURATION
   HELMET_ENABLED: z.coerce.boolean().default(true),
-
 
   // RATE LIMITING CONFIGURATION
   RATE_LIMIT_ENABLED: z.coerce.boolean().default(true),
@@ -67,27 +61,25 @@ const envSchema = z.object({
   RATE_LIMIT_SKIP_SUCCESSFUL: z.coerce.boolean().default(false),
   RATE_LIMIT_SKIP_FAILED: z.coerce.boolean().default(false),
 
-
   // LOGGING CONFIGURATION
-  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  LOG_LEVEL: z
+    .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
+    .default('info'),
   LOG_PRETTY: z.coerce.boolean().default(true),
-
 
   // PAGINATION CONFIGURATION
   DEFAULT_PAGE_SIZE: z.coerce.number().default(20),
   MAX_PAGE_SIZE: z.coerce.number().default(100),
 
-
   // CACHE TTL CONFIGURATION (segundos)
-  CACHE_TTL_TASKS: z.coerce.number().default(300),           // 5 minutos
-  CACHE_TTL_CATEGORIES: z.coerce.number().default(600),      // 10 minutos
-  CACHE_TTL_USER_TASKS: z.coerce.number().default(180),      // 3 minutos
+  CACHE_TTL_TASKS: z.coerce.number().default(300), // 5 minutos
+  CACHE_TTL_CATEGORIES: z.coerce.number().default(600), // 10 minutos
+  CACHE_TTL_USER_TASKS: z.coerce.number().default(180), // 3 minutos
   CACHE_TTL_USER_CATEGORIES: z.coerce.number().default(600), // 10 minutos
-  CACHE_TTL_USER_STATS: z.coerce.number().default(300),      // 5 minutos
-  CACHE_TTL_TASK_DETAIL: z.coerce.number().default(300),     // 5 minutos
+  CACHE_TTL_USER_STATS: z.coerce.number().default(300), // 5 minutos
+  CACHE_TTL_TASK_DETAIL: z.coerce.number().default(300), // 5 minutos
   CACHE_TTL_CATEGORY_DETAIL: z.coerce.number().default(600), // 10 minutos
-  CACHE_TTL_SEARCH_RESULTS: z.coerce.number().default(120),  // 2 minutos
-
+  CACHE_TTL_SEARCH_RESULTS: z.coerce.number().default(120), // 2 minutos
 
   // BACKGROUND JOBS CONFIGURATION
   JOBS_CLEANUP_ENABLED: z.coerce.boolean().default(true),
@@ -97,12 +89,10 @@ const envSchema = z.object({
   JOBS_STATS_UPDATE_ENABLED: z.coerce.boolean().default(true),
   JOBS_STATS_UPDATE_INTERVAL_MS: z.coerce.number().default(300000), // 5 minutos
 
-
   // HEALTH CHECK & SWAGGER
   HEALTH_CHECK_ENABLED: z.coerce.boolean().default(true),
   SWAGGER_ENABLED: z.coerce.boolean().default(true),
   SWAGGER_PATH: z.string().default('/docs'),
-
 
   // SECURITY HEADERS
   CSP_ENABLED: z.coerce.boolean().default(true),
@@ -114,16 +104,18 @@ const envSchema = z.object({
 function validateEnvironment() {
   try {
     const result = envSchema.safeParse(process.env);
-    
+
     if (!result.success) {
       console.error('❌ Error de validación de variables de entorno:');
       result.error.errors.forEach((err) => {
         console.error(`  - ${err.path.join('.')}: ${err.message}`);
       });
-      console.error('\nVerifica tu archivo .env y las variables de entorno requeridas.');
+      console.error(
+        '\nVerifica tu archivo .env y las variables de entorno requeridas.',
+      );
       process.exit(1);
     }
-    
+
     return result.data;
   } catch (error) {
     console.error('💀 Error crítico validando variables de entorno:', error);
@@ -174,7 +166,7 @@ export const config = {
 
   // Configuración CORS
   cors: {
-    origin: env.CORS_ORIGIN.split(',').map(origin => origin.trim()),
+    origin: env.CORS_ORIGIN.split(',').map((origin) => origin.trim()),
   },
 
   // Configuración de seguridad
@@ -190,33 +182,33 @@ export const config = {
     enabled: env.RATE_LIMIT_ENABLED,
     windowMs: env.RATE_LIMIT_WINDOW_MS,
     maxRequests: env.RATE_LIMIT_MAX_REQUESTS,
-    
+
     // Configuraciones específicas por endpoint
     auth: {
       max: env.RATE_LIMIT_AUTH_MAX,
       windowMs: env.RATE_LIMIT_WINDOW_MS,
     },
-    
+
     createTask: {
       max: env.RATE_LIMIT_CREATE_TASK_MAX,
       windowMs: env.RATE_LIMIT_CREATE_TASK_WINDOW_MS,
     },
-    
+
     search: {
       max: env.RATE_LIMIT_SEARCH_MAX,
       windowMs: env.RATE_LIMIT_SEARCH_WINDOW_MS,
     },
-    
+
     bulk: {
       max: env.RATE_LIMIT_BULK_MAX,
       windowMs: env.RATE_LIMIT_BULK_WINDOW_MS,
     },
-    
+
     admin: {
       max: env.RATE_LIMIT_ADMIN_MAX,
       windowMs: env.RATE_LIMIT_ADMIN_WINDOW_MS,
     },
-    
+
     // Configuración del store Redis
     redis: {
       keyPrefix: env.RATE_LIMIT_REDIS_KEY_PREFIX,
@@ -300,7 +292,9 @@ if (config.app.isDevelopment) {
   console.log(`   Auth Service: ${config.authService.url}`);
   console.log(`   Redis Prefix: ${config.redis.prefix}`);
   console.log(`   Log Level: ${config.logging.level}`);
-  console.log(`   Jobs Enabled: cleanup=${config.jobs.cleanup.enabled}, stats=${config.jobs.statsUpdate.enabled}`);
+  console.log(
+    `   Jobs Enabled: cleanup=${config.jobs.cleanup.enabled}, stats=${config.jobs.statsUpdate.enabled}`,
+  );
   console.log(`   Swagger: ${config.swagger.enabled ? 'enabled' : 'disabled'}`);
 }
 

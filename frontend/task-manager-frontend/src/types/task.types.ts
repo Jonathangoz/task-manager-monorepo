@@ -5,7 +5,12 @@
 // ==========================================
 
 // Task Status and Priority Enums
-export type TaskStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'ON_HOLD';
+export type TaskStatus =
+  | 'PENDING'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'CANCELLED'
+  | 'ON_HOLD';
 export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
 // Core Task Types
@@ -108,7 +113,13 @@ export interface TaskSearchParams {
 }
 
 export interface SortOptions {
-  field: 'createdAt' | 'updatedAt' | 'dueDate' | 'priority' | 'status' | 'title';
+  field:
+    | 'createdAt'
+    | 'updatedAt'
+    | 'dueDate'
+    | 'priority'
+    | 'status'
+    | 'title';
   order: 'asc' | 'desc';
 }
 
@@ -192,7 +203,10 @@ export interface TaskContextType {
   getTask: (id: string) => Promise<Task>;
   getTasks: (params?: TaskSearchParams) => Promise<TasksResponse>;
   duplicateTask: (id: string) => Promise<Task>;
-  bulkUpdateTasks: (ids: string[], data: Partial<UpdateTaskData>) => Promise<void>;
+  bulkUpdateTasks: (
+    ids: string[],
+    data: Partial<UpdateTaskData>,
+  ) => Promise<void>;
   bulkDeleteTasks: (ids: string[]) => Promise<void>;
 
   // Category Actions
@@ -359,7 +373,10 @@ export interface TaskExportOptions {
 
 export interface TaskImportData {
   tasks: Omit<Task, 'id' | 'userId' | 'createdAt' | 'updatedAt'>[];
-  categories?: Omit<Category, 'id' | 'userId' | 'tasksCount' | 'createdAt' | 'updatedAt'>[];
+  categories?: Omit<
+    Category,
+    'id' | 'userId' | 'tasksCount' | 'createdAt' | 'updatedAt'
+  >[];
 }
 
 // Drag and Drop Types
@@ -378,7 +395,7 @@ export interface DropResult {
 }
 
 // Error Types
-export type TaskErrorCode = 
+export type TaskErrorCode =
   | 'TASK_NOT_FOUND'
   | 'TASK_ACCESS_DENIED'
   | 'INVALID_TASK_STATUS'
@@ -395,7 +412,7 @@ export interface TaskError {
 }
 
 // Event Types
-export type TaskEventType = 
+export type TaskEventType =
   | 'task_created'
   | 'task_updated'
   | 'task_deleted'

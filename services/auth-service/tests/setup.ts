@@ -23,21 +23,22 @@ beforeAll(async () => {
   testDb = new PrismaClient({
     datasources: {
       db: {
-        url: process.env.DATABASE_URL || 'postgresql://test_user:test_password@localhost:5432/auth_test_db'
-      }
-    }
+        url:
+          process.env.DATABASE_URL ||
+          'postgresql://test_user:test_password@localhost:5432/auth_test_db',
+      },
+    },
   });
 
   try {
     await testDb.$connect();
-    
+
     // Ejecutar migraciones de prueba
     await testDb.$executeRaw`DROP SCHEMA IF EXISTS public CASCADE`;
     await testDb.$executeRaw`CREATE SCHEMA public`;
-    
+
     // Aquí se ejecutarían las migraciones reales en un entorno real
     // Por ahora, creamos las tablas manualmente para testing
-    
   } catch (error) {
     logger.error('Failed to setup test database:', error);
     throw error;

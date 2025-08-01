@@ -4,118 +4,118 @@ version: 2 # <-- Aquí estaba el error, corregido de 'ersion' a 'version'
 
 updates:
   # Root package.json dependencies
-  - package-ecosystem: "npm"
-    directory: "/"
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-      timezone: "America/Bogota"
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:00'
+      timezone: 'America/Bogota'
     open-pull-requests-limit: 10
     reviewers:
-      - "Jonathangoz"
+      - 'Jonathangoz'
     assignees:
-      - "Jonathangoz"
+      - 'Jonathangoz'
     commit-message:
-      prefix: "chore(deps)"
-      include: "scope"
+      prefix: 'chore(deps)'
+      include: 'scope'
     labels:
-      - "dependencies"
-      - "automerge"
+      - 'dependencies'
+      - 'automerge'
 
   # Auth Service dependencies
-  - package-ecosystem: "npm"
-    directory: "/services/auth-service"
+  - package-ecosystem: 'npm'
+    directory: '/services/auth-service'
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:30"
-      timezone: "America/Bogota"
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:30'
+      timezone: 'America/Bogota'
     open-pull-requests-limit: 5
     reviewers:
-      - "Jonathangoz"
+      - 'Jonathangoz'
     assignees:
-      - "Jonathangoz"
+      - 'Jonathangoz'
     commit-message:
-      prefix: "chore(auth-service)"
-      include: "scope"
+      prefix: 'chore(auth-service)'
+      include: 'scope'
     labels:
-      - "dependencies"
-      - "auth-service"
+      - 'dependencies'
+      - 'auth-service'
 
   # Task Service dependencies
-  - package-ecosystem: "npm"
-    directory: "/services/task-service"
+  - package-ecosystem: 'npm'
+    directory: '/services/task-service'
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "10:00"
-      timezone: "America/Bogota"
+      interval: 'weekly'
+      day: 'monday'
+      time: '10:00'
+      timezone: 'America/Bogota'
     open-pull-requests-limit: 5
     reviewers:
-      - "Jonathangoz"
+      - 'Jonathangoz'
     assignees:
-      - "Jonathangoz"
+      - 'Jonathangoz'
     commit-message:
-      prefix: "chore(task-service)"
-      include: "scope"
+      prefix: 'chore(task-service)'
+      include: 'scope'
     labels:
-      - "dependencies"
-      - "task-service"
+      - 'dependencies'
+      - 'task-service'
 
   # Docker updates
-  - package-ecosystem: "docker"
-    directory: "/"
+  - package-ecosystem: 'docker'
+    directory: '/'
     schedule:
-      interval: "weekly"
-      day: "tuesday"
-      time: "09:00"
-      timezone: "America/Bogota"
+      interval: 'weekly'
+      day: 'tuesday'
+      time: '09:00'
+      timezone: 'America/Bogota'
     open-pull-requests-limit: 3
     reviewers:
-      - "Jonathangoz"
+      - 'Jonathangoz'
     assignees:
-      - "Jonathangoz"
+      - 'Jonathangoz'
     commit-message:
-      prefix: "chore(docker)"
+      prefix: 'chore(docker)'
     labels:
-      - "docker"
-      - "infrastructure"
+      - 'docker'
+      - 'infrastructure'
 
   # GitHub Actions updates
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: 'github-actions'
+    directory: '/'
     schedule:
-      interval: "weekly"
-      day: "tuesday"
-      time: "10:00"
-      timezone: "America/Bogota"
+      interval: 'weekly'
+      day: 'tuesday'
+      time: '10:00'
+      timezone: 'America/Bogota'
     open-pull-requests-limit: 3
     reviewers:
-      - "Jonathangoz"
+      - 'Jonathangoz'
     assignees:
-      - "Jonathangoz"
+      - 'Jonathangoz'
     commit-message:
-      prefix: "chore(ci)"
+      prefix: 'chore(ci)'
     labels:
-      - "github-actions"
-      - "ci-cd"
+      - 'github-actions'
+      - 'ci-cd'
 
   # Shared dependencies (if exists)
-  - package-ecosystem: "npm"
-    directory: "/shared"
+  - package-ecosystem: 'npm'
+    directory: '/shared'
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "11:00"
-      timezone: "America/Bogota"
+      interval: 'weekly'
+      day: 'monday'
+      time: '11:00'
+      timezone: 'America/Bogota'
     open-pull-requests-limit: 3
     reviewers:
-      - "Jonathangoz"
+      - 'Jonathangoz'
     assignees:
-      - "Jonathangoz"
+      - 'Jonathangoz'
     commit-message:
-      prefix: "chore(shared)"
+      prefix: 'chore(shared)'
     labels:
-      - "dependencies"
-      - "shared"
+      - 'dependencies'
+      - 'shared'

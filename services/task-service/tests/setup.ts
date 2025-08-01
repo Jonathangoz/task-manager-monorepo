@@ -10,10 +10,10 @@ logger.level = 'silent';
 beforeAll(async () => {
   // Conectar a base de datos de prueba
   await testDb.connect();
-  
+
   // Conectar a Redis de prueba
   await testRedis.connect();
-  
+
   console.log('🧪 Test environment setup complete');
 });
 
@@ -21,7 +21,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await testDb.disconnect();
   await testRedis.disconnect();
-  
+
   console.log('🧹 Test environment cleanup complete');
 });
 
@@ -33,7 +33,8 @@ beforeEach(async () => {
 
 // Configurar variables de entorno para tests
 process.env.NODE_ENV = 'test';
-process.env.DATABASE_URL = 'postgresql://test_user:test_password@localhost:5432/task_test_db';
+process.env.DATABASE_URL =
+  'postgresql://test_user:test_password@localhost:5432/task_test_db';
 process.env.REDIS_URL = 'redis://localhost:/1';
 process.env.JWT_SECRET = 'test-jwt-secret-key';
 process.env.LOG_LEVEL = 'silent';

@@ -2,8 +2,8 @@
 
 import { SignJWT, jwtVerify, EncryptJWT, jwtDecrypt } from 'jose';
 import { createHash, randomBytes } from 'crypto';
-import { 
-  ITokenService, 
+import {
+  ITokenService,
   TokenOptions,
   RefreshTokenData,
 } from '@/core/interfaces/ITokenService';
@@ -14,14 +14,14 @@ import {
 } from '@/core/domain/interfaces/IAuthService';
 import { IUserRepository } from '@/core/interfaces/IUserRepository';
 import { ICacheService, CacheOptions } from '@/core/interfaces/ICacheService';
-import  config  from '@/config/environment';
+import config from '@/config/environment';
 import { logger } from '@/utils/logger';
-import { 
-  ERROR_CODES, 
-  ERROR_MESSAGES, 
+import {
+  ERROR_CODES,
+  ERROR_MESSAGES,
   TOKEN_CONFIG,
   CACHE_KEYS,
-  CACHE_TTL 
+  CACHE_TTL,
 } from '@/utils/constants';
 import { db } from '@/config/database';
 
@@ -32,7 +32,7 @@ export class TokenService implements ITokenService {
 
   constructor(
     private readonly userRepository: IUserRepository,
-    private readonly cacheService: ICacheService
+    private readonly cacheService: ICacheService,
   ) {
     // Preparar las claves como Uint8Array para jose
     this.jwtSecret = new TextEncoder().encode(config.jwt.secret);
@@ -44,8 +44,8 @@ export class TokenService implements ITokenService {
    * Generar Access Token (JWT)
    */
   async generateAccessToken(
-    payload: Omit<TokenPayload, 'iat' | 'exp' | 'iss'>, 
-    options?: TokenOptions
+    payload: Omit<TokenPayload, 'iat' | 'exp' | 'iss'>,
+    options?: TokenOptions,
   ): Promise<string> {
     try {
       const now = Math.floor(Date.now() / 1000);
@@ -69,11 +69,14 @@ export class TokenService implements ITokenService {
 
       const token = await jwt.sign(this.jwtSecret);
 
-      logger.debug({ 
-        userId: payload.sub, 
-        sessionId: payload.sessionId,
-        expiresAt: new Date(expiration * 1000).toISOString()
-      }, 'Access token generated');
+      logger.debug(
+        {
+          userId: payload.sub,
+          sessionId: payload.sessionId,
+          expiresAt: new Date(expiration * 1000).toISOString(),
+        },
+        'Access token generated',
+      );
 
       return token;
     } catch (error) {
@@ -101,10 +104,13 @@ export class TokenService implements ITokenService {
         iss: payload.iss as string,
       };
 
-      logger.debug({ 
-        userId: tokenPayload.sub, 
-        sessionId: tokenPayload.sessionId 
-      }, 'Access token validated successfully');
+      logger.debug(
+        {
+          userId: tokenPayload.sub,
+          sessionId: tokenPayload.sessionId,
+        },
+        'Access token validated successfully',
+      );
 
       return tokenPayload;
     } catch (error) {
@@ -113,10 +119,16 @@ export class TokenService implements ITokenService {
         throw new Error(ERROR_CODES.TOKEN_INVALID);
       }
       if ((error as any).code === 'ERR_JWT_EXPIRED') {
-        logger.warn({ err: error as Error }, 'Acceso de validación del token fallido: expirado');
+        logger.warn(
+          { err: error as Error },
+          'Acceso de validación del token fallido: expirado',
+        );
         throw new Error(ERROR_CODES.TOKEN_EXPIRED);
       }
-      logger.warn({ err: error as Error }, 'Acceso de validación del token fallido');
+      logger.warn(
+        { err: error as Error },
+        'Acceso de validación del token fallido',
+      );
       throw new Error(ERROR_CODES.TOKEN_INVALID);
     }
   }
@@ -125,9 +137,9 @@ export class TokenService implements ITokenService {
    * Generar Refresh Token
    */
   async generateRefreshToken(
-    userId: string, 
-    sessionId: string, 
-    options?: TokenOptions
+    userId: string,
+    sessionId: string,
+    options?: TokenOptions,
   ): Promise<{
     token: string;
     tokenId: string;
@@ -168,16 +180,22 @@ export class TokenService implements ITokenService {
       // Cachear el token
       await this.cacheRefreshToken(tokenId, userId, sessionId, expiresAt);
 
-      logger.debug({ 
-        userId, 
-        sessionId, 
-        tokenId,
-        expiresAt: expiresAt.toISOString()
-      }, 'Refresh token generated');
+      logger.debug(
+        {
+          userId,
+          sessionId,
+          tokenId,
+          expiresAt: expiresAt.toISOString(),
+        },
+        'Refresh token generated',
+      );
 
       return { token, tokenId, expiresAt };
     } catch (error) {
-      logger.error({ error, userId, sessionId }, 'Failed to generate refresh token');
+      logger.error(
+        { error, userId, sessionId },
+        'Failed to generate refresh token',
+      );
       throw new Error(ERROR_MESSAGES.INTERNAL_ERROR);
     }
   }
@@ -212,30 +230,45 @@ export class TokenService implements ITokenService {
       });
 
       if (!storedToken) {
-        logger.warn({ tokenId: tokenPayload.tokenId }, 'Refresh token not found or revoked');
+        logger.warn(
+          { tokenId: tokenPayload.tokenId },
+          'Refresh token not found or revoked',
+        );
         throw new Error(ERROR_CODES.REFRESH_TOKEN_INVALID);
       }
 
-      logger.debug({ 
-        userId: tokenPayload.sub, 
-        tokenId: tokenPayload.tokenId,
-        sessionId: tokenPayload.sessionId 
-      }, 'Refresh token validated successfully');
+      logger.debug(
+        {
+          userId: tokenPayload.sub,
+          tokenId: tokenPayload.tokenId,
+          sessionId: tokenPayload.sessionId,
+        },
+        'Refresh token validated successfully',
+      );
 
       return tokenPayload;
     } catch (error) {
       if ((error as any).code === 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED') {
-        logger.warn({ err: error as Error }, 'verificación de refresh token fallida: firma inválida');
+        logger.warn(
+          { err: error as Error },
+          'verificación de refresh token fallida: firma inválida',
+        );
         throw new Error(ERROR_CODES.REFRESH_TOKEN_INVALID);
       }
       if ((error as any).code === 'ERR_JWT_EXPIRED') {
-        logger.warn({ err: error as Error }, 'validacion de refresh token fallida: expirado');
+        logger.warn(
+          { err: error as Error },
+          'validacion de refresh token fallida: expirado',
+        );
         throw new Error(ERROR_CODES.REFRESH_TOKEN_EXPIRED);
       }
       if ((error as Error).message === ERROR_CODES.REFRESH_TOKEN_INVALID) {
         throw error; // Re-lanza el error personalizado
       }
-      logger.warn({ err: error as Error }, 'validacion de refresh token fallida');
+      logger.warn(
+        { err: error as Error },
+        'validacion de refresh token fallida',
+      );
       throw new Error(ERROR_CODES.REFRESH_TOKEN_INVALID);
     }
   }
@@ -246,9 +279,9 @@ export class TokenService implements ITokenService {
   async encryptToken(token: string): Promise<string> {
     try {
       const jwe = new EncryptJWT({ token })
-        .setProtectedHeader({ 
-          alg: config.jwe.algorithm, 
-          enc: config.jwe.encryption 
+        .setProtectedHeader({
+          alg: config.jwe.algorithm,
+          enc: config.jwe.encryption,
         })
         .setIssuedAt()
         .setExpirationTime('15m'); // Tokens encriptados tienen vida corta
@@ -269,7 +302,7 @@ export class TokenService implements ITokenService {
   async decryptToken(encryptedToken: string): Promise<string> {
     try {
       const { payload } = await jwtDecrypt(encryptedToken, this.jweSecret);
-      
+
       const token = payload.token as string;
       if (!token) {
         throw new Error('Invalid encrypted token payload');
@@ -307,7 +340,7 @@ export class TokenService implements ITokenService {
       // Decodificar el payload sin verificar la firma
       const [, payloadBase64] = token.split('.');
       const payload = JSON.parse(
-        Buffer.from(payloadBase64, 'base64url').toString('utf8')
+        Buffer.from(payloadBase64, 'base64url').toString('utf8'),
       );
 
       const now = Math.floor(Date.now() / 1000);
@@ -365,9 +398,9 @@ export class TokenService implements ITokenService {
   async revokeAllUserTokens(userId: string): Promise<void> {
     try {
       await db.refreshToken.updateMany({
-        where: { 
+        where: {
           userId,
-          isRevoked: false 
+          isRevoked: false,
         },
         data: { isRevoked: true },
       });
@@ -386,8 +419,8 @@ export class TokenService implements ITokenService {
    * Actualizar información de sesión en refresh token
    */
   async updateRefreshTokenSessionInfo(
-    tokenId: string, 
-    sessionInfo: SessionInfo
+    tokenId: string,
+    sessionInfo: SessionInfo,
   ): Promise<void> {
     try {
       await db.refreshToken.update({
@@ -400,7 +433,10 @@ export class TokenService implements ITokenService {
 
       logger.debug({ tokenId }, 'Refresh token session info updated');
     } catch (error) {
-      logger.error({ error, tokenId }, 'Failed to update refresh token session info');
+      logger.error(
+        { error, tokenId },
+        'Failed to update refresh token session info',
+      );
       // No lanzar error, esta información es opcional
     }
   }
@@ -412,11 +448,8 @@ export class TokenService implements ITokenService {
     try {
       const result = await db.refreshToken.deleteMany({
         where: {
-          OR: [
-            { expiresAt: { lt: new Date() } },
-            { isRevoked: true }
-          ]
-        }
+          OR: [{ expiresAt: { lt: new Date() } }, { isRevoked: true }],
+        },
       });
 
       logger.info({ deletedCount: result.count }, 'Expired tokens cleaned up');
@@ -440,10 +473,10 @@ export class TokenService implements ITokenService {
    * Cachear refresh token
    */
   private async cacheRefreshToken(
-    tokenId: string, 
-    userId: string, 
+    tokenId: string,
+    userId: string,
     sessionId: string,
-    expiresAt: Date
+    expiresAt: Date,
   ): Promise<void> {
     try {
       const cacheKey = CACHE_KEYS.REFRESH_TOKEN(tokenId);
@@ -456,7 +489,10 @@ export class TokenService implements ITokenService {
         options,
       );
     } catch (error) {
-      logger.warn({ err: error as Error, tokenId }, 'Failed to cache refresh token');
+      logger.warn(
+        { err: error as Error, tokenId },
+        'Failed to cache refresh token',
+      );
     }
   }
 

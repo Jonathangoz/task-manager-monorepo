@@ -10,7 +10,11 @@ const nextConfig = {
     appDir: true,
   },
   images: {
-    domains: ['localhost', 'task-manager-auth-service.onrender.com', 'task-manager-task-service.onrender.com'],
+    domains: [
+      'localhost',
+      'task-manager-auth-service.onrender.com',
+      'task-manager-task-service.onrender.com',
+    ],
     formats: ['image/webp', 'image/avif'],
   },
   async headers() {
@@ -38,27 +42,27 @@ const nextConfig = {
       },
     ];
   },
-// En next.config.mjs - para desarrollo/producción
-async rewrites() {
-  const isDev = process.env.NODE_ENV === 'development';
-  const authServiceUrl = isDev 
-    ? process.env.NEXT_PUBLIC_AUTH_SERVICE_URL_DEV 
-    : process.env.NEXT_PUBLIC_AUTH_SERVICE_URL;
-  const taskServiceUrl = isDev 
-    ? process.env.NEXT_PUBLIC_TASK_SERVICE_URL_DEV 
-    : process.env.NEXT_PUBLIC_TASK_SERVICE_URL;
+  // En next.config.mjs - para desarrollo/producción
+  async rewrites() {
+    const isDev = process.env.NODE_ENV === 'development';
+    const authServiceUrl = isDev
+      ? process.env.NEXT_PUBLIC_AUTH_SERVICE_URL_DEV
+      : process.env.NEXT_PUBLIC_AUTH_SERVICE_URL;
+    const taskServiceUrl = isDev
+      ? process.env.NEXT_PUBLIC_TASK_SERVICE_URL_DEV
+      : process.env.NEXT_PUBLIC_TASK_SERVICE_URL;
 
-  return [
-    {
-      source: '/api/auth/:path*',
-      destination: `${authServiceUrl}/:path*`,
-    },
-    {
-      source: '/api/tasks/:path*', 
-      destination: `${taskServiceUrl}/:path*`,
-    },
-  ];
-},
+    return [
+      {
+        source: '/api/auth/:path*',
+        destination: `${authServiceUrl}/:path*`,
+      },
+      {
+        source: '/api/tasks/:path*',
+        destination: `${taskServiceUrl}/:path*`,
+      },
+    ];
+  },
   output: 'standalone',
   poweredByHeader: false,
   compress: true,

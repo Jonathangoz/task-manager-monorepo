@@ -2,9 +2,14 @@ import { sign } from 'jose';
 import { TextEncoder } from 'util';
 
 export class AuthTestHelper {
-  private static secret = new TextEncoder().encode(process.env.JWT_SECRET || 'test-jwt-secret');
+  private static secret = new TextEncoder().encode(
+    process.env.JWT_SECRET || 'test-jwt-secret',
+  );
 
-  static async createValidToken(userId: string, email: string): Promise<string> {
+  static async createValidToken(
+    userId: string,
+    email: string,
+  ): Promise<string> {
     const payload = {
       sub: userId,
       email,
@@ -17,7 +22,10 @@ export class AuthTestHelper {
       .sign(this.secret);
   }
 
-  static async createExpiredToken(userId: string, email: string): Promise<string> {
+  static async createExpiredToken(
+    userId: string,
+    email: string,
+  ): Promise<string> {
     const payload = {
       sub: userId,
       email,

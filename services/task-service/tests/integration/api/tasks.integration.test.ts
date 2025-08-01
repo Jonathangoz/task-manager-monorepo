@@ -13,7 +13,7 @@ describe('Tasks API Integration', () => {
     // Crear token válido
     authToken = await AuthTestHelper.createValidToken(
       userId,
-      fixtures.users.john.email
+      fixtures.users.john.email,
     );
 
     // Preparar datos de prueba

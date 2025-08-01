@@ -14,7 +14,7 @@ services:
       pnpm prisma:generate
       pnpm build
     startCommand: pnpm start:prod
-    healthCheckPath: /health
+    healthCheckPath: /api/v1/health # ✅ CORREGIDO - path completo
     autoDeploy: true
     envVars:
       # Variables específicas del servicio
@@ -24,7 +24,7 @@ services:
         value: 3001
       - key: API_VERSION
         value: v1
-        
+
       # Variables de base de datos y cache
       - key: DATABASE_URL
         fromDatabase:
@@ -36,49 +36,57 @@ services:
           name: task-manager-cache-prod
           property: connectionString
       - key: REDIS_PREFIX
-        value: "auth:"
-        
+        value: 'auth:'
+
       # 🔑 JWT Configuration - VALORES DIRECTOS
       - key: JWT_SECRET
-        value: "base64:u+vQTtcSFJR4GsfR7D4bvK6IAsACgvb8hW62FdlEqYCP/GoZQPNCw9Bmw4iVrrSrkj998JYRz41rldpInU/K9g=="
+        value: 'base64:u+vQTtcSFJR4GsfR7D4bvK6IAsACgvb8hW62FdlEqYCP/GoZQPNCw9Bmw4iVrrSrkj998JYRz41rldpInU/K9g=='
       - key: JWT_ISSUER
-        value: "task-manager-auth"
+        value: 'task-manager-auth'
       - key: JWT_EXPIRES_IN
-        value: "15m"
+        value: '15m'
       - key: REFRESH_TOKEN_SECRET
-        value: "base64:vfIeKTFck9rzwlhO4Jft2XgJmDstLnhn4ZB6anVLYeWvogGiVL/PoK+mvkHTdWYA7pQslxgzDuEMVdNPzpK2cg=="
+        value: 'base64:vfIeKTFck9rzwlhO4Jft2XgJmDstLnhn4ZB6anVLYeWvogGiVL/PoK+mvkHTdWYA7pQslxgzDuEMVdNPzpK2cg=='
       - key: REFRESH_TOKEN_EXPIRES_IN
-        value: "7d"
+        value: '7d'
       - key: JWE_SECRET
-        value: "base64:jMjjQLeL0B38/H6ujAR1eOi8cRKGxSQUQbuv72n9ew0="
+        value: 'base64:jMjjQLeL0B38/H6ujAR1eOi8cRKGxSQUQbuv72n9ew0='
       - key: JWE_ALGORITHM
-        value: "dir"
+        value: 'dir'
       - key: JWE_ENCRYPTION
-        value: "A256GCM"
-      
+        value: 'A256GCM'
+
       # 🔐 Security
       - key: AUTH_SERVICE_API_KEY
-        value: "base64:2V9JFfBSkMoLGxi514RLAqhcfm5J6c50INEKK9cPaaI="
-      
+        value: 'base64:2V9JFfBSkMoLGxi514RLAqhcfm5J6c50INEKK9cPaaI='
+
       # 🌐 CORS Configuration
       - key: CORS_ORIGIN
-        value: "https://your-frontend-url.onrender.com"  # Cambiar por tu frontend
-        
-      # 🔧 Logging y configuración
+        value: 'https://your-frontend-url.onrender.com'
+
+      # 🔧 Logging y configuración - OPTIMIZADO PARA RENDER
       - key: LOG_LEVEL
-        value: "info"
+        value: 'info'
       - key: LOG_PRETTY
-        value: "false"
+        value: 'false'
       - key: RATE_LIMIT_WINDOW_MS
-        value: "900000"
+        value: '900000'
       - key: RATE_LIMIT_MAX_REQUESTS
-        value: "100"
+        value: '100'
       - key: HELMET_ENABLED
-        value: "true"
+        value: 'true'
       - key: HEALTH_CHECK_ENABLED
-        value: "true"
+        value: 'true'
       - key: SWAGGER_ENABLED
-        value: "true"
+        value: 'false' # ✅ Deshabilitado en producción
+
+      # ✅ TIMEOUTS OPTIMIZADOS PARA RENDER
+      - key: HTTP_REQUEST_TIMEOUT
+        value: '120000' # 2 minutos
+      - key: HEALTH_CHECK_TIMEOUT
+        value: '5000' # 5 segundos
+      - key: DATABASE_TIMEOUT
+        value: '30000' # 30 segundos
 
   # ✅ Task Service - Production
   - type: web
@@ -94,7 +102,7 @@ services:
       pnpm prisma:generate
       pnpm build
     startCommand: pnpm start:prod
-    healthCheckPath: /api/v1/health
+    healthCheckPath: /api/v1/health # ✅ CORREGIDO - path completo
     autoDeploy: true
     envVars:
       # Variables específicas del servicio
@@ -104,7 +112,7 @@ services:
         value: 3002
       - key: API_VERSION
         value: v1
-        
+
       # Variables de base de datos y cache
       - key: DATABASE_URL
         fromDatabase:
@@ -116,67 +124,75 @@ services:
           name: task-manager-cache-prod
           property: connectionString
       - key: REDIS_PREFIX
-        value: "tasks:"
-        
+        value: 'tasks:'
+
       # 🔗 Comunicación entre servicios
       - key: AUTH_SERVICE_URL
-        value: "https://task-manager-auth-service.onrender.com"  # URL interno de Render
+        value: 'https://task-manager-auth-service.onrender.com'
       - key: AUTH_SERVICE_VERIFY_ENDPOINT
-        value: "/api/v1/auth/verify-token"
+        value: '/api/v1/auth/verify-token'
       - key: AUTH_SERVICE_API_KEY
-        value: "base64:2V9JFfBSkMoLGxi514RLAqhcfm5J6c50INEKK9cPaaI="
+        value: 'base64:2V9JFfBSkMoLGxi514RLAqhcfm5J6c50INEKK9cPaaI='
       - key: AUTH_SERVICE_TIMEOUT
-        value: "10000"
-        
+        value: '10000'
+
       # 🔑 JWT Configuration - MISMOS VALORES QUE AUTH
       - key: JWT_SECRET
-        value: "base64:u+vQTtcSFJR4GsfR7D4bvK6IAsACgvb8hW62FdlEqYCP/GoZQPNCw9Bmw4iVrrSrkj998JYRz41rldpInU/K9g=="
+        value: 'base64:u+vQTtcSFJR4GsfR7D4bvK6IAsACgvb8hW62FdlEqYCP/GoZQPNCw9Bmw4iVrrSrkj998JYRz41rldpInU/K9g=='
       - key: JWT_ISSUER
-        value: "task-manager-auth"
-        
+        value: 'task-manager-auth'
+
       # 🌐 CORS Configuration
       - key: CORS_ORIGIN
-        value: "https://your-frontend-url.onrender.com,https://task-manager-auth-service.onrender.com"
-        
+        value: 'https://your-frontend-url.onrender.com,https://task-manager-auth-service.onrender.com'
+
       # Variables específicas de tareas
       - key: DEFAULT_PAGE_SIZE
-        value: "20"
+        value: '20'
       - key: MAX_PAGE_SIZE
-        value: "100"
+        value: '100'
       - key: CACHE_TTL_TASKS
-        value: "300"
+        value: '300'
       - key: CACHE_TTL_CATEGORIES
-        value: "600"
+        value: '600'
       - key: CACHE_TTL_USER_TASKS
-        value: "180"
-        
+        value: '180'
+
       # Variables de logging y configuración
       - key: LOG_LEVEL
-        value: "info"
+        value: 'info'
       - key: LOG_PRETTY
-        value: "false"
+        value: 'false'
       - key: RATE_LIMIT_WINDOW_MS
-        value: "900000"
+        value: '900000'
       - key: RATE_LIMIT_MAX_REQUESTS
-        value: "200"
+        value: '200'
       - key: HELMET_ENABLED
-        value: "true"
+        value: 'true'
       - key: HEALTH_CHECK_ENABLED
-        value: "true"
+        value: 'true'
       - key: SWAGGER_ENABLED
-        value: "true"
+        value: 'false' # ✅ Deshabilitado en producción
+
+      # ✅ TIMEOUTS OPTIMIZADOS PARA RENDER
+      - key: HTTP_REQUEST_TIMEOUT
+        value: '120000'
+      - key: HEALTH_CHECK_TIMEOUT
+        value: '5000'
+      - key: DATABASE_TIMEOUT
+        value: '30000'
 
   # Production Redis Cache
   - type: keyvalue
     name: task-manager-cache-prod
-    plan: free 
+    plan: free
     region: oregon
-    ipAllowList: [] 
+    ipAllowList: []
     maxmemoryPolicy: allkeys-lru
 
 databases:
-  - name: task-manager-unified-db-prod 
-    databaseName: task_manager_db_prod 
-    user: task_manager_user_prod 
+  - name: task-manager-unified-db-prod
+    databaseName: task_manager_db_prod
+    user: task_manager_user_prod
     plan: free
     region: oregon

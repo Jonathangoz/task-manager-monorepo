@@ -28,21 +28,21 @@ export const ERROR_CODES = {
   INVALID_TASK_STATUS: 'INVALID_TASK_STATUS',
   INVALID_TASK_PRIORITY: 'INVALID_TASK_PRIORITY',
   TASK_OVERDUE: 'TASK_OVERDUE',
-  
+
   // Category errors
   CATEGORY_NOT_FOUND: 'CATEGORY_NOT_FOUND',
   CATEGORY_ALREADY_EXISTS: 'CATEGORY_ALREADY_EXISTS',
   CATEGORY_ACCESS_DENIED: 'CATEGORY_ACCESS_DENIED',
   CATEGORY_HAS_TASKS: 'CATEGORY_HAS_TASKS',
   CATEGORY_LIMIT_EXCEEDED: 'CATEGORY_LIMIT_EXCEEDED',
-  
+
   // Authentication errors
   INVALID_TOKEN: 'INVALID_TOKEN',
   TOKEN_EXPIRED: 'TOKEN_EXPIRED',
   TOKEN_REQUIRED: 'TOKEN_REQUIRED',
   USER_NOT_FOUND: 'USER_NOT_FOUND',
   UNAUTHORIZED_ACCESS: 'UNAUTHORIZED_ACCESS',
-  
+
   // Validation errors
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INVALID_DATE_FORMAT: 'INVALID_DATE_FORMAT',
@@ -55,14 +55,14 @@ export const ERROR_CODES = {
   INVALID_CUID: 'INVALID_CUID',
   INVALID_SEARCH_QUERY: 'INVALID_SEARCH_QUERY',
   RESERVED_NAME_ERROR: 'RESERVED_NAME_ERROR',
-  
+
   // System errors
   DATABASE_ERROR: 'DATABASE_ERROR',
   REDIS_ERROR: 'REDIS_ERROR',
   AUTH_SERVICE_ERROR: 'AUTH_SERVICE_ERROR',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
-  
+
   // Rate limiting
   RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
 } as const;
@@ -75,12 +75,12 @@ export const SUCCESS_MESSAGES = {
   TASK_STATUS_UPDATED: 'Estado de tarea actualizado exitosamente',
   TASK_PRIORITY_UPDATED: 'Prioridad de tarea actualizada exitosamente',
   TASK_COMPLETED: 'Tarea completada exitosamente',
-  
+
   CATEGORY_CREATED: 'Categoria creada exitosamente',
   CATEGORY_UPDATED: 'Categoria actualizada exitosamente',
   CATEGORY_DELETED: 'Categoria eliminada exitosamente',
   CATEGORIES_BULK_DELETED: 'Categorias eliminadas en lote exitosamente',
-  
+
   TASKS_RETRIEVED: 'Tareas obtenidas exitosamente',
   CATEGORIES_RETRIEVED: 'Categorias obtenidas exitosamente',
   STATS_RETRIEVED: 'Estatísticas obtenidas exitosamente',
@@ -94,30 +94,34 @@ export const ERROR_MESSAGES = {
   TASK_ACCESS_DENIED: 'Acceso denagado a la tarea',
   CATEGORY_NOT_FOUND: 'Categoria no encontrada o acceso denegado',
   CATEGORY_ALREADY_EXISTS: 'Una categoria con este nombre ya existe',
-  CATEGORY_HAS_TASKS: 'No se puede eliminar la categoria porque tiene tareas asociadas',
-  CATEGORY_LIMIT_EXCEEDED: 'Se ha alcanzado el límite máximo de categorías por usuario',
-  
+  CATEGORY_HAS_TASKS:
+    'No se puede eliminar la categoria porque tiene tareas asociadas',
+  CATEGORY_LIMIT_EXCEEDED:
+    'Se ha alcanzado el límite máximo de categorías por usuario',
+
   INVALID_TOKEN: 'Token de autenticación inválido',
   TOKEN_EXPIRED: 'Token expirado',
   TOKEN_REQUIRED: 'Token de autenticación requerido',
   UNAUTHORIZED_ACCESS: 'Acceso no autorizado',
-  
+
   VALIDATION_ERROR: 'Validación fallida',
   INVALID_DATE_FORMAT: 'Formato de fecha inválido',
-  INVALID_DUE_DATE: 'No se puede establecer una fecha de vencimiento en el pasado',
+  INVALID_DUE_DATE:
+    'No se puede establecer una fecha de vencimiento en el pasado',
   INVALID_HEX_COLOR: 'Color hexadecimal inválido',
   INVALID_ICON: 'Icono inválido o no permitido',
   INVALID_CUID: 'Identificador CUID inválido',
   INVALID_SEARCH_QUERY: 'Consulta de búsqueda inválida',
   RESERVED_NAME_ERROR: 'Este nombre está reservado y no puede ser utilizado',
-  
+
   AUTH_SERVICE_ERROR: 'Servicio de autenticación no disponible',
   DATABASE_ERROR: 'Base de datos no disponible',
   REDIS_ERROR: 'Servicio Redis no disponible',
   INTERNAL_ERROR: 'Error interno del servidor',
   SERVICE_UNAVAILABLE: 'Servicio temporalmente no disponible',
-  
-  RATE_LIMIT_EXCEEDED: 'Límite de solicitudes excedido, por favor intente más tarde',
+
+  RATE_LIMIT_EXCEEDED:
+    'Límite de solicitudes excedido, por favor intente más tarde',
 } as const;
 
 // Task Configuration
@@ -129,7 +133,7 @@ export const TASK_CONFIG = {
   MAX_ATTACHMENTS_COUNT: 5,
   MAX_ESTIMATED_HOURS: 999,
   MIN_DUE_DATE_OFFSET_MINUTES: 5,
-  MAX_TASKS_PER_USER: 5
+  MAX_TASKS_PER_USER: 5,
 } as const;
 
 // Category Configuration (Enhanced)
@@ -140,7 +144,7 @@ export const CATEGORY_CONFIG = {
   MAX_BULK_DELETE: 20,
   DEFAULT_COLOR: '#6366f1',
   DEFAULT_ICON: 'folder',
-  
+
   // Allowed colors palette for enhanced validation
   ALLOWED_COLORS: [
     '#6366f1', // Indigo (default)
@@ -162,40 +166,124 @@ export const CATEGORY_CONFIG = {
     '#1e293b', // Slate (darker)
     '#374151', // Gray
     '#6b7280', // Gray (light)
-    '#9ca3af'  // Gray (lighter)
+    '#9ca3af', // Gray (lighter)
   ] as const,
-  
+
   // Allowed icons for enhanced validation
   ALLOWED_ICONS: [
     // Basic icons
-    'folder', 'home', 'briefcase', 'school', 'heart', 'dollar-sign',
-    'shopping-cart', 'plane', 'utensils', 'gamepad-2', 'dumbbell',
-    'laptop', 'palette', 'music', 'book', 'users', 'user',
-    'building', 'target', 'calendar', 'clock', 'star', 'flag',
-    'tag', 'bookmark', 'file-text', 'image', 'video',
-    'settings', 'wrench', 'inbox', 'archive', 'trash-2',
-    
+    'folder',
+    'home',
+    'briefcase',
+    'school',
+    'heart',
+    'dollar-sign',
+    'shopping-cart',
+    'plane',
+    'utensils',
+    'gamepad-2',
+    'dumbbell',
+    'laptop',
+    'palette',
+    'music',
+    'book',
+    'users',
+    'user',
+    'building',
+    'target',
+    'calendar',
+    'clock',
+    'star',
+    'flag',
+    'tag',
+    'bookmark',
+    'file-text',
+    'image',
+    'video',
+    'settings',
+    'wrench',
+    'inbox',
+    'archive',
+    'trash-2',
+
     // Additional professional icons
-    'briefcase-business', 'chart-bar', 'chart-pie', 'chart-line',
-    'clipboard', 'clipboard-check', 'clipboard-list', 'code',
-    'database', 'file-code', 'folder-open', 'git-branch',
-    'globe', 'hard-drive', 'layers', 'layout-dashboard',
-    'lightbulb', 'mail', 'map-pin', 'monitor', 'network',
-    'package', 'phone', 'printer', 'search', 'server',
-    'shield', 'smartphone', 'tablet', 'trending-up',
-    'truck', 'wifi', 'zap'
+    'briefcase-business',
+    'chart-bar',
+    'chart-pie',
+    'chart-line',
+    'clipboard',
+    'clipboard-check',
+    'clipboard-list',
+    'code',
+    'database',
+    'file-code',
+    'folder-open',
+    'git-branch',
+    'globe',
+    'hard-drive',
+    'layers',
+    'layout-dashboard',
+    'lightbulb',
+    'mail',
+    'map-pin',
+    'monitor',
+    'network',
+    'package',
+    'phone',
+    'printer',
+    'search',
+    'server',
+    'shield',
+    'smartphone',
+    'tablet',
+    'trending-up',
+    'truck',
+    'wifi',
+    'zap',
   ] as const,
-  
+
   // Reserved names that cannot be used for categories
   RESERVED_NAMES: [
-    'all', 'none', 'default', 'uncategorized', 'sin categoria',
-    'admin', 'administrator', 'system', 'root', 'null', 'undefined',
-    'void', 'empty', 'blank', 'general', 'misc', 'miscellaneous',
-    'other', 'others', 'todo', 'todos', 'task', 'tasks',
-    'category', 'categories', 'grupo', 'grupos', 'group', 'groups',
-    'api', 'app', 'application', 'config', 'configuration',
-    'settings', 'preferences', 'profile', 'user', 'users'
-  ] as const
+    'all',
+    'none',
+    'default',
+    'uncategorized',
+    'sin categoria',
+    'admin',
+    'administrator',
+    'system',
+    'root',
+    'null',
+    'undefined',
+    'void',
+    'empty',
+    'blank',
+    'general',
+    'misc',
+    'miscellaneous',
+    'other',
+    'others',
+    'todo',
+    'todos',
+    'task',
+    'tasks',
+    'category',
+    'categories',
+    'grupo',
+    'grupos',
+    'group',
+    'groups',
+    'api',
+    'app',
+    'application',
+    'config',
+    'configuration',
+    'settings',
+    'preferences',
+    'profile',
+    'user',
+    'users',
+  ] as const,
 } as const;
 
 // Validation Configuration (New)
@@ -204,43 +292,43 @@ export const VALIDATION_CONFIG = {
   CUID: {
     MIN_LENGTH: 20,
     MAX_LENGTH: 30,
-    PATTERN: /^[a-zA-Z0-9_-]+$/
+    PATTERN: /^[a-zA-Z0-9_-]+$/,
   },
-  
+
   // Hex color validation
   HEX_COLOR: {
     MIN_LENGTH: 4, // #RGB format
     MAX_LENGTH: 7, // #RRGGBB format
-    PATTERN: /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/
+    PATTERN: /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/,
   },
-  
+
   // Icon validation
   ICON: {
     MIN_LENGTH: 1,
     MAX_LENGTH: 50,
-    PATTERN: /^[a-zA-Z0-9\-_]+$/
+    PATTERN: /^[a-zA-Z0-9\-_]+$/,
   },
-  
+
   // Name validation (categories, tasks, etc.)
   NAME: {
     MIN_LENGTH: 1,
     MAX_LENGTH: 200,
-    PATTERN: /^[a-zA-Z0-9\s\-_áéíóúÁÉÍÓÚñÑ]+$/
+    PATTERN: /^[a-zA-Z0-9\s\-_áéíóúÁÉÍÓÚñÑ]+$/,
   },
-  
+
   // Search query validation
   SEARCH: {
     MIN_LENGTH: 1,
     MAX_LENGTH: 100,
-    PATTERN: /^[a-zA-Z0-9\s\-_áéíóúÁÉÍÓÚñÑ]+$/
+    PATTERN: /^[a-zA-Z0-9\s\-_áéíóúÁÉÍÓÚñÑ]+$/,
   },
-  
+
   // Bulk operations
   BULK: {
     MIN_ITEMS: 1,
     MAX_ITEMS: 50,
-    MAX_CATEGORY_DELETE: 20
-  }
+    MAX_CATEGORY_DELETE: 20,
+  },
 } as const;
 
 // Task Status Options
@@ -277,7 +365,7 @@ export const SORT_FIELDS = {
   STATUS: 'status',
   TITLE: 'title',
   NAME: 'name', // For categories
-  TASK_COUNT: 'taskCount' // For categories
+  TASK_COUNT: 'taskCount', // For categories
 } as const;
 
 export const SORT_ORDERS = {
@@ -297,7 +385,7 @@ export const FILTER_FIELDS = {
   TAGS: 'tags',
   IS_ACTIVE: 'isActive', // For categories
   HAS_ICON: 'hasIcon', // For categories
-  COLOR: 'color' // For categories
+  COLOR: 'color', // For categories
 } as const;
 
 // Cache Keys Patterns
@@ -308,10 +396,12 @@ export const CACHE_KEYS = {
   TASK_DETAIL: (taskId: string) => `task:${taskId}`,
   CATEGORY_DETAIL: (categoryId: string) => `category:${categoryId}`,
   CATEGORY_TASKS: (categoryId: string) => `category:${categoryId}:tasks`,
-  SEARCH_RESULTS: (userId: string, query: string) => `search:${userId}:${Buffer.from(query).toString('base64')}`,
+  SEARCH_RESULTS: (userId: string, query: string) =>
+    `search:${userId}:${Buffer.from(query).toString('base64')}`,
   RATE_LIMIT: (key: string) => `ratelimit:${key}`,
   USER_CATEGORY_COUNT: (userId: string) => `user:${userId}:category_count`,
-  CATEGORY_NAME_UNIQUE: (userId: string, name: string) => `unique:${userId}:${name.toLowerCase()}`
+  CATEGORY_NAME_UNIQUE: (userId: string, name: string) =>
+    `unique:${userId}:${name.toLowerCase()}`,
 } as const;
 
 // Cache TTL (Time To Live) in seconds - From Environment Configuration
@@ -325,7 +415,7 @@ export const CACHE_TTL = {
   SEARCH_RESULTS: config.cache.ttl.searchResults,
   RATE_LIMIT: 900,
   USER_CATEGORY_COUNT: 300, // 5 minutes
-  CATEGORY_NAME_UNIQUE: 600 // 10 minutes
+  CATEGORY_NAME_UNIQUE: 600, // 10 minutes
 } as const;
 
 // Pagination Configuration
@@ -351,26 +441,26 @@ export const EVENT_TYPES = {
   TASK_DELETED: 'task.deleted',
   TASK_STATUS_CHANGED: 'task.status.changed',
   TASK_COMPLETED: 'task.completed',
-  
+
   CATEGORY_CREATED: 'category.created',
   CATEGORY_UPDATED: 'category.updated',
   CATEGORY_DELETED: 'category.deleted',
   CATEGORY_BULK_DELETED: 'category.bulk.deleted',
   CATEGORY_LIMIT_REACHED: 'category.limit.reached',
   CATEGORY_NAME_CONFLICT: 'category.name.conflict',
-  
+
   USER_STATS_UPDATED: 'stats.updated',
-  
+
   AUTH_TOKEN_VALIDATED: 'auth.token.validated',
   AUTH_SERVICE_ERROR: 'auth.service.error',
-  
+
   CACHE_HIT: 'cache.hit',
   CACHE_MISS: 'cache.miss',
   CACHE_ERROR: 'cache.error',
-  
+
   VALIDATION_ERROR: 'validation.error',
   VALIDATION_SUCCESS: 'validation.success',
-  
+
   RATE_LIMIT_EXCEEDED: 'security.rate_limit_exceeded',
 } as const;
 
@@ -396,12 +486,14 @@ interface PrismaErrorMapping {
 
 // Prisma Error Mappings - Indexado por código de error de Prisma
 export const PRISMA_ERROR_MAPPINGS: Record<string, PrismaErrorMapping> = {
-  'P2000': { // The value provided for the column is too long
+  P2000: {
+    // The value provided for the column is too long
     statusCode: HTTP_STATUS.BAD_REQUEST,
     message: 'El valor proporcionado es demasiado largo para el campo.',
     errorCode: ERROR_CODES.VALIDATION_ERROR,
   },
-  'P2002': { // Unique constraint violation
+  P2002: {
+    // Unique constraint violation
     statusCode: HTTP_STATUS.CONFLICT,
     message: 'Ya existe un recurso con este valor único.',
     errorCode: ERROR_CODES.TASK_ALREADY_EXISTS,
@@ -414,151 +506,183 @@ export const PRISMA_ERROR_MAPPINGS: Record<string, PrismaErrorMapping> = {
         return 'Ya existe una tarea con este título.';
       }
       return 'Ya existe un recurso con este valor único.';
-    }
+    },
   },
-  'P2003': { // Foreign key constraint failed
+  P2003: {
+    // Foreign key constraint failed
     statusCode: HTTP_STATUS.BAD_REQUEST,
-    message: 'Violación de clave foránea. El recurso relacionado no existe o no se puede vincular.',
+    message:
+      'Violación de clave foránea. El recurso relacionado no existe o no se puede vincular.',
     errorCode: ERROR_CODES.VALIDATION_ERROR,
   },
-  'P2004': { // A constraint failed on the database
+  P2004: {
+    // A constraint failed on the database
     statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
     message: 'Fallo una restricción de la base de datos.',
     errorCode: ERROR_CODES.DATABASE_ERROR,
   },
-  'P2005': { // The value stored in the database is invalid for the field's type
+  P2005: {
+    // The value stored in the database is invalid for the field's type
     statusCode: HTTP_STATUS.BAD_REQUEST,
     message: 'El valor en la base de datos es inválido para el tipo de campo.',
     errorCode: ERROR_CODES.DATABASE_ERROR,
   },
-  'P2006': { // The provided value is not of the correct type
+  P2006: {
+    // The provided value is not of the correct type
     statusCode: HTTP_STATUS.BAD_REQUEST,
     message: 'El valor proporcionado no es del tipo correcto.',
     errorCode: ERROR_CODES.VALIDATION_ERROR,
   },
-  'P2007': { // Validation error
+  P2007: {
+    // Validation error
     statusCode: HTTP_STATUS.BAD_REQUEST,
     message: 'Error de validación en la base de datos.',
     errorCode: ERROR_CODES.DATABASE_ERROR,
   },
-  'P2008': { // Failed to parse the query
+  P2008: {
+    // Failed to parse the query
     statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
     message: 'Error al parsear la consulta de la base de datos.',
     errorCode: ERROR_CODES.DATABASE_ERROR,
   },
-  'P2009': { // Failed to validate the query
+  P2009: {
+    // Failed to validate the query
     statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
     message: 'Error al validar la consulta de la base de datos.',
     errorCode: ERROR_CODES.DATABASE_ERROR,
   },
-  'P2010': { // Raw query failed
+  P2010: {
+    // Raw query failed
     statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
     message: 'La consulta SQL falló.',
     errorCode: ERROR_CODES.DATABASE_ERROR,
   },
-  'P2011': { // Null constraint violation
+  P2011: {
+    // Null constraint violation
     statusCode: HTTP_STATUS.BAD_REQUEST,
     message: 'Faltan campos requeridos.',
     errorCode: ERROR_CODES.VALIDATION_ERROR,
   },
-  'P2012': { // Missing a required value
+  P2012: {
+    // Missing a required value
     statusCode: HTTP_STATUS.BAD_REQUEST,
     message: 'Falta un valor requerido.',
     errorCode: ERROR_CODES.VALIDATION_ERROR,
   },
-  'P2013': { // Missing a required argument
+  P2013: {
+    // Missing a required argument
     statusCode: HTTP_STATUS.BAD_REQUEST,
     message: 'Falta un argumento requerido.',
     errorCode: ERROR_CODES.VALIDATION_ERROR,
   },
-  'P2014': { // The change you are trying to make requires a record that does not exist
+  P2014: {
+    // The change you are trying to make requires a record that does not exist
     statusCode: HTTP_STATUS.NOT_FOUND,
     message: 'La operación requiere un registro que no existe.',
     errorCode: ERROR_CODES.TASK_NOT_FOUND,
   },
-  'P2015': { // A related record could not be found
+  P2015: {
+    // A related record could not be found
     statusCode: HTTP_STATUS.NOT_FOUND,
     message: 'No se encontró un registro relacionado.',
     errorCode: ERROR_CODES.TASK_NOT_FOUND,
   },
-  'P2016': { // A query interpretation error occurred
+  P2016: {
+    // A query interpretation error occurred
     statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
     message: 'Error de interpretación de consulta.',
     errorCode: ERROR_CODES.DATABASE_ERROR,
   },
-  'P2017': { // The records for relation are not connected
+  P2017: {
+    // The records for relation are not connected
     statusCode: HTTP_STATUS.BAD_REQUEST,
     message: 'Los registros para la relación no están conectados.',
     errorCode: ERROR_CODES.VALIDATION_ERROR,
   },
-  'P2018': { // The required connected records were not found
+  P2018: {
+    // The required connected records were not found
     statusCode: HTTP_STATUS.NOT_FOUND,
     message: 'No se encontraron los registros conectados requeridos.',
     errorCode: ERROR_CODES.TASK_NOT_FOUND,
   },
-  'P2019': { // Input error
+  P2019: {
+    // Input error
     statusCode: HTTP_STATUS.BAD_REQUEST,
     message: 'Error en la entrada de datos.',
     errorCode: ERROR_CODES.VALIDATION_ERROR,
   },
-  'P2020': { // Value out of range for the type
+  P2020: {
+    // Value out of range for the type
     statusCode: HTTP_STATUS.BAD_REQUEST,
     message: 'Valor fuera de rango para el tipo de dato.',
     errorCode: ERROR_CODES.VALIDATION_ERROR,
   },
-  'P2021': { // Table does not exist
+  P2021: {
+    // Table does not exist
     statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
     message: 'La tabla de la base de datos no existe.',
     errorCode: ERROR_CODES.DATABASE_ERROR,
   },
-  'P2022': { // Column does not exist
+  P2022: {
+    // Column does not exist
     statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
     message: 'La columna de la base de datos no existe.',
     errorCode: ERROR_CODES.DATABASE_ERROR,
   },
-  'P2023': { // Raw query syntax error
+  P2023: {
+    // Raw query syntax error
     statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
     message: 'Error de sintaxis en la consulta SQL.',
     errorCode: ERROR_CODES.DATABASE_ERROR,
   },
-  'P2024': { // Timed out fetching a new connection
+  P2024: {
+    // Timed out fetching a new connection
     statusCode: HTTP_STATUS.SERVICE_UNAVAILABLE,
     message: 'Tiempo de espera agotado al conectar con la base de datos.',
     errorCode: ERROR_CODES.DATABASE_ERROR,
   },
-  'P2025': { // An operation failed because it depends on one or more records that were required but not found.
+  P2025: {
+    // An operation failed because it depends on one or more records that were required but not found.
     statusCode: HTTP_STATUS.NOT_FOUND,
     message: 'El registro no fue encontrado.',
     errorCode: ERROR_CODES.TASK_NOT_FOUND,
   },
-  'P2026': { // The client has a mismatch between the Prisma Client and the Prisma Schema.
+  P2026: {
+    // The client has a mismatch between the Prisma Client and the Prisma Schema.
     statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
     message: 'Error de configuración interna de la base de datos.',
     errorCode: ERROR_CODES.INTERNAL_ERROR,
   },
-  'P2027': { // Multiple errors occurred on the database query.
+  P2027: {
+    // Multiple errors occurred on the database query.
     statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
     message: 'Múltiples errores en la consulta de la base de datos.',
     errorCode: ERROR_CODES.DATABASE_ERROR,
   },
-  'P2028': { // Transaction failed
+  P2028: {
+    // Transaction failed
     statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
     message: 'La transacción de la base de datos falló.',
     errorCode: ERROR_CODES.DATABASE_ERROR,
   },
-  'P2030': { // Cannot find a fulltext index to use for the search
+  P2030: {
+    // Cannot find a fulltext index to use for the search
     statusCode: HTTP_STATUS.BAD_REQUEST,
     message: 'No se encontró un índice de texto completo para la búsqueda.',
     errorCode: ERROR_CODES.DATABASE_ERROR,
   },
-  'P2033': { // A number used in the query is too large for its type.
+  P2033: {
+    // A number used in the query is too large for its type.
     statusCode: HTTP_STATUS.BAD_REQUEST,
-    message: 'Un número utilizado en la consulta es demasiado grande para su tipo.',
+    message:
+      'Un número utilizado en la consulta es demasiado grande para su tipo.',
     errorCode: ERROR_CODES.VALIDATION_ERROR,
   },
-  'P2034': { // Transaction failed due to a write conflict or a deadlock.
+  P2034: {
+    // Transaction failed due to a write conflict or a deadlock.
     statusCode: HTTP_STATUS.CONFLICT,
-    message: 'La transacción falló debido a un conflicto de escritura o un interbloqueo.',
+    message:
+      'La transacción falló debido a un conflicto de escritura o un interbloqueo.',
     errorCode: ERROR_CODES.DATABASE_ERROR,
   },
 } as const;
@@ -641,10 +765,10 @@ export type TaskPriority = keyof typeof TASK_PRIORITIES;
 export type TaskStatus = keyof typeof TASK_STATUSES;
 
 // Category Color Type
-export type CategoryColor = typeof CATEGORY_CONFIG.ALLOWED_COLORS[number];
+export type CategoryColor = (typeof CATEGORY_CONFIG.ALLOWED_COLORS)[number];
 
 // Category Icon Type
-export type CategoryIcon = typeof CATEGORY_CONFIG.ALLOWED_ICONS[number];
+export type CategoryIcon = (typeof CATEGORY_CONFIG.ALLOWED_ICONS)[number];
 
 // HTTP Methods
 export const HTTP_METHODS = {
@@ -684,14 +808,14 @@ export const CONTENT_TYPES = {
   HTML: 'text/html',
   XML: 'application/xml',
   CSV: 'text/csv',
-  XLSX: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  XLSX: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 } as const;
 
 // Export Formats
 export const EXPORT_FORMATS = {
   JSON: 'json',
   CSV: 'csv',
-  XLSX: 'xlsx'
+  XLSX: 'xlsx',
 } as const;
 
 // Validation Rules Collections (for complex validations)
@@ -703,25 +827,36 @@ export const VALIDATION_RULES = {
     DESCRIPTION_MAX_LENGTH: CATEGORY_CONFIG.MAX_DESCRIPTION_LENGTH,
     REQUIRED_FIELDS: ['name'] as const,
     OPTIONAL_FIELDS: ['description', 'color', 'icon'] as const,
-    UPDATABLE_FIELDS: ['name', 'description', 'color', 'icon', 'isActive'] as const
+    UPDATABLE_FIELDS: [
+      'name',
+      'description',
+      'color',
+      'icon',
+      'isActive',
+    ] as const,
   },
-  
+
   // Task specific validation rules
   TASK: {
     TITLE_MIN_LENGTH: 1,
     TITLE_MAX_LENGTH: TASK_CONFIG.MAX_TITLE_LENGTH,
     DESCRIPTION_MAX_LENGTH: TASK_CONFIG.MAX_DESCRIPTION_LENGTH,
     REQUIRED_FIELDS: ['title'] as const,
-    OPTIONAL_FIELDS: ['description', 'dueDate', 'priority', 'categoryId'] as const
+    OPTIONAL_FIELDS: [
+      'description',
+      'dueDate',
+      'priority',
+      'categoryId',
+    ] as const,
   },
-  
+
   // Common validation rules
   COMMON: {
     SEARCH_MIN_LENGTH: VALIDATION_CONFIG.SEARCH.MIN_LENGTH,
     SEARCH_MAX_LENGTH: VALIDATION_CONFIG.SEARCH.MAX_LENGTH,
     CUID_MIN_LENGTH: VALIDATION_CONFIG.CUID.MIN_LENGTH,
-    CUID_MAX_LENGTH: VALIDATION_CONFIG.CUID.MAX_LENGTH
-  }
+    CUID_MAX_LENGTH: VALIDATION_CONFIG.CUID.MAX_LENGTH,
+  },
 } as const;
 
 // Business Rules Configuration
@@ -732,25 +867,28 @@ export const BUSINESS_RULES = {
     CAN_DELETE_WITH_TASKS: false, // Requires force flag
     DEFAULT_COLOR_ON_CREATE: true,
     DEFAULT_ICON_ON_CREATE: true,
-    AUTO_ACTIVATE_ON_CREATE: true
+    AUTO_ACTIVATE_ON_CREATE: true,
   },
-  
+
   TASK: {
     REQUIRE_CATEGORY: false, // Tasks can exist without category
     AUTO_SET_CREATION_DATE: true,
     ALLOW_PAST_DUE_DATES: false,
-    DEFAULT_PRIORITY_ON_CREATE: true
-  }
+    DEFAULT_PRIORITY_ON_CREATE: true,
+  },
 } as const;
 
 // Feature Flags Configuration
 export const FEATURE_FLAGS = {
-  ENHANCED_CATEGORY_VALIDATION: process.env.FEATURE_ENHANCED_VALIDATION === 'true',
-  CATEGORY_COLOR_PALETTE_STRICT: process.env.FEATURE_STRICT_COLOR_PALETTE === 'true',
-  CATEGORY_ICON_VALIDATION_STRICT: process.env.FEATURE_STRICT_ICON_VALIDATION === 'true',
+  ENHANCED_CATEGORY_VALIDATION:
+    process.env.FEATURE_ENHANCED_VALIDATION === 'true',
+  CATEGORY_COLOR_PALETTE_STRICT:
+    process.env.FEATURE_STRICT_COLOR_PALETTE === 'true',
+  CATEGORY_ICON_VALIDATION_STRICT:
+    process.env.FEATURE_STRICT_ICON_VALIDATION === 'true',
   BULK_OPERATIONS_ENABLED: process.env.FEATURE_BULK_OPERATIONS !== 'false',
   CATEGORY_EXPORT_ENABLED: process.env.FEATURE_CATEGORY_EXPORT !== 'false',
-  ADVANCED_SEARCH_ENABLED: process.env.FEATURE_ADVANCED_SEARCH !== 'false'
+  ADVANCED_SEARCH_ENABLED: process.env.FEATURE_ADVANCED_SEARCH !== 'false',
 } as const;
 
 // Configuración de rate limiting basada en el entorno
@@ -759,7 +897,7 @@ export const RATE_LIMIT_CONFIG = {
   DEFAULT_WINDOW_MS: config.rateLimit.windowMs,
   SHORT_WINDOW_MS: config.rateLimit.createTask.windowMs,
   MEDIUM_WINDOW_MS: config.rateLimit.bulk.windowMs,
-  
+
   // Límites por defecto - From Environment
   DEFAULT_MAX_REQUESTS: config.rateLimit.maxRequests,
   AUTH_MAX_REQUESTS: config.rateLimit.auth.max,
@@ -767,14 +905,14 @@ export const RATE_LIMIT_CONFIG = {
   SEARCH_MAX: config.rateLimit.search.max,
   BULK_MAX: config.rateLimit.bulk.max,
   ADMIN_MAX: config.rateLimit.admin.max,
-  
+
   // Prefijos de claves Redis - From Environment
   REDIS_KEY_PREFIX: config.rateLimit.redis.keyPrefix,
-  
+
   // Configuración Redis
   SKIP_SUCCESSFUL: config.rateLimit.redis.skipSuccessful,
   SKIP_FAILED: config.rateLimit.redis.skipFailed,
-  
+
   // Tipos de identificadores
   IDENTIFIER_TYPES: {
     IP: 'ip',
@@ -800,9 +938,11 @@ export const RATE_LIMIT_ERROR_CODES = {
 
 // RATE LIMIT ERROR MESSAGES ADICIONALES
 export const RATE_LIMIT_ERROR_MESSAGES = {
-  GENERAL_RATE_LIMIT: 'Límite de solicitudes generales excedido. Intente más tarde.',
+  GENERAL_RATE_LIMIT:
+    'Límite de solicitudes generales excedido. Intente más tarde.',
   AUTH_RATE_LIMIT: 'Demasiados intentos de autenticación. Intente más tarde.',
-  CREATE_TASK_RATE_LIMIT: 'Límite de creación de tareas excedido. Espere un momento.',
+  CREATE_TASK_RATE_LIMIT:
+    'Límite de creación de tareas excedido. Espere un momento.',
   SEARCH_RATE_LIMIT: 'Demasiadas búsquedas realizadas. Espere un momento.',
   BULK_RATE_LIMIT: 'Límite de operaciones en lote excedido. Intente más tarde.',
   ADMIN_RATE_LIMIT: 'Límite de operaciones administrativas excedido.',
@@ -826,7 +966,8 @@ export const RATE_LIMIT_CACHE_KEYS = {
   SEARCH: (identifier: string) => `rate_limit:search:${identifier}`,
   BULK: (identifier: string) => `rate_limit:bulk:${identifier}`,
   ADMIN: (identifier: string) => `rate_limit:admin:${identifier}`,
-  USER_SPECIFIC: (userId: string, action: string) => `rate_limit:user:${userId}:${action}`,
+  USER_SPECIFIC: (userId: string, action: string) =>
+    `rate_limit:user:${userId}:${action}`,
 } as const;
 
 // RATE LIMIT HEADERS
@@ -839,7 +980,8 @@ export const RATE_LIMIT_HEADERS = {
 } as const;
 
 // TIPOS TYPESCRIPT PARA RATE LIMITING
-export type RateLimitIdentifierType = keyof typeof RATE_LIMIT_CONFIG.IDENTIFIER_TYPES;
+export type RateLimitIdentifierType =
+  keyof typeof RATE_LIMIT_CONFIG.IDENTIFIER_TYPES;
 export type RateLimitErrorCode = keyof typeof RATE_LIMIT_ERROR_CODES;
 export type RateLimitEventType = keyof typeof RATE_LIMIT_EVENT_TYPES;
 
@@ -872,7 +1014,7 @@ export const RATE_LIMIT_MONITORING = {
   // Umbrales para alertas
   WARNING_THRESHOLD: 0.8, // 80% del límite
   CRITICAL_THRESHOLD: 0.95, // 95% del límite
-  
+
   // Métricas a trackear
   METRICS: {
     REQUESTS_PER_MINUTE: 'rate_limit.requests_per_minute',
@@ -881,7 +1023,7 @@ export const RATE_LIMIT_MONITORING = {
     STORE_ERRORS: 'rate_limit.store_errors',
     FALLBACK_ACTIVATIONS: 'rate_limit.fallback_activations',
   },
-  
+
   // Intervalos de limpieza
   CLEANUP_INTERVAL_MS: 300000, // 5 minutos
   METRICS_RETENTION_MS: 86400000, // 24 horas
@@ -897,7 +1039,7 @@ export const ENDPOINT_RATE_LIMITS = {
     skipSuccessfulRequests: false,
     skipFailedRequests: false,
   },
-  
+
   // Endpoints de autenticación - From Environment
   AUTH: {
     windowMs: config.rateLimit.auth.windowMs,
@@ -905,7 +1047,7 @@ export const ENDPOINT_RATE_LIMITS = {
     skipSuccessfulRequests: config.rateLimit.redis.skipSuccessful,
     skipFailedRequests: config.rateLimit.redis.skipFailed,
   },
-  
+
   // Creación de recursos (tareas, categorías) - From Environment
   CREATE_RESOURCE: {
     windowMs: config.rateLimit.createTask.windowMs,
@@ -913,7 +1055,7 @@ export const ENDPOINT_RATE_LIMITS = {
     skipSuccessfulRequests: config.rateLimit.redis.skipSuccessful,
     skipFailedRequests: config.rateLimit.redis.skipFailed,
   },
-  
+
   // Búsquedas y filtros - From Environment
   SEARCH: {
     windowMs: config.rateLimit.search.windowMs,
@@ -921,7 +1063,7 @@ export const ENDPOINT_RATE_LIMITS = {
     skipSuccessfulRequests: config.rateLimit.redis.skipSuccessful,
     skipFailedRequests: config.rateLimit.redis.skipFailed,
   },
-  
+
   // Operaciones en lote - From Environment
   BULK_OPERATIONS: {
     windowMs: config.rateLimit.bulk.windowMs,
@@ -929,7 +1071,7 @@ export const ENDPOINT_RATE_LIMITS = {
     skipSuccessfulRequests: config.rateLimit.redis.skipSuccessful,
     skipFailedRequests: config.rateLimit.redis.skipFailed,
   },
-  
+
   // Endpoints administrativos - From Environment
   ADMIN: {
     windowMs: config.rateLimit.admin.windowMs,
@@ -937,7 +1079,7 @@ export const ENDPOINT_RATE_LIMITS = {
     skipSuccessfulRequests: config.rateLimit.redis.skipSuccessful,
     skipFailedRequests: config.rateLimit.redis.skipFailed,
   },
-  
+
   // Usuarios autenticados (límite general) - From Environment
   AUTHENTICATED_USER: {
     windowMs: config.rateLimit.windowMs,
@@ -955,18 +1097,15 @@ export const RATE_LIMIT_ROUTE_PATTERNS = {
     '/api/v1/auth/refresh',
     '/api/v1/auth/verify-token',
   ],
-  
-  CREATE_ROUTES: [
-    'POST:/api/v1/tasks',
-    'POST:/api/v1/categories',
-  ],
-  
+
+  CREATE_ROUTES: ['POST:/api/v1/tasks', 'POST:/api/v1/categories'],
+
   SEARCH_ROUTES: [
     'GET:/api/v1/tasks/search',
     'GET:/api/v1/categories/search',
     'POST:/api/v1/tasks/filter',
   ],
-  
+
   BULK_ROUTES: [
     'POST:/api/v1/tasks/bulk',
     'PUT:/api/v1/tasks/bulk',
@@ -974,13 +1113,13 @@ export const RATE_LIMIT_ROUTE_PATTERNS = {
     'POST:/api/v1/categories/bulk',
     'DELETE:/api/v1/categories/bulk',
   ],
-  
+
   ADMIN_ROUTES: [
     '/api/v1/admin/*',
     '/api/v1/stats/system',
     '/api/v1/health/detailed',
   ],
-  
+
   PUBLIC_ROUTES: [
     'GET:/api/v1/health',
     'GET:/api/v1/docs',
@@ -991,46 +1130,44 @@ export const RATE_LIMIT_ROUTE_PATTERNS = {
 // CONFIGURACIÓN DE WHITELIST/BLACKLIST
 export const RATE_LIMIT_EXEMPTIONS = {
   // IPs que no tienen rate limiting (desarrollo, health checks)
-  WHITELISTED_IPS: [
-    '127.0.0.1',
-    '::1',
-    'localhost',
-  ] as const,
-  
+  WHITELISTED_IPS: ['127.0.0.1', '::1', 'localhost'] as const,
+
   // User agents que pueden tener límites diferentes
   TRUSTED_USER_AGENTS: [
     'HealthCheck/1.0',
     'LoadBalancer/1.0',
     'Monitoring/1.0',
   ] as const,
-  
+
   // Rutas que no tienen rate limiting
-  EXEMPTED_ROUTES: [
-    '/api/v1/health',
-    '/favicon.ico',
-    '/robots.txt',
-  ] as const,
+  EXEMPTED_ROUTES: ['/api/v1/health', '/favicon.ico', '/robots.txt'] as const,
 } as const;
 
 // MENSAJES DE ERROR CONTEXTUALES
 export const CONTEXTUAL_RATE_LIMIT_MESSAGES = {
-  TASK_CREATION: 'Has alcanzado el límite de creación de tareas por minuto. Espera {seconds} segundos.',
-  CATEGORY_CREATION: 'Has alcanzado el límite de creación de categorías por minuto. Espera {seconds} segundos.',
-  SEARCH_QUERIES: 'Demasiadas búsquedas realizadas. Espera {seconds} segundos antes de buscar nuevamente.',
-  BULK_OPERATIONS: 'Límite de operaciones en lote alcanzado. Espera {minutes} minutos.',
-  AUTH_ATTEMPTS: 'Demasiados intentos de autenticación. Espera {minutes} minutos.',
-  GENERAL_API: 'Límite de solicitudes a la API alcanzado. Espera {minutes} minutos.',
+  TASK_CREATION:
+    'Has alcanzado el límite de creación de tareas por minuto. Espera {seconds} segundos.',
+  CATEGORY_CREATION:
+    'Has alcanzado el límite de creación de categorías por minuto. Espera {seconds} segundos.',
+  SEARCH_QUERIES:
+    'Demasiadas búsquedas realizadas. Espera {seconds} segundos antes de buscar nuevamente.',
+  BULK_OPERATIONS:
+    'Límite de operaciones en lote alcanzado. Espera {minutes} minutos.',
+  AUTH_ATTEMPTS:
+    'Demasiados intentos de autenticación. Espera {minutes} minutos.',
+  GENERAL_API:
+    'Límite de solicitudes a la API alcanzado. Espera {minutes} minutos.',
 } as const;
 
 // CONFIGURACIÓN DE DEGRADACIÓN GRADUAL
 export const RATE_LIMIT_DEGRADATION = {
   // Umbrales para activar degradación
   THRESHOLDS: {
-    LIGHT_LOAD: 0.5,  // 50% del límite
+    LIGHT_LOAD: 0.5, // 50% del límite
     MEDIUM_LOAD: 0.7, // 70% del límite
-    HEAVY_LOAD: 0.9,  // 90% del límite
+    HEAVY_LOAD: 0.9, // 90% del límite
   },
-  
+
   // Acciones por nivel de carga
   ACTIONS: {
     LIGHT_LOAD: {
@@ -1054,7 +1191,8 @@ export const RATE_LIMIT_DEGRADATION = {
 // TIPOS EXPORTADOS ADICIONALES
 export type EndpointRateLimitType = keyof typeof ENDPOINT_RATE_LIMITS;
 export type RateLimitRoutePattern = keyof typeof RATE_LIMIT_ROUTE_PATTERNS;
-export type RateLimitDegradationLevel = keyof typeof RATE_LIMIT_DEGRADATION.THRESHOLDS;
+export type RateLimitDegradationLevel =
+  keyof typeof RATE_LIMIT_DEGRADATION.THRESHOLDS;
 
 // CONSTANTES DE INTEGRACIÓN CON OTROS SISTEMAS
 export const RATE_LIMIT_INTEGRATION = {
@@ -1064,7 +1202,7 @@ export const RATE_LIMIT_INTEGRATION = {
     CLIENT_IP: 'X-Forwarded-For',
     REAL_IP: 'X-Real-IP',
   },
-  
+
   // Métricas para sistemas de monitoreo
   METRICS_KEYS: {
     REQUESTS_COUNT: 'rate_limit_requests_total',
@@ -1072,11 +1210,11 @@ export const RATE_LIMIT_INTEGRATION = {
     RESPONSE_TIME: 'rate_limit_response_time',
     STORE_ERRORS: 'rate_limit_store_errors_total',
   },
-  
+
   // Configuración para alertas
   ALERT_THRESHOLDS: {
     HIGH_VIOLATION_RATE: 100, // violaciones por hora
-    HIGH_ERROR_RATE: 10,      // errores por minuto
+    HIGH_ERROR_RATE: 10, // errores por minuto
     STORE_UNAVAILABLE_TIME: 60, // segundos
   },
 } as const;
@@ -1088,12 +1226,12 @@ export const RATE_LIMIT_INTEGRATION = {
  */
 export const generateRateLimitMessage = (
   type: keyof typeof CONTEXTUAL_RATE_LIMIT_MESSAGES,
-  resetTimeMs: number
+  resetTimeMs: number,
 ): string => {
   const template = CONTEXTUAL_RATE_LIMIT_MESSAGES[type];
   const seconds = Math.ceil(resetTimeMs / 1000);
   const minutes = Math.ceil(seconds / 60);
-  
+
   return template
     .replace('{seconds}', seconds.toString())
     .replace('{minutes}', minutes.toString());
@@ -1103,15 +1241,17 @@ export const generateRateLimitMessage = (
  * Verifica si una IP está en la whitelist
  */
 export const isWhitelistedIP = (ip: string): boolean => {
-  return (RATE_LIMIT_EXEMPTIONS.WHITELISTED_IPS as readonly string[]).includes(ip);
+  return (RATE_LIMIT_EXEMPTIONS.WHITELISTED_IPS as readonly string[]).includes(
+    ip,
+  );
 };
 
 /**
  * Verifica si una ruta está exenta de rate limiting
  */
 export const isExemptedRoute = (path: string): boolean => {
-  return (RATE_LIMIT_EXEMPTIONS.EXEMPTED_ROUTES as readonly string[]).some(route => 
-    path.startsWith(route) || path === route
+  return (RATE_LIMIT_EXEMPTIONS.EXEMPTED_ROUTES as readonly string[]).some(
+    (route) => path.startsWith(route) || path === route,
   );
 };
 
@@ -1141,7 +1281,9 @@ export const isValidCategoryIcon = (icon: string): icon is CategoryIcon => {
  */
 export const isReservedCategoryName = (name: string): boolean => {
   const normalizedName = name.toLowerCase().trim();
-  return (CATEGORY_CONFIG.RESERVED_NAMES as readonly string[]).includes(normalizedName);
+  return (CATEGORY_CONFIG.RESERVED_NAMES as readonly string[]).includes(
+    normalizedName,
+  );
 };
 
 /**
@@ -1149,7 +1291,14 @@ export const isReservedCategoryName = (name: string): boolean => {
  */
 export const normalizeHexColor = (color: string): string => {
   if (color.length === 4) {
-    return '#' + color.slice(1).split('').map((c: string) => c + c).join('');
+    return (
+      '#' +
+      color
+        .slice(1)
+        .split('')
+        .map((c: string) => c + c)
+        .join('')
+    );
   }
   return color.toLowerCase();
 };
@@ -1185,7 +1334,10 @@ export const isEnhancedValidationEnabled = (): boolean => {
 /**
  * Obtiene la configuración de validación para un campo específico
  */
-export const getValidationConfig = (entity: keyof typeof VALIDATION_RULES, field?: string) => {
+export const getValidationConfig = (
+  entity: keyof typeof VALIDATION_RULES,
+  field?: string,
+) => {
   const entityConfig = VALIDATION_RULES[entity];
   if (field && field in entityConfig) {
     return entityConfig[field as keyof typeof entityConfig];
@@ -1203,7 +1355,9 @@ export const getBusinessRules = (entity: keyof typeof BUSINESS_RULES) => {
 /**
  * Verifica si una característica está habilitada
  */
-export const isFeatureEnabled = (feature: keyof typeof FEATURE_FLAGS): boolean => {
+export const isFeatureEnabled = (
+  feature: keyof typeof FEATURE_FLAGS,
+): boolean => {
   return FEATURE_FLAGS[feature];
 };
 
@@ -1215,9 +1369,9 @@ export const LOGGING_CONFIG = {
     WARN: 'warn',
     INFO: 'info',
     DEBUG: 'debug',
-    TRACE: 'trace'
+    TRACE: 'trace',
   },
-  
+
   // Categorías de log
   CATEGORIES: {
     VALIDATION: 'validation',
@@ -1226,9 +1380,9 @@ export const LOGGING_CONFIG = {
     DATABASE: 'database',
     CACHE: 'cache',
     BUSINESS_LOGIC: 'business_logic',
-    EXTERNAL_SERVICE: 'external_service'
+    EXTERNAL_SERVICE: 'external_service',
   },
-  
+
   // Contextos para structured logging
   CONTEXTS: {
     REQUEST_ID: 'requestId',
@@ -1237,8 +1391,8 @@ export const LOGGING_CONFIG = {
     TASK_ID: 'taskId',
     OPERATION: 'operation',
     DURATION: 'duration',
-    ERROR_CODE: 'errorCode'
-  }
+    ERROR_CODE: 'errorCode',
+  },
 } as const;
 
 // CONSTANTES DE TESTING
@@ -1249,50 +1403,54 @@ export const TESTING_CONFIG = {
       name: 'Test Category',
       description: 'A test category for unit tests',
       color: '#6366f1',
-      icon: 'folder'
+      icon: 'folder',
     },
     INVALID_CATEGORY: {
       name: '', // Invalid: empty name
       description: 'A' + 'a'.repeat(CATEGORY_CONFIG.MAX_DESCRIPTION_LENGTH), // Invalid: too long
       color: 'invalid-color', // Invalid: not hex format
-      icon: 'invalid-icon' // Invalid: not in allowed list
-    }
+      icon: 'invalid-icon', // Invalid: not in allowed list
+    },
   },
-  
+
   // IDs de prueba en formato CUID
   MOCK_IDS: {
     VALID_CUID: 'cl9e2q1kj0001js08abcdefgh',
     INVALID_CUID: 'invalid-id',
     USER_ID: 'cl9e2q1kj0002js08user001',
     CATEGORY_ID: 'cl9e2q1kj0003js08cat001',
-    TASK_ID: 'cl9e2q1kj0004js08task001'
+    TASK_ID: 'cl9e2q1kj0004js08task001',
   },
-  
+
   // Configuración para tests de rate limiting
   RATE_LIMIT_TEST: {
     FAST_WINDOW_MS: 1000, // 1 segundo para tests rápidos
     LOW_LIMIT: 5, // Límite bajo para disparar rate limiting
-    TEST_USER_AGENT: 'Test-Agent/1.0'
-  }
+    TEST_USER_AGENT: 'Test-Agent/1.0',
+  },
 } as const;
 
 // CONSTANTES DE DESARROLLO
 export const DEVELOPMENT_CONFIG = {
   // Configuración para desarrollo local
   LOCAL: {
-    DISABLE_RATE_LIMITING: process.env.NODE_ENV === 'development' && process.env.DISABLE_RATE_LIMIT === 'true',
+    DISABLE_RATE_LIMITING:
+      process.env.NODE_ENV === 'development' &&
+      process.env.DISABLE_RATE_LIMIT === 'true',
     VERBOSE_VALIDATION_ERRORS: process.env.NODE_ENV === 'development',
-    MOCK_AUTH_SERVICE: process.env.NODE_ENV === 'development' && process.env.MOCK_AUTH === 'true',
-    DETAILED_ERROR_RESPONSES: process.env.NODE_ENV === 'development'
+    MOCK_AUTH_SERVICE:
+      process.env.NODE_ENV === 'development' &&
+      process.env.MOCK_AUTH === 'true',
+    DETAILED_ERROR_RESPONSES: process.env.NODE_ENV === 'development',
   },
-  
+
   // Configuración para debugging
   DEBUG: {
     LOG_VALIDATION_DETAILS: process.env.DEBUG_VALIDATION === 'true',
     LOG_RATE_LIMIT_DETAILS: process.env.DEBUG_RATE_LIMIT === 'true',
     LOG_CACHE_OPERATIONS: process.env.DEBUG_CACHE === 'true',
-    TRACE_DATABASE_QUERIES: process.env.DEBUG_DATABASE === 'true'
-  }
+    TRACE_DATABASE_QUERIES: process.env.DEBUG_DATABASE === 'true',
+  },
 } as const;
 
 // Exportar un objeto combinado si se desea (opcional)
@@ -1323,5 +1481,5 @@ export const ALL_CONSTANTS = {
   API_VERSIONS,
   SERVICE_NAMES,
   REQUEST_HEADERS,
-  CONTENT_TYPES
+  CONTENT_TYPES,
 } as const;

@@ -27,10 +27,13 @@ const formatTimestamp = () => {
     hour12: false,
   }).formatToParts(now);
 
-  const parts = bogotaTime.reduce((acc, part) => {
-    acc[part.type] = part.value;
-    return acc;
-  }, {} as Record<string, string>);
+  const parts = bogotaTime.reduce(
+    (acc, part) => {
+      acc[part.type] = part.value;
+      return acc;
+    },
+    {} as Record<string, string>,
+  );
 
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
 };
@@ -40,11 +43,15 @@ const formatTimestamp = () => {
 // ==============================================
 const getLogLevel = (): pino.LevelWithSilent => {
   const level = process.env.LOG_LEVEL as pino.LevelWithSilent;
-  return ['trace', 'debug', 'info', 'warn', 'error', 'fatal'].includes(level) ? level : 'info';
+  return ['trace', 'debug', 'info', 'warn', 'error', 'fatal'].includes(level)
+    ? level
+    : 'info';
 };
 
 const getLogPretty = (): boolean => {
-  return process.env.LOG_PRETTY === 'true' || process.env.NODE_ENV === 'development';
+  return (
+    process.env.LOG_PRETTY === 'true' || process.env.NODE_ENV === 'development'
+  );
 };
 
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -97,7 +104,7 @@ const baseLoggerConfig: pino.LoggerOptions = {
 // ==============================================
 const createDevelopmentLogger = (): pino.Logger => {
   const devConfig = { ...baseLoggerConfig };
-  
+
   if (getLogPretty()) {
     devConfig.transport = {
       target: 'pino-pretty',
@@ -154,7 +161,7 @@ const createProductionLogger = (): pino.Logger => {
 
   // Configurar transporte múltiple
   productionConfig.transport = {
-    targets: destinations.map(dest => ({
+    targets: destinations.map((dest) => ({
       target: 'pino/file',
       level: dest.level,
       options: {
@@ -170,42 +177,44 @@ const createProductionLogger = (): pino.Logger => {
 // ==============================================
 // CREAR INSTANCIA DEL LOGGER
 // ==============================================
-export const logger = isDevelopment ? createDevelopmentLogger() : createProductionLogger();
+export const logger = isDevelopment
+  ? createDevelopmentLogger()
+  : createProductionLogger();
 
 // ==============================================
 // LOGGERS ESPECIALIZADOS POR COMPONENTE
 // ==============================================
-export const httpLogger = logger.child({ 
+export const httpLogger = logger.child({
   component: 'http',
   domain: 'web',
 });
 
-export const dbLogger = logger.child({ 
+export const dbLogger = logger.child({
   component: 'database',
   domain: 'persistence',
 });
 
-export const redisLogger = logger.child({ 
+export const redisLogger = logger.child({
   component: 'redis',
   domain: 'cache',
 });
 
-export const taskLogger = logger.child({ 
+export const taskLogger = logger.child({
   component: 'task',
   domain: 'business',
 });
 
-export const categoryLogger = logger.child({ 
+export const categoryLogger = logger.child({
   component: 'category',
   domain: 'business',
 });
 
-export const authLogger = logger.child({ 
+export const authLogger = logger.child({
   component: 'auth',
   domain: 'security',
 });
 
-export const securityLogger = logger.child({ 
+export const securityLogger = logger.child({
   component: 'security',
   domain: 'security',
 });
@@ -215,10 +224,10 @@ export const securityLogger = logger.child({
 // ==============================================
 export const createRequestLogger = (requestId?: string, userId?: string) => {
   const context: Record<string, any> = { context: 'request' };
-  
+
   if (requestId) context.requestId = requestId;
   if (userId) context.userId = userId;
-  
+
   return logger.child(context);
 };
 
@@ -234,405 +243,634 @@ export const loggers = {
   // ==============================================
   // EVENTOS DE TAREAS
   // ==============================================
-  taskCreated: (taskId: string, title: string, userId: string, categoryId?: string) =>
-    taskLogger.info({
-      taskId,
-      title,
-      userId,
-      categoryId,
-      event: 'task.created',
-      domain: 'business',
-    }, `📝 Tarea creada: "${title}" por usuario ${userId}`),
+  taskCreated: (
+    taskId: string,
+    title: string,
+    userId: string,
+    categoryId?: string,
+  ) =>
+    taskLogger.info(
+      {
+        taskId,
+        title,
+        userId,
+        categoryId,
+        event: 'task.created',
+        domain: 'business',
+      },
+      `📝 Tarea creada: "${title}" por usuario ${userId}`,
+    ),
 
-  taskUpdated: (taskId: string, title: string, userId: string, updatedFields: string[]) =>
-    taskLogger.info({
-      taskId,
-      title,
-      userId,
-      updatedFields,
-      event: 'task.updated',
-      domain: 'business',
-    }, `✏️ Tarea actualizada: "${title}" - campos: ${updatedFields.join(', ')}`),
+  taskUpdated: (
+    taskId: string,
+    title: string,
+    userId: string,
+    updatedFields: string[],
+  ) =>
+    taskLogger.info(
+      {
+        taskId,
+        title,
+        userId,
+        updatedFields,
+        event: 'task.updated',
+        domain: 'business',
+      },
+      `✏️ Tarea actualizada: "${title}" - campos: ${updatedFields.join(', ')}`,
+    ),
 
   taskDeleted: (taskId: string, title: string, userId: string) =>
-    taskLogger.info({
-      taskId,
-      title,
-      userId,
-      event: 'task.deleted',
-      domain: 'business',
-    }, `🗑️ Tarea eliminada: "${title}" por usuario ${userId}`),
+    taskLogger.info(
+      {
+        taskId,
+        title,
+        userId,
+        event: 'task.deleted',
+        domain: 'business',
+      },
+      `🗑️ Tarea eliminada: "${title}" por usuario ${userId}`,
+    ),
 
-  taskStatusChanged: (taskId: string, title: string, oldStatus: string, newStatus: string, userId: string) =>
-    taskLogger.info({
-      taskId,
-      title,
-      oldStatus,
-      newStatus,
-      userId,
-      event: 'task.status.changed',
-      domain: 'business',
-    }, `🔄 Estado de tarea cambiado: "${title}" de ${oldStatus} a ${newStatus}`),
+  taskStatusChanged: (
+    taskId: string,
+    title: string,
+    oldStatus: string,
+    newStatus: string,
+    userId: string,
+  ) =>
+    taskLogger.info(
+      {
+        taskId,
+        title,
+        oldStatus,
+        newStatus,
+        userId,
+        event: 'task.status.changed',
+        domain: 'business',
+      },
+      `🔄 Estado de tarea cambiado: "${title}" de ${oldStatus} a ${newStatus}`,
+    ),
 
-  taskCompleted: (taskId: string, title: string, userId: string, completionTime?: Date) =>
-    taskLogger.info({
-      taskId,
-      title,
-      userId,
-      completionTime,
-      event: 'task.completed',
-      domain: 'business',
-    }, `✅ Tarea completada: "${title}" por usuario ${userId}`),
+  taskCompleted: (
+    taskId: string,
+    title: string,
+    userId: string,
+    completionTime?: Date,
+  ) =>
+    taskLogger.info(
+      {
+        taskId,
+        title,
+        userId,
+        completionTime,
+        event: 'task.completed',
+        domain: 'business',
+      },
+      `✅ Tarea completada: "${title}" por usuario ${userId}`,
+    ),
 
   taskOverdue: (taskId: string, title: string, userId: string, dueDate: Date) =>
-    taskLogger.warn({
-      taskId,
-      title,
-      userId,
-      dueDate,
-      event: 'task.overdue',
-      domain: 'business',
-    }, `⏰ Tarea vencida: "${title}" (vencimiento: ${dueDate.toISOString()})`),
+    taskLogger.warn(
+      {
+        taskId,
+        title,
+        userId,
+        dueDate,
+        event: 'task.overdue',
+        domain: 'business',
+      },
+      `⏰ Tarea vencida: "${title}" (vencimiento: ${dueDate.toISOString()})`,
+    ),
 
-  taskPriorityChanged: (taskId: string, title: string, oldPriority: string, newPriority: string, userId: string) =>
-    taskLogger.info({
-      taskId,
-      title,
-      oldPriority,
-      newPriority,
-      userId,
-      event: 'task.priority.changed',
-      domain: 'business',
-    }, `🎯 Prioridad de tarea cambiada: "${title}" de ${oldPriority} a ${newPriority}`),
+  taskPriorityChanged: (
+    taskId: string,
+    title: string,
+    oldPriority: string,
+    newPriority: string,
+    userId: string,
+  ) =>
+    taskLogger.info(
+      {
+        taskId,
+        title,
+        oldPriority,
+        newPriority,
+        userId,
+        event: 'task.priority.changed',
+        domain: 'business',
+      },
+      `🎯 Prioridad de tarea cambiada: "${title}" de ${oldPriority} a ${newPriority}`,
+    ),
 
-  taskBulkOperation: (operation: string, taskIds: string[], userId: string, affectedCount: number) =>
-    taskLogger.info({
-      operation,
-      taskIds,
-      userId,
-      affectedCount,
-      event: 'task.bulk.operation',
-      domain: 'business',
-    }, `📦 Operación en lote: ${operation} aplicada a ${affectedCount} tareas`),
+  taskBulkOperation: (
+    operation: string,
+    taskIds: string[],
+    userId: string,
+    affectedCount: number,
+  ) =>
+    taskLogger.info(
+      {
+        operation,
+        taskIds,
+        userId,
+        affectedCount,
+        event: 'task.bulk.operation',
+        domain: 'business',
+      },
+      `📦 Operación en lote: ${operation} aplicada a ${affectedCount} tareas`,
+    ),
 
   // ==============================================
   // EVENTOS DE CATEGORÍAS
   // ==============================================
-  categoryCreated: (categoryId: string, name: string, userId: string, color?: string, icon?: string) =>
-    categoryLogger.info({
-      categoryId,
-      name,
-      userId,
-      color,
-      icon,
-      event: 'category.created',
-      domain: 'business',
-    }, `📁 Categoría creada: "${name}" por usuario ${userId}`),
+  categoryCreated: (
+    categoryId: string,
+    name: string,
+    userId: string,
+    color?: string,
+    icon?: string,
+  ) =>
+    categoryLogger.info(
+      {
+        categoryId,
+        name,
+        userId,
+        color,
+        icon,
+        event: 'category.created',
+        domain: 'business',
+      },
+      `📁 Categoría creada: "${name}" por usuario ${userId}`,
+    ),
 
-  categoryUpdated: (categoryId: string, name: string, userId: string, updatedFields: string[]) =>
-    categoryLogger.info({
-      categoryId,
-      name,
-      userId,
-      updatedFields,
-      event: 'category.updated',
-      domain: 'business',
-    }, `✏️ Categoría actualizada: "${name}" - campos: ${updatedFields.join(', ')}`),
+  categoryUpdated: (
+    categoryId: string,
+    name: string,
+    userId: string,
+    updatedFields: string[],
+  ) =>
+    categoryLogger.info(
+      {
+        categoryId,
+        name,
+        userId,
+        updatedFields,
+        event: 'category.updated',
+        domain: 'business',
+      },
+      `✏️ Categoría actualizada: "${name}" - campos: ${updatedFields.join(', ')}`,
+    ),
 
-  categoryDeleted: (categoryId: string, name: string, userId: string, taskCount?: number) =>
-    categoryLogger.info({
-      categoryId,
-      name,
-      userId,
-      taskCount,
-      event: 'category.deleted',
-      domain: 'business',
-    }, `🗑️ Categoría eliminada: "${name}" (${taskCount || 0} tareas afectadas)`),
+  categoryDeleted: (
+    categoryId: string,
+    name: string,
+    userId: string,
+    taskCount?: number,
+  ) =>
+    categoryLogger.info(
+      {
+        categoryId,
+        name,
+        userId,
+        taskCount,
+        event: 'category.deleted',
+        domain: 'business',
+      },
+      `🗑️ Categoría eliminada: "${name}" (${taskCount || 0} tareas afectadas)`,
+    ),
 
-  categoryBulkDeleted: (categoryIds: string[], userId: string, affectedCount: number, totalTasks: number) =>
-    categoryLogger.info({
-      categoryIds,
-      userId,
-      affectedCount,
-      totalTasks,
-      event: 'category.bulk.deleted',
-      domain: 'business',
-    }, `🗂️ Eliminación en lote: ${affectedCount} categorías (${totalTasks} tareas afectadas)`),
+  categoryBulkDeleted: (
+    categoryIds: string[],
+    userId: string,
+    affectedCount: number,
+    totalTasks: number,
+  ) =>
+    categoryLogger.info(
+      {
+        categoryIds,
+        userId,
+        affectedCount,
+        totalTasks,
+        event: 'category.bulk.deleted',
+        domain: 'business',
+      },
+      `🗂️ Eliminación en lote: ${affectedCount} categorías (${totalTasks} tareas afectadas)`,
+    ),
 
-  categoryTasksReassigned: (fromCategoryId: string, toCategoryId: string, taskCount: number, userId: string) =>
-    categoryLogger.info({
-      fromCategoryId,
-      toCategoryId,
-      taskCount,
-      userId,
-      event: 'category.tasks.reassigned',
-      domain: 'business',
-    }, `🔄 ${taskCount} tareas reasignadas de categoría ${fromCategoryId} a ${toCategoryId}`),
+  categoryTasksReassigned: (
+    fromCategoryId: string,
+    toCategoryId: string,
+    taskCount: number,
+    userId: string,
+  ) =>
+    categoryLogger.info(
+      {
+        fromCategoryId,
+        toCategoryId,
+        taskCount,
+        userId,
+        event: 'category.tasks.reassigned',
+        domain: 'business',
+      },
+      `🔄 ${taskCount} tareas reasignadas de categoría ${fromCategoryId} a ${toCategoryId}`,
+    ),
 
-  categoryLimitReached: (userId: string, currentCount: number, maxCount: number) =>
-    categoryLogger.warn({
-      userId,
-      currentCount,
-      maxCount,
-      event: 'category.limit.reached',
-      domain: 'business',
-    }, `⚠️ Usuario ${userId} alcanzó límite de categorías: ${currentCount}/${maxCount}`),
+  categoryLimitReached: (
+    userId: string,
+    currentCount: number,
+    maxCount: number,
+  ) =>
+    categoryLogger.warn(
+      {
+        userId,
+        currentCount,
+        maxCount,
+        event: 'category.limit.reached',
+        domain: 'business',
+      },
+      `⚠️ Usuario ${userId} alcanzó límite de categorías: ${currentCount}/${maxCount}`,
+    ),
 
   // ==============================================
   // EVENTOS DE AUTENTICACIÓN Y AUTORIZACIÓN
   // ==============================================
   tokenValidated: (userId: string, ip?: string, userAgent?: string) =>
-    authLogger.info({
-      userId,
-      ip,
-      userAgent,
-      event: 'auth.token.validated',
-      domain: 'security',
-    }, `🔑 Token validado para usuario ${userId}`),
+    authLogger.info(
+      {
+        userId,
+        ip,
+        userAgent,
+        event: 'auth.token.validated',
+        domain: 'security',
+      },
+      `🔑 Token validado para usuario ${userId}`,
+    ),
 
   tokenValidationFailed: (reason: string, ip?: string, tokenPreview?: string) =>
-    securityLogger.warn({
-      reason,
-      ip,
-      tokenPreview,
-      event: 'auth.token.validation.failed',
-      domain: 'security',
-    }, `❌ Validación de token falló: ${reason}`),
+    securityLogger.warn(
+      {
+        reason,
+        ip,
+        tokenPreview,
+        event: 'auth.token.validation.failed',
+        domain: 'security',
+      },
+      `❌ Validación de token falló: ${reason}`,
+    ),
 
-  unauthorizedAccess: (ip: string, endpoint: string, reason: string, userAgent?: string) =>
-    securityLogger.warn({
-      ip,
-      endpoint,
-      reason,
-      userAgent,
-      event: 'security.unauthorized',
-      domain: 'security',
-    }, `🚫 Acceso no autorizado: ${ip} en ${endpoint} - ${reason}`),
+  unauthorizedAccess: (
+    ip: string,
+    endpoint: string,
+    reason: string,
+    userAgent?: string,
+  ) =>
+    securityLogger.warn(
+      {
+        ip,
+        endpoint,
+        reason,
+        userAgent,
+        event: 'security.unauthorized',
+        domain: 'security',
+      },
+      `🚫 Acceso no autorizado: ${ip} en ${endpoint} - ${reason}`,
+    ),
 
-  forbiddenAccess: (userId: string, resource: string, action: string, ip?: string) =>
-    securityLogger.warn({
-      userId,
-      resource,
-      action,
-      ip,
-      event: 'security.forbidden',
-      domain: 'security',
-    }, `🔒 Acceso prohibido: usuario ${userId} intentó ${action} en ${resource}`),
+  forbiddenAccess: (
+    userId: string,
+    resource: string,
+    action: string,
+    ip?: string,
+  ) =>
+    securityLogger.warn(
+      {
+        userId,
+        resource,
+        action,
+        ip,
+        event: 'security.forbidden',
+        domain: 'security',
+      },
+      `🔒 Acceso prohibido: usuario ${userId} intentó ${action} en ${resource}`,
+    ),
 
   // ==============================================
   // EVENTOS DE SEGURIDAD
   // ==============================================
-  suspiciousActivity: (ip: string, activity: string, details?: object, userId?: string) =>
-    securityLogger.warn({
-      ip,
-      activity,
-      details,
-      userId,
-      event: 'security.suspicious',
-      domain: 'security',
-    }, `⚠️ Actividad sospechosa: ${activity} desde ${ip}`),
+  suspiciousActivity: (
+    ip: string,
+    activity: string,
+    details?: object,
+    userId?: string,
+  ) =>
+    securityLogger.warn(
+      {
+        ip,
+        activity,
+        details,
+        userId,
+        event: 'security.suspicious',
+        domain: 'security',
+      },
+      `⚠️ Actividad sospechosa: ${activity} desde ${ip}`,
+    ),
 
-  rateLimitExceeded: (ip: string, endpoint: string, limit: number, windowMs: number, userId?: string) =>
-    securityLogger.warn({
-      ip,
-      endpoint,
-      limit,
-      windowMs,
-      userId,
-      event: 'security.rate_limit',
-      domain: 'security',
-    }, `🚫 Rate limit excedido: ${ip} en ${endpoint} (${limit}/${windowMs}ms)`),
+  rateLimitExceeded: (
+    ip: string,
+    endpoint: string,
+    limit: number,
+    windowMs: number,
+    userId?: string,
+  ) =>
+    securityLogger.warn(
+      {
+        ip,
+        endpoint,
+        limit,
+        windowMs,
+        userId,
+        event: 'security.rate_limit',
+        domain: 'security',
+      },
+      `🚫 Rate limit excedido: ${ip} en ${endpoint} (${limit}/${windowMs}ms)`,
+    ),
 
   // ==============================================
   // EVENTOS DE BASE DE DATOS
   // ==============================================
-  dbQuery: (operation: string, table: string, duration: number, recordCount?: string) =>
-    dbLogger.debug({
-      operation,
-      table,
-      duration,
-      recordCount,
-      event: 'db.query',
-      domain: 'database',
-    }, `🗄️ Query ${operation} en ${table} (${duration}ms)${recordCount ? ` - ${recordCount} registros` : ''}`),
+  dbQuery: (
+    operation: string,
+    table: string,
+    duration: number,
+    recordCount?: string,
+  ) =>
+    dbLogger.debug(
+      {
+        operation,
+        table,
+        duration,
+        recordCount,
+        event: 'db.query',
+        domain: 'database',
+      },
+      `🗄️ Query ${operation} en ${table} (${duration}ms)${recordCount ? ` - ${recordCount} registros` : ''}`,
+    ),
 
   dbError: (error: Error, operation: string, table?: string, userId?: string) =>
-    dbLogger.error({
-      error,
-      operation,
-      table,
-      userId,
-      event: 'db.error',
-      domain: 'database',
-    }, `❌ Error en BD (${operation}): ${error.message}`),
+    dbLogger.error(
+      {
+        error,
+        operation,
+        table,
+        userId,
+        event: 'db.error',
+        domain: 'database',
+      },
+      `❌ Error en BD (${operation}): ${error.message}`,
+    ),
 
-  dbConnection: (status: 'connected' | 'disconnected' | 'error', details?: object) =>
-    dbLogger.info({
-      status,
-      details,
-      event: 'db.connection',
-      domain: 'database',
-    }, `🔌 Base de datos: ${status}`),
+  dbConnection: (
+    status: 'connected' | 'disconnected' | 'error',
+    details?: object,
+  ) =>
+    dbLogger.info(
+      {
+        status,
+        details,
+        event: 'db.connection',
+        domain: 'database',
+      },
+      `🔌 Base de datos: ${status}`,
+    ),
 
-  slowQuery: (operation: string, table: string, duration: number, threshold: number) =>
-    dbLogger.warn({
-      operation,
-      table,
-      duration,
-      threshold,
-      event: 'performance.slow_query',
-      domain: 'performance',
-    }, `🐌 Query lenta: ${operation} en ${table} (${duration}ms > ${threshold}ms)`),
+  slowQuery: (
+    operation: string,
+    table: string,
+    duration: number,
+    threshold: number,
+  ) =>
+    dbLogger.warn(
+      {
+        operation,
+        table,
+        duration,
+        threshold,
+        event: 'performance.slow_query',
+        domain: 'performance',
+      },
+      `🐌 Query lenta: ${operation} en ${table} (${duration}ms > ${threshold}ms)`,
+    ),
 
   // ==============================================
   // EVENTOS DE CACHE (REDIS)
   // ==============================================
   cacheHit: (key: string, ttl?: number, userId?: string) =>
-    redisLogger.debug({
-      key,
-      ttl,
-      userId,
-      event: 'cache.hit',
-      domain: 'cache',
-    }, `💾 Cache hit: ${key}`),
+    redisLogger.debug(
+      {
+        key,
+        ttl,
+        userId,
+        event: 'cache.hit',
+        domain: 'cache',
+      },
+      `💾 Cache hit: ${key}`,
+    ),
 
   cacheMiss: (key: string, userId?: string) =>
-    redisLogger.debug({
-      key,
-      userId,
-      event: 'cache.miss',
-      domain: 'cache',
-    }, `🔍 Cache miss: ${key}`),
+    redisLogger.debug(
+      {
+        key,
+        userId,
+        event: 'cache.miss',
+        domain: 'cache',
+      },
+      `🔍 Cache miss: ${key}`,
+    ),
 
   cacheSet: (key: string, ttl: number, userId?: string) =>
-    redisLogger.debug({
-      key,
-      ttl,
-      userId,
-      event: 'cache.set',
-      domain: 'cache',
-    }, `💾 Cache set: ${key} (TTL: ${ttl}s)`),
+    redisLogger.debug(
+      {
+        key,
+        ttl,
+        userId,
+        event: 'cache.set',
+        domain: 'cache',
+      },
+      `💾 Cache set: ${key} (TTL: ${ttl}s)`,
+    ),
 
-  cacheError: (error: Error, key: string, operation: 'get' | 'set' | 'del', userId?: string) =>
-    redisLogger.error({
-      error,
-      key,
-      operation,
-      userId,
-      event: 'cache.error',
-      domain: 'cache',
-    }, `❌ Error en cache (${operation}): ${key}`),
+  cacheError: (
+    error: Error,
+    key: string,
+    operation: 'get' | 'set' | 'del',
+    userId?: string,
+  ) =>
+    redisLogger.error(
+      {
+        error,
+        key,
+        operation,
+        userId,
+        event: 'cache.error',
+        domain: 'cache',
+      },
+      `❌ Error en cache (${operation}): ${key}`,
+    ),
 
   cacheInvalidated: (pattern: string, count: number, reason: string) =>
-    redisLogger.info({
-      pattern,
-      count,
-      reason,
-      event: 'cache.invalidated',
-      domain: 'cache',
-    }, `🧹 Cache invalidado: ${count} claves con patrón "${pattern}" - ${reason}`),
+    redisLogger.info(
+      {
+        pattern,
+        count,
+        reason,
+        event: 'cache.invalidated',
+        domain: 'cache',
+      },
+      `🧹 Cache invalidado: ${count} claves con patrón "${pattern}" - ${reason}`,
+    ),
 
   // ==============================================
   // EVENTOS DE BÚSQUEDA Y FILTRADO
   // ==============================================
-  searchPerformed: (userId: string, query: string, resultsCount: number, duration: number) =>
-    taskLogger.info({
-      userId,
-      query,
-      resultsCount,
-      duration,
-      event: 'search.performed',
-      domain: 'business',
-    }, `🔍 Búsqueda realizada: "${query}" - ${resultsCount} resultados (${duration}ms)`),
+  searchPerformed: (
+    userId: string,
+    query: string,
+    resultsCount: number,
+    duration: number,
+  ) =>
+    taskLogger.info(
+      {
+        userId,
+        query,
+        resultsCount,
+        duration,
+        event: 'search.performed',
+        domain: 'business',
+      },
+      `🔍 Búsqueda realizada: "${query}" - ${resultsCount} resultados (${duration}ms)`,
+    ),
 
   filterApplied: (userId: string, filters: object, resultsCount: number) =>
-    taskLogger.info({
-      userId,
-      filters,
-      resultsCount,
-      event: 'filter.applied',
-      domain: 'business',
-    }, `🔧 Filtros aplicados - ${resultsCount} resultados`),
+    taskLogger.info(
+      {
+        userId,
+        filters,
+        resultsCount,
+        event: 'filter.applied',
+        domain: 'business',
+      },
+      `🔧 Filtros aplicados - ${resultsCount} resultados`,
+    ),
 
   // ==============================================
   // EVENTOS DE ESTADÍSTICAS
   // ==============================================
   statsUpdated: (userId: string, statsData: object, duration: number) =>
-    taskLogger.info({
-      userId,
-      statsData,
-      duration,
-      event: 'stats.updated',
-      domain: 'business',
-    }, `📊 Estadísticas actualizadas para usuario ${userId} (${duration}ms)`),
+    taskLogger.info(
+      {
+        userId,
+        statsData,
+        duration,
+        event: 'stats.updated',
+        domain: 'business',
+      },
+      `📊 Estadísticas actualizadas para usuario ${userId} (${duration}ms)`,
+    ),
 
   statsGenerated: (userId: string, period: string, metricsCount: number) =>
-    taskLogger.info({
-      userId,
-      period,
-      metricsCount,
-      event: 'stats.generated',
-      domain: 'business',
-    }, `📈 Estadísticas generadas: período ${period}, ${metricsCount} métricas`),
+    taskLogger.info(
+      {
+        userId,
+        period,
+        metricsCount,
+        event: 'stats.generated',
+        domain: 'business',
+      },
+      `📈 Estadísticas generadas: período ${period}, ${metricsCount} métricas`,
+    ),
 
   // ==============================================
   // MONITOREO DE RENDIMIENTO
   // ==============================================
-  requestCompleted: (method: string, path: string, statusCode: number, duration: number, userId?: string) =>
-    httpLogger.info({
-      method,
-      path,
-      statusCode,
-      duration,
-      userId,
-      event: 'request.completed',
-      domain: 'web',
-    }, `🌐 ${method} ${path} - ${statusCode} (${duration}ms)`),
+  requestCompleted: (
+    method: string,
+    path: string,
+    statusCode: number,
+    duration: number,
+    userId?: string,
+  ) =>
+    httpLogger.info(
+      {
+        method,
+        path,
+        statusCode,
+        duration,
+        userId,
+        event: 'request.completed',
+        domain: 'web',
+      },
+      `🌐 ${method} ${path} - ${statusCode} (${duration}ms)`,
+    ),
 
   highMemoryUsage: (usage: number, threshold: number) =>
-    logger.warn({
-      memoryUsage: usage,
-      threshold,
-      event: 'performance.high_memory',
-      domain: 'performance',
-    }, `🧠 Alto uso de memoria: ${usage}MB > ${threshold}MB`),
+    logger.warn(
+      {
+        memoryUsage: usage,
+        threshold,
+        event: 'performance.high_memory',
+        domain: 'performance',
+      },
+      `🧠 Alto uso de memoria: ${usage}MB > ${threshold}MB`,
+    ),
 
   highCpuUsage: (usage: number, threshold: number) =>
-    logger.warn({
-      cpuUsage: usage,
-      threshold,
-      event: 'performance.high_cpu',
-      domain: 'performance',
-    }, `⚡ Alto uso de CPU: ${usage}% > ${threshold}%`),
+    logger.warn(
+      {
+        cpuUsage: usage,
+        threshold,
+        event: 'performance.high_cpu',
+        domain: 'performance',
+      },
+      `⚡ Alto uso de CPU: ${usage}% > ${threshold}%`,
+    ),
 
   // ==============================================
   // EVENTOS DE INTEGRACIÓN CON AUTH SERVICE
   // ==============================================
   authServiceCalled: (endpoint: string, duration: number, statusCode: number) =>
-    authLogger.debug({
-      endpoint,
-      duration,
-      statusCode,
-      event: 'auth_service.called',
-      domain: 'integration',
-    }, `🔗 Auth Service llamado: ${endpoint} - ${statusCode} (${duration}ms)`),
+    authLogger.debug(
+      {
+        endpoint,
+        duration,
+        statusCode,
+        event: 'auth_service.called',
+        domain: 'integration',
+      },
+      `🔗 Auth Service llamado: ${endpoint} - ${statusCode} (${duration}ms)`,
+    ),
 
   authServiceError: (endpoint: string, error: Error, duration: number) =>
-    authLogger.error({
-      endpoint,
-      error,
-      duration,
-      event: 'auth_service.error',
-      domain: 'integration',
-    }, `❌ Error en Auth Service: ${endpoint} - ${error.message} (${duration}ms)`),
+    authLogger.error(
+      {
+        endpoint,
+        error,
+        duration,
+        event: 'auth_service.error',
+        domain: 'integration',
+      },
+      `❌ Error en Auth Service: ${endpoint} - ${error.message} (${duration}ms)`,
+    ),
 
   authServiceTimeout: (endpoint: string, timeout: number) =>
-    authLogger.warn({
-      endpoint,
-      timeout,
-      event: 'auth_service.timeout',
-      domain: 'integration',
-    }, `⏱️ Timeout en Auth Service: ${endpoint} (${timeout}ms)`),
+    authLogger.warn(
+      {
+        endpoint,
+        timeout,
+        event: 'auth_service.timeout',
+        domain: 'integration',
+      },
+      `⏱️ Timeout en Auth Service: ${endpoint} (${timeout}ms)`,
+    ),
 };
 
 // ==============================================
@@ -640,13 +878,16 @@ export const loggers = {
 // ==============================================
 export const logError = {
   critical: (error: Error, context?: object, userId?: string) => {
-    logger.fatal({
-      error,
-      userId,
-      severity: 'critical',
-      ...context
-    }, `💀 ERROR CRÍTICO: ${error.message}`);
-    
+    logger.fatal(
+      {
+        error,
+        userId,
+        severity: 'critical',
+        ...context,
+      },
+      `💀 ERROR CRÍTICO: ${error.message}`,
+    );
+
     // En producción, podrías enviar alertas aquí
     if (isProduction) {
       // TODO: Integrar con sistema de alertas (Slack, email, etc.)
@@ -654,28 +895,37 @@ export const logError = {
   },
 
   high: (error: Error, context?: object, userId?: string) =>
-    logger.error({
-      error,
-      userId,
-      severity: 'high',
-      ...context
-    }, `❌ Error alto: ${error.message}`),
+    logger.error(
+      {
+        error,
+        userId,
+        severity: 'high',
+        ...context,
+      },
+      `❌ Error alto: ${error.message}`,
+    ),
 
   medium: (error: Error, context?: object, userId?: string) =>
-    logger.warn({
-      error,
-      userId,
-      severity: 'medium',
-      ...context
-    }, `⚠️ Error medio: ${error.message}`),
+    logger.warn(
+      {
+        error,
+        userId,
+        severity: 'medium',
+        ...context,
+      },
+      `⚠️ Error medio: ${error.message}`,
+    ),
 
   low: (error: Error, context?: object, userId?: string) =>
-    logger.info({
-      error,
-      userId,
-      severity: 'low',
-      ...context
-    }, `ℹ️ Error menor: ${error.message}`),
+    logger.info(
+      {
+        error,
+        userId,
+        severity: 'low',
+        ...context,
+      },
+      `ℹ️ Error menor: ${error.message}`,
+    ),
 };
 
 // ==============================================
@@ -683,34 +933,43 @@ export const logError = {
 // ==============================================
 export const healthCheck = {
   passed: (service: string, duration: number, details?: object) =>
-    logger.info({
-      service,
-      duration,
-      status: 'healthy',
-      details,
-      event: 'health.check.passed',
-      domain: 'health',
-    }, `✅ Health check OK: ${service} (${duration}ms)`),
+    logger.info(
+      {
+        service,
+        duration,
+        status: 'healthy',
+        details,
+        event: 'health.check.passed',
+        domain: 'health',
+      },
+      `✅ Health check OK: ${service} (${duration}ms)`,
+    ),
 
   failed: (service: string, error: Error, duration: number) =>
-    logger.error({
-      service,
-      error,
-      duration,
-      status: 'unhealthy',
-      event: 'health.check.failed',
-      domain: 'health',
-    }, `❌ Health check FAILED: ${service} (${duration}ms)`),
+    logger.error(
+      {
+        service,
+        error,
+        duration,
+        status: 'unhealthy',
+        event: 'health.check.failed',
+        domain: 'health',
+      },
+      `❌ Health check FAILED: ${service} (${duration}ms)`,
+    ),
 
   degraded: (service: string, warning: string, duration: number) =>
-    logger.warn({
-      service,
-      warning,
-      duration,
-      status: 'degraded',
-      event: 'health.check.degraded',
-      domain: 'health',
-    }, `⚠️ Health check DEGRADED: ${service} - ${warning} (${duration}ms)`),
+    logger.warn(
+      {
+        service,
+        warning,
+        duration,
+        status: 'degraded',
+        event: 'health.check.degraded',
+        domain: 'health',
+      },
+      `⚠️ Health check DEGRADED: ${service} - ${warning} (${duration}ms)`,
+    ),
 };
 
 // ==============================================
@@ -718,34 +977,46 @@ export const healthCheck = {
 // ==============================================
 export const startup = {
   serviceStarted: (port: number, env: string) =>
-    logger.info({
-      port,
-      env,
-      event: 'service.started',
-      domain: 'startup',
-    }, `🚀 Task Service iniciado en puerto ${port} (${env})`),
+    logger.info(
+      {
+        port,
+        env,
+        event: 'service.started',
+        domain: 'startup',
+      },
+      `🚀 Task Service iniciado en puerto ${port} (${env})`,
+    ),
 
   configLoaded: (configSummary: object) =>
-    logger.info({
-      config: configSummary,
-      event: 'config.loaded',
-      domain: 'startup',
-    }, '⚙️ Configuración cargada'),
+    logger.info(
+      {
+        config: configSummary,
+        event: 'config.loaded',
+        domain: 'startup',
+      },
+      '⚙️ Configuración cargada',
+    ),
 
   dependencyConnected: (dependency: string, version?: string) =>
-    logger.info({
-      dependency,
-      version,
-      event: 'dependency.connected',
-      domain: 'startup',
-    }, `🔌 Conectado a ${dependency}${version ? ` v${version}` : ''}`),
+    logger.info(
+      {
+        dependency,
+        version,
+        event: 'dependency.connected',
+        domain: 'startup',
+      },
+      `🔌 Conectado a ${dependency}${version ? ` v${version}` : ''}`,
+    ),
 
   gracefulShutdown: (signal: string) =>
-    logger.info({
-      signal,
-      event: 'service.shutdown',
-      domain: 'startup',
-    }, `🛑 Apagado graceful recibido: ${signal}`),
+    logger.info(
+      {
+        signal,
+        event: 'service.shutdown',
+        domain: 'startup',
+      },
+      `🛑 Apagado graceful recibido: ${signal}`,
+    ),
 };
 
 // ==============================================
@@ -758,8 +1029,10 @@ export const reconfigureLogger = (envConfig: any) => {
 
   const logLevel = envConfig.logging?.level || envConfig.LOG_LEVEL || 'info';
   const logPretty = envConfig.logging?.pretty ?? envConfig.LOG_PRETTY ?? true;
-  const isDev = envConfig.app?.isDevelopment ?? envConfig.NODE_ENV === 'development';
-  const isProd = envConfig.app?.isProduction ?? envConfig.NODE_ENV === 'production';
+  const isDev =
+    envConfig.app?.isDevelopment ?? envConfig.NODE_ENV === 'development';
+  const isProd =
+    envConfig.app?.isProduction ?? envConfig.NODE_ENV === 'production';
 
   const reconfiguredConfig: pino.LoggerOptions = {
     level: logLevel,
@@ -827,7 +1100,7 @@ export const reconfigureLogger = (envConfig: any) => {
     ];
 
     reconfiguredConfig.transport = {
-      targets: destinations.map(dest => ({
+      targets: destinations.map((dest) => ({
         target: 'pino/file',
         level: dest.level,
         options: {
@@ -839,15 +1112,18 @@ export const reconfigureLogger = (envConfig: any) => {
   }
 
   reconfiguredLogger = pino(reconfiguredConfig);
-  
+
   // Log de reconfiguración
-  reconfiguredLogger.info({
-    logLevel,
-    timezone: BOGOTA_TIMEZONE,
-    logDir: LOG_DIR,
-    prettyPrint: isDev && logPretty,
-    reconfigured: true,
-  }, '🔧 Task Service Logger reconfigurado con environment cargado');
+  reconfiguredLogger.info(
+    {
+      logLevel,
+      timezone: BOGOTA_TIMEZONE,
+      logDir: LOG_DIR,
+      prettyPrint: isDev && logPretty,
+      reconfigured: true,
+    },
+    '🔧 Task Service Logger reconfigurado con environment cargado',
+  );
 
   return reconfiguredLogger;
 };

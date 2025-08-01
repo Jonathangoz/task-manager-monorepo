@@ -6,7 +6,7 @@ export const mockLogger = {
   error: jest.fn(),
   warn: jest.fn(),
   debug: jest.fn(),
-  child: jest.fn().mockReturnThis()
+  child: jest.fn().mockReturnThis(),
 };
 
 // Mock para Redis
@@ -19,7 +19,7 @@ export const mockRedis = {
   flushdb: jest.fn(),
   quit: jest.fn(),
   connect: jest.fn(),
-  ping: jest.fn().mockResolvedValue('PONG')
+  ping: jest.fn().mockResolvedValue('PONG'),
 };
 
 // Mock para Prisma
@@ -30,7 +30,7 @@ export const mockPrismaUser = {
   findMany: jest.fn(),
   update: jest.fn(),
   delete: jest.fn(),
-  count: jest.fn()
+  count: jest.fn(),
 };
 
 export const mockPrisma = {
@@ -39,23 +39,23 @@ export const mockPrisma = {
     create: jest.fn(),
     findUnique: jest.fn(),
     delete: jest.fn(),
-    deleteMany: jest.fn()
+    deleteMany: jest.fn(),
   },
   userSession: {
     create: jest.fn(),
     findUnique: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
-    deleteMany: jest.fn()
+    deleteMany: jest.fn(),
   },
   loginAttempt: {
     create: jest.fn(),
     count: jest.fn(),
-    deleteMany: jest.fn()
+    deleteMany: jest.fn(),
   },
   $connect: jest.fn(),
   $disconnect: jest.fn(),
-  $transaction: jest.fn()
+  $transaction: jest.fn(),
 };
 
 // Mock para crypto functions
@@ -63,7 +63,7 @@ export const mockCrypto = {
   hashPassword: jest.fn().mockResolvedValue('hashed-password'),
   verifyPassword: jest.fn().mockResolvedValue(true),
   generateSecureToken: jest.fn().mockReturnValue('secure-token'),
-  generateSessionId: jest.fn().mockReturnValue('session-id')
+  generateSessionId: jest.fn().mockReturnValue('session-id'),
 };
 
 // Factory para crear mocks de Request/Response de Express
@@ -74,7 +74,7 @@ export const createMockReq = (overrides = {}) => ({
   headers: {},
   ip: '127.0.0.1',
   get: jest.fn(),
-  ...overrides
+  ...overrides,
 });
 
 export const createMockRes = () => {
@@ -85,7 +85,7 @@ export const createMockRes = () => {
     cookie: jest.fn().mockReturnThis(),
     clearCookie: jest.fn().mockReturnThis(),
     header: jest.fn().mockReturnThis(),
-    locals: {}
+    locals: {},
   };
   return res;
 };
@@ -95,10 +95,10 @@ export const createMockNext = () => jest.fn();
 // Helper para limpiar todos los mocks
 export const clearAllMocks = () => {
   jest.clearAllMocks();
-  
+
   // Limpiar mocks específicos
-  Object.values(mockLogger).forEach(mock => mock.mockClear());
-  Object.values(mockRedis).forEach(mock => mock.mockClear());
-  Object.values(mockPrismaUser).forEach(mock => mock.mockClear());
-  Object.values(mockCrypto).forEach(mock => mock.mockClear());
+  Object.values(mockLogger).forEach((mock) => mock.mockClear());
+  Object.values(mockRedis).forEach((mock) => mock.mockClear());
+  Object.values(mockPrismaUser).forEach((mock) => mock.mockClear());
+  Object.values(mockCrypto).forEach((mock) => mock.mockClear());
 };

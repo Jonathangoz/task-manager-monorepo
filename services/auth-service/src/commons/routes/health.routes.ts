@@ -17,17 +17,17 @@ export class HealthRoutes {
      */
     router.get(
       '/health',
-      asyncHandler(healthController.basicHealthCheck.bind(healthController))
+      asyncHandler(healthController.basicHealthCheck.bind(healthController)),
     );
 
     /**
-     * GET /health/ready  
+     * GET /health/ready
      * Readiness probe - verifica dependencias con timeouts agresivos
      * Mejor para depends_on: service_healthy en Docker Compose
      */
     router.get(
       '/health/ready',
-      asyncHandler(healthController.readinessCheck.bind(healthController))
+      asyncHandler(healthController.readinessCheck.bind(healthController)),
     );
 
     /**
@@ -35,8 +35,8 @@ export class HealthRoutes {
      * Liveness probe - solo verifica que el proceso esté vivo
      */
     router.get(
-      '/health/live', 
-      asyncHandler(healthController.livenessCheck.bind(healthController))
+      '/health/live',
+      asyncHandler(healthController.livenessCheck.bind(healthController)),
     );
 
     // === HEALTH CHECKS DETALLADOS (solo en desarrollo/staging) ===
@@ -47,7 +47,9 @@ export class HealthRoutes {
        */
       router.get(
         '/detailed',
-        asyncHandler(healthController.detailedHealthCheck.bind(healthController))
+        asyncHandler(
+          healthController.detailedHealthCheck.bind(healthController),
+        ),
       );
 
       /**
@@ -56,7 +58,9 @@ export class HealthRoutes {
        */
       router.get(
         '/database',
-        asyncHandler(healthController.databaseHealthCheck.bind(healthController))
+        asyncHandler(
+          healthController.databaseHealthCheck.bind(healthController),
+        ),
       );
 
       /**
@@ -65,7 +69,7 @@ export class HealthRoutes {
        */
       router.get(
         '/redis',
-        asyncHandler(healthController.redisHealthCheck.bind(healthController))
+        asyncHandler(healthController.redisHealthCheck.bind(healthController)),
       );
 
       /**
@@ -74,7 +78,9 @@ export class HealthRoutes {
        */
       router.get(
         '/dependencies',
-        asyncHandler(healthController.dependenciesHealthCheck.bind(healthController))
+        asyncHandler(
+          healthController.dependenciesHealthCheck.bind(healthController),
+        ),
       );
 
       /**
@@ -83,7 +89,7 @@ export class HealthRoutes {
        */
       router.get(
         '/metrics',
-        asyncHandler(healthController.getMetrics.bind(healthController))
+        asyncHandler(healthController.getMetrics.bind(healthController)),
       );
     }
 

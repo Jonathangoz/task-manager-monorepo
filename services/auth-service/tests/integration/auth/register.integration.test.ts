@@ -13,7 +13,7 @@ describe('POST /api/v1/auth/register', () => {
   beforeEach(async () => {
     testDatabase = new TestDatabase(testDb);
     testRedis = new TestRedis();
-    
+
     await testDatabase.cleanAll();
     await testRedis.flush();
   });
@@ -39,14 +39,14 @@ describe('POST /api/v1/auth/register', () => {
           firstName: registerData.firstName,
           lastName: registerData.lastName,
           isActive: true,
-          isVerified: false
-        }
-      }
+          isVerified: false,
+        },
+      },
     });
 
     // Verificar que el usuario se guardó en la base de datos
     const savedUser = await testDb.user.findUnique({
-      where: { email: registerData.email }
+      where: { email: registerData.email },
     });
     expect(savedUser).toBeTruthy();
     expect(savedUser?.password).not.toBe(registerData.password); // Password debe estar hasheado
@@ -56,7 +56,7 @@ describe('POST /api/v1/auth/register', () => {
     // Arrange
     const invalidData = {
       ...authFixtures.validRegister,
-      email: 'invalid-email-format'
+      email: 'invalid-email-format',
     };
 
     // Act
@@ -69,19 +69,19 @@ describe('POST /api/v1/auth/register', () => {
     expect(response.body).toMatchObject({
       success: false,
       error: {
-        code: 'VALIDATION_ERROR'
-      }
+        code: 'VALIDATION_ERROR',
+      },
     });
   });
 
   it('should return 409 when user already exists', async () => {
     // Arrange
     const registerData = authFixtures.validRegister;
-    
+
     // Crear usuario existente
     await testDatabase.createTestUser({
       email: registerData.email,
-      username: registerData.username
+      username: registerData.username,
     });
 
     // Act
@@ -94,8 +94,8 @@ describe('POST /api/v1/auth/register', () => {
     expect(response.body).toMatchObject({
       success: false,
       error: {
-        code: 'USER_ALREADY_EXISTS'
-      }
+        code: 'USER_ALREADY_EXISTS',
+      },
     });
   });
 
@@ -103,7 +103,7 @@ describe('POST /api/v1/auth/register', () => {
     // Arrange
     const weakPasswordData = {
       ...authFixtures.validRegister,
-      password: '123' // Password muy débil
+      password: '123', // Password muy débil
     };
 
     // Act
@@ -116,15 +116,15 @@ describe('POST /api/v1/auth/register', () => {
     expect(response.body).toMatchObject({
       success: false,
       error: {
-        code: 'VALIDATION_ERROR'
-      }
+        code: 'VALIDATION_ERROR',
+      },
     });
   });
 
   it('should handle database errors gracefully', async () => {
     // Arrange
     const registerData = authFixtures.validRegister;
-    
+
     // Simular error de DB desconectando temporalmente
     await testDb.$disconnect();
 
@@ -138,8 +138,8 @@ describe('POST /api/v1/auth/register', () => {
     expect(response.body).toMatchObject({
       success: false,
       error: {
-        code: 'INTERNAL_ERROR'
-      }
+        code: 'INTERNAL_ERROR',
+      },
     });
 
     // Reconectar para próximos tests

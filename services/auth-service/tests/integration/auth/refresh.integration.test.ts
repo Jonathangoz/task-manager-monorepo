@@ -15,7 +15,7 @@ describe('POST /api/v1/auth/refresh', () => {
   beforeEach(async () => {
     testDatabase = new TestDatabase(testDb);
     testRedis = new TestRedis();
-    
+
     await testDatabase.cleanAll();
     await testRedis.flush();
 
@@ -23,12 +23,10 @@ describe('POST /api/v1/auth/refresh', () => {
     testUser = await testDatabase.createTestUser();
 
     // Hacer login para obtener refresh token válido
-    const loginResponse = await request(app)
-      .post('/api/v1/auth/login')
-      .send({
-        email: testUser.email,
-        password: 'Password123!' // Password sin hashear para login
-      });
+    const loginResponse = await request(app).post('/api/v1/auth/login').send({
+      email: testUser.email,
+      password: 'Password123!', // Password sin hashear para login
+    });
 
     validRefreshToken = loginResponse.body.data.tokens.refreshToken;
   });
@@ -48,9 +46,9 @@ describe('POST /api/v1/auth/refresh', () => {
         tokens: {
           accessToken: expect.any(String),
           refreshToken: expect.any(String),
-          expiresIn: expect.any(Number)
-        }
-      }
+          expiresIn: expect.any(Number),
+        },
+      },
     });
 
     // Verificar que el nuevo refresh token es diferente
@@ -68,8 +66,8 @@ describe('POST /api/v1/auth/refresh', () => {
     expect(response.body).toMatchObject({
       success: false,
       error: {
-        code: 'REFRESH_TOKEN_INVALID'
-      }
+        code: 'REFRESH_TOKEN_INVALID',
+      },
     });
   });
 
@@ -77,7 +75,7 @@ describe('POST /api/v1/auth/refresh', () => {
     // Arrange - Crear token expirado en DB
     const expiredToken = await testDatabase.createRefreshToken(testUser.id, {
       token: 'expired-token',
-      expiresAt: new Date(Date.now() - 1000) // Expirado hace 1 segundo
+      expiresAt: new Date(Date.now() - 1000), // Expirado hace 1 segundo
     });
 
     // Act
@@ -90,8 +88,8 @@ describe('POST /api/v1/auth/refresh', () => {
     expect(response.body).toMatchObject({
       success: false,
       error: {
-        code: 'REFRESH_TOKEN_EXPIRED'
-      }
+        code: 'REFRESH_TOKEN_EXPIRED',
+      },
     });
   });
 
@@ -99,7 +97,7 @@ describe('POST /api/v1/auth/refresh', () => {
     // Arrange - Crear token revocado en DB
     const revokedToken = await testDatabase.createRefreshToken(testUser.id, {
       token: 'revoked-token',
-      isRevoked: true
+      isRevoked: true,
     });
 
     // Act
@@ -112,8 +110,8 @@ describe('POST /api/v1/auth/refresh', () => {
     expect(response.body).toMatchObject({
       success: false,
       error: {
-        code: 'REFRESH_TOKEN_INVALID'
-      }
+        code: 'REFRESH_TOKEN_INVALID',
+      },
     });
   });
 
@@ -123,7 +121,7 @@ describe('POST /api/v1/auth/refresh', () => {
     const originalLastSeen = session.lastSeen;
 
     // Wait a bit to ensure timestamp difference
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
     // Act
     await request(app)
@@ -133,9 +131,11 @@ describe('POST /api/v1/auth/refresh', () => {
 
     // Assert
     const updatedSession = await testDb.userSession.findUnique({
-      where: { id: session.id }
+      where: { id: session.id },
     });
 
-    expect(updatedSession?.lastSeen.getTime()).toBeGreaterThan(originalLastSeen.getTime());
+    expect(updatedSession?.lastSeen.getTime()).toBeGreaterThan(
+      originalLastSeen.getTime(),
+    );
   });
 });

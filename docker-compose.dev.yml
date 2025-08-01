@@ -1,9 +1,8 @@
 # Task-Manager-monorepo docker-compose.dev.yml - VERSIÓN OPTIMIZADA PARA HARDWARE LIMITADO
 
 services:
-
   # DATABASES
-  
+
   # Auth Service Database
   auth-db:
     image: postgres:16-alpine
@@ -12,20 +11,20 @@ services:
       POSTGRES_DB: auth_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: 1234
-      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --locale=C"
+      POSTGRES_INITDB_ARGS: '--encoding=UTF-8 --locale=C'
       LC_ALL: C
       LANG: C
     ports:
-      - "5433:5432"
+      - '5433:5432'
     volumes:
       - auth_db_data:/var/lib/postgresql/data
     # ✅ HEALTHCHECK COHERENTE CON HARDWARE LIMITADO
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d auth_db"]
-      interval: 60s          # Coherente con servicios
-      timeout: 30s           # Coherente con servicios
-      retries: 8             # Coherente con servicios
-      start_period: 480s     # 8 minutos - coherente con servicios
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d auth_db']
+      interval: 60s # Coherente con servicios
+      timeout: 30s # Coherente con servicios
+      retries: 8 # Coherente con servicios
+      start_period: 480s # 8 minutos - coherente con servicios
     restart: unless-stopped
     networks:
       - task-manager-network
@@ -45,20 +44,20 @@ services:
       POSTGRES_DB: task_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: 1234
-      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --locale=C"
+      POSTGRES_INITDB_ARGS: '--encoding=UTF-8 --locale=C'
       LC_ALL: C
       LANG: C
     ports:
-      - "5434:5432"
+      - '5434:5432'
     volumes:
       - task_db_data:/var/lib/postgresql/data
     # ✅ HEALTHCHECK COHERENTE CON HARDWARE LIMITADO
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d task_db"]
-      interval: 60s          # Coherente con servicios
-      timeout: 30s           # Coherente con servicios
-      retries: 8             # Coherente con servicios
-      start_period: 480s     # 8 minutos - coherente con servicios
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d task_db']
+      interval: 60s # Coherente con servicios
+      timeout: 30s # Coherente con servicios
+      retries: 8 # Coherente con servicios
+      start_period: 480s # 8 minutos - coherente con servicios
     restart: unless-stopped
     networks:
       - task-manager-network
@@ -74,17 +73,17 @@ services:
     image: redis:7-alpine
     container_name: task-manager-redis
     ports:
-      - "6379:6379"
+      - '6379:6379'
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
     # ✅ HEALTHCHECK COHERENTE CON HARDWARE LIMITADO
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 60s          # Coherente con servicios
-      timeout: 30s           # Coherente con servicios
-      retries: 8             # Coherente con servicios
-      start_period: 240s     # 4 minutos - Redis arranca más rápido
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 60s # Coherente con servicios
+      timeout: 30s # Coherente con servicios
+      retries: 8 # Coherente con servicios
+      start_period: 240s # 4 minutos - Redis arranca más rápido
     restart: unless-stopped
     networks:
       - task-manager-network
@@ -105,37 +104,37 @@ services:
       target: development
     container_name: task-manager-auth-service
     ports:
-      - "3001:3001" 
+      - '3001:3001'
     environment:
       NODE_ENV: development
-      SERVICE_NAME: auth-service 
+      SERVICE_NAME: auth-service
       PORT: 3001
-      
+
       # Database Configuration
       DATABASE_URL: postgresql://postgres:1234@auth-db:5432/auth_db
-      DATABASE_HOST: auth-db    
+      DATABASE_HOST: auth-db
       DATABASE_PORT: 5432
       POSTGRES_DB: auth_db
       POSTGRES_USER: postgres
-      
+
       # Redis Configuration
       REDIS_URL: redis://redis:6379
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PREFIX: "auth:"
-      
+      REDIS_PREFIX: 'auth:'
+
       # JWT Configuration
-      JWT_SECRET: "base64:u+vQTtcSFJR4GsfR7D4bvK6IAsACgvb8hW62FdlEqYCP/GoZQPNCw9Bmw4iVrrSrkj998JYRz41rldpInU/K9g=="
-      REFRESH_TOKEN_SECRET: "base64:vfIeKTFck9rzwlhO4Jft2XgJmDstLnhn4ZB6anVLYeWvogGiVL/PoK+mvkHTdWYA7pQslxgzDuEMVdNPzpK2cg=="
-      JWE_SECRET: "base64:jMjjQLeL0B38/H6ujAR1eOi8cRKGxSQUQbuv72n9ew0="
-      
+      JWT_SECRET: 'base64:u+vQTtcSFJR4GsfR7D4bvK6IAsACgvb8hW62FdlEqYCP/GoZQPNCw9Bmw4iVrrSrkj998JYRz41rldpInU/K9g=='
+      REFRESH_TOKEN_SECRET: 'base64:vfIeKTFck9rzwlhO4Jft2XgJmDstLnhn4ZB6anVLYeWvogGiVL/PoK+mvkHTdWYA7pQslxgzDuEMVdNPzpK2cg=='
+      JWE_SECRET: 'base64:jMjjQLeL0B38/H6ujAR1eOi8cRKGxSQUQbuv72n9ew0='
+
       # CORS Configuration
-      CORS_ORIGIN: "http://localhost:3000,http://localhost:3002"
-      
+      CORS_ORIGIN: 'http://localhost:3000,http://localhost:3002'
+
       # Logging Configuration
-      LOG_LEVEL: "debug"
-      LOG_PRETTY: "true"
-      
+      LOG_LEVEL: 'debug'
+      LOG_PRETTY: 'true'
+
     volumes:
       - ./services/auth-service:/app
       - /app/node_modules
@@ -151,11 +150,21 @@ services:
       - task-manager-network
     # ✅ HEALTHCHECK COHERENTE PARA HARDWARE LIMITADO
     healthcheck:
-      test: ["CMD", "curl", "-f", "--max-time", "30", "--connect-timeout", "10", "http://localhost:3001/api/v1/health"]
-      interval: 60s          # Cada minuto (no sobrecargar)
-      timeout: 30s           # 30 segundos para responder
-      start_period: 480s     # 8 minutos de gracia inicial
-      retries: 8             # 8 intentos antes de marcar unhealthy
+      test:
+        [
+          'CMD',
+          'curl',
+          '-f',
+          '--max-time',
+          '30',
+          '--connect-timeout',
+          '10',
+          'http://localhost:3001/api/v1/health',
+        ]
+      interval: 60s # Cada minuto (no sobrecargar)
+      timeout: 30s # 30 segundos para responder
+      start_period: 480s # 8 minutos de gracia inicial
+      retries: 8 # 8 intentos antes de marcar unhealthy
     deploy:
       resources:
         limits:
@@ -171,38 +180,38 @@ services:
       target: development
     container_name: task-manager-task-service
     ports:
-      - "3002:3002" 
+      - '3002:3002'
     environment:
       NODE_ENV: development
-      SERVICE_NAME: task-service 
+      SERVICE_NAME: task-service
       PORT: 3002
-      
+
       # Database Configuration
       DATABASE_URL: postgresql://postgres:1234@task-db:5432/task_db
-      DATABASE_HOST: task-db    
+      DATABASE_HOST: task-db
       DATABASE_PORT: 5432
       POSTGRES_DB: task_db
       POSTGRES_USER: postgres
-      
+
       # Redis Configuration
       REDIS_URL: redis://redis:6379
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PREFIX: "tasks:"
-      
+      REDIS_PREFIX: 'tasks:'
+
       # Service Communication
-      AUTH_SERVICE_URL: "http://auth-service:3001"
-      
+      AUTH_SERVICE_URL: 'http://auth-service:3001'
+
       # JWT Configuration (para validar tokens del auth-service)
-      JWT_SECRET: "base64:u+vQTtcSFJR4GsfR7D4bvK6IAsACgvb8hW62FdlEqYCP/GoZQPNCw9Bmw4iVrrSrkj998JYRz41rldpInU/K9g=="
-      
+      JWT_SECRET: 'base64:u+vQTtcSFJR4GsfR7D4bvK6IAsACgvb8hW62FdlEqYCP/GoZQPNCw9Bmw4iVrrSrkj998JYRz41rldpInU/K9g=='
+
       # CORS Configuration
-      CORS_ORIGIN: "http://localhost:3000,http://localhost:3001"
-      
+      CORS_ORIGIN: 'http://localhost:3000,http://localhost:3001'
+
       # Logging Configuration
-      LOG_LEVEL: "debug"
-      LOG_PRETTY: "true"
-      
+      LOG_LEVEL: 'debug'
+      LOG_PRETTY: 'true'
+
     volumes:
       - ./services/task-service:/app
       - /app/node_modules
@@ -218,15 +227,25 @@ services:
     restart: unless-stopped
     networks:
       - task-manager-network
-    
+
     # ✅ HEALTHCHECK COHERENTE PARA HARDWARE LIMITADO
     healthcheck:
-      test: ["CMD", "curl", "-f", "--max-time", "30", "--connect-timeout", "10", "http://localhost:3002/api/v1/health"]
-      interval: 60s          # Cada minuto (no sobrecargar)
-      timeout: 30s           # 30 segundos para responder
-      start_period: 480s     # 8 minutos de gracia inicial
-      retries: 8             # 8 intentos antes de marcar unhealthy
-      
+      test:
+        [
+          'CMD',
+          'curl',
+          '-f',
+          '--max-time',
+          '30',
+          '--connect-timeout',
+          '10',
+          'http://localhost:3002/api/v1/health',
+        ]
+      interval: 60s # Cada minuto (no sobrecargar)
+      timeout: 30s # 30 segundos para responder
+      start_period: 480s # 8 minutos de gracia inicial
+      retries: 8 # 8 intentos antes de marcar unhealthy
+
     # Recursos optimizados para desarrollo
     deploy:
       resources:

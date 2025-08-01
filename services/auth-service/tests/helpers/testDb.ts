@@ -21,17 +21,17 @@ export class TestDatabase {
       lastName: 'User',
       isActive: true,
       isVerified: true,
-      ...overrides
+      ...overrides,
     };
 
     return this.prisma.user.create({
-      data: defaultUser
+      data: defaultUser,
     });
   }
 
   async createMultipleUsers(count: number): Promise<User[]> {
     const users: User[] = [];
-    
+
     for (let i = 0; i < count; i++) {
       const user = await this.createTestUser({
         email: `test${i}@example.com`,
@@ -39,7 +39,7 @@ export class TestDatabase {
       });
       users.push(user);
     }
-    
+
     return users;
   }
 
@@ -51,8 +51,8 @@ export class TestDatabase {
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 días
         userAgent: 'test-agent',
         ipAddress: '127.0.0.1',
-        ...overrides
-      }
+        ...overrides,
+      },
     });
   }
 
@@ -64,8 +64,8 @@ export class TestDatabase {
         ipAddress: '127.0.0.1',
         userAgent: 'test-agent',
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 horas
-        ...overrides
-      }
+        ...overrides,
+      },
     });
   }
 }

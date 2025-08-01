@@ -1,14 +1,14 @@
 // src/core/application/UserService.ts
 import { User } from '@/core/entities/User';
-import { 
-  IUserRepository, 
-  CreateUserData, 
-  UpdateUserData, 
-  UserWithPassword, 
-  UserWithoutPassword 
+import {
+  IUserRepository,
+  CreateUserData,
+  UpdateUserData,
+  UserWithPassword,
+  UserWithoutPassword,
 } from '@/core/interfaces/IUserRepository';
 import { ICacheService } from '@/core/interfaces/ICacheService';
-import { 
+import {
   IUserService,
   CreateUserData as ICreateUserData,
   UpdateUserData as IUpdateUserData,
@@ -16,17 +16,17 @@ import {
   UserFilters,
   PaginationOptions,
   PaginatedUsers,
-  UserSession
+  UserSession,
 } from '@/core/interfaces/IUserService';
 import { hashPassword, validatePasswordStrength } from '@/utils/crypto';
 import { logger } from '@/utils/logger';
-import { 
-  ERROR_CODES, 
-  ERROR_MESSAGES, 
+import {
+  ERROR_CODES,
+  ERROR_MESSAGES,
   SUCCESS_MESSAGES,
   SECURITY_CONFIG,
   CACHE_KEYS,
-  CACHE_TTL 
+  CACHE_TTL,
 } from '@/utils/constants';
 
 export interface UserProfileUpdate {
@@ -54,7 +54,7 @@ export interface UserListResponse {
 export class UserService implements IUserService {
   constructor(
     private readonly userRepository: IUserRepository,
-    private readonly cacheService: ICacheService
+    private readonly cacheService: ICacheService,
   ) {}
 
   /**
@@ -62,19 +62,31 @@ export class UserService implements IUserService {
    */
   async create(data: ICreateUserData): Promise<User> {
     try {
-      logger.info({ email: data.email, username: data.username }, 'Creating new user');
+      logger.info(
+        { email: data.email, username: data.username },
+        'Creating new user',
+      );
 
       // Validar que el email y username no existan
-      const userExists = await this.userRepository.exists(data.email, data.username);
+      const userExists = await this.userRepository.exists(
+        data.email,
+        data.username,
+      );
       if (userExists) {
-        logger.warn({ email: data.email, username: data.username }, 'User already exists');
+        logger.warn(
+          { email: data.email, username: data.username },
+          'User already exists',
+        );
         throw new Error(ERROR_MESSAGES.USER_ALREADY_EXISTS);
       }
 
       // Validar fortaleza de la contraseña
       const passwordValidation = validatePasswordStrength(data.password);
       if (!passwordValidation.isValid) {
-        logger.warn({ errors: passwordValidation.errors }, 'Password validation failed');
+        logger.warn(
+          { errors: passwordValidation.errors },
+          'Password validation failed',
+        );
         throw new Error(passwordValidation.errors.join(', '));
       }
 
@@ -90,7 +102,10 @@ export class UserService implements IUserService {
       // Convertir a entidad User
       const user = User.fromPrisma(userWithPassword);
 
-      logger.info({ userId: user.id, email: user.email }, 'User created successfully');
+      logger.info(
+        { userId: user.id, email: user.email },
+        'User created successfully',
+      );
 
       // Cachear el perfil del usuario
       await this.cacheUserProfile(user);
@@ -129,7 +144,8 @@ export class UserService implements IUserService {
       }
 
       // Convertir a entidad User (necesitamos obtener con password para crear la entidad completa)
-      const userWithPassword = await this.userRepository.findByIdWithPassword(id);
+      const userWithPassword =
+        await this.userRepository.findByIdWithPassword(id);
       if (!userWithPassword) {
         return null;
       }
@@ -163,7 +179,8 @@ export class UserService implements IUserService {
    */
   async findByEmail(email: string): Promise<User | null> {
     try {
-      const userWithPassword = await this.userRepository.findByEmailWithPassword(email);
+      const userWithPassword =
+        await this.userRepository.findByEmailWithPassword(email);
       if (!userWithPassword) {
         logger.warn({ email }, 'User not found by email');
         return null;
@@ -195,7 +212,8 @@ export class UserService implements IUserService {
    */
   async findByUsername(username: string): Promise<User | null> {
     try {
-      const userWithPassword = await this.userRepository.findByUsernameWithPassword(username);
+      const userWithPassword =
+        await this.userRepository.findByUsernameWithPassword(username);
       if (!userWithPassword) {
         logger.warn({ username }, 'User not found by username');
         return null;
@@ -243,7 +261,8 @@ export class UserService implements IUserService {
       const updatedUserData = await this.userRepository.update(id, data);
 
       // Convertir a entidad User (necesitamos obtener con password)
-      const userWithPassword = await this.userRepository.findByIdWithPassword(id);
+      const userWithPassword =
+        await this.userRepository.findByIdWithPassword(id);
       if (!userWithPassword) {
         throw new Error(ERROR_MESSAGES.USER_NOT_FOUND);
       }
@@ -283,7 +302,8 @@ export class UserService implements IUserService {
       const updatedUserData = await this.userRepository.update(id, data);
 
       // Convertir a entidad User (necesitamos obtener con password)
-      const userWithPassword = await this.userRepository.findByIdWithPassword(id);
+      const userWithPassword =
+        await this.userRepository.findByIdWithPassword(id);
       if (!userWithPassword) {
         throw new Error(ERROR_MESSAGES.USER_NOT_FOUND);
       }
@@ -305,7 +325,10 @@ export class UserService implements IUserService {
   /**
    * Actualizar perfil de usuario (método legacy)
    */
-  async updateUserProfile(userId: string, updateData: UserProfileUpdate): Promise<User> {
+  async updateUserProfile(
+    userId: string,
+    updateData: UserProfileUpdate,
+  ): Promise<User> {
     return this.updateProfile(userId, updateData);
   }
 
@@ -315,10 +338,10 @@ export class UserService implements IUserService {
   async updateLastLogin(id: string): Promise<void> {
     try {
       await this.userRepository.updateLastLogin(id);
-      
+
       // Invalidar cache para que se actualice con el nuevo lastLoginAt
       await this.invalidateUserCache(id);
-      
+
       logger.debug({ userId: id }, 'Last login updated');
     } catch (error) {
       logger.error({ error, userId: id }, 'Failed to update last login');
@@ -353,7 +376,10 @@ export class UserService implements IUserService {
       // Validar fortaleza de la nueva contraseña
       const passwordValidation = validatePasswordStrength(newPassword);
       if (!passwordValidation.isValid) {
-        logger.warn({ userId, errors: passwordValidation.errors }, 'New password validation failed');
+        logger.warn(
+          { userId, errors: passwordValidation.errors },
+          'New password validation failed',
+        );
         throw new Error(passwordValidation.errors.join(', '));
       }
 
@@ -373,21 +399,27 @@ export class UserService implements IUserService {
   /**
    * Listar usuarios con paginación y filtros
    */
-  async findMany(filters?: UserFilters, pagination?: PaginationOptions): Promise<PaginatedUsers> {
-    try {      
+  async findMany(
+    filters?: UserFilters,
+    pagination?: PaginationOptions,
+  ): Promise<PaginatedUsers> {
+    try {
       logger.debug({ filters, pagination }, 'Finding users with filters');
 
       const paginationOptions: PaginationOptions = {
         page: pagination?.page || 1,
         limit: pagination?.limit || 20,
         sortBy: pagination?.sortBy || 'createdAt',
-        sortOrder: pagination?.sortOrder || 'desc'
+        sortOrder: pagination?.sortOrder || 'desc',
       };
 
-      const result = await this.userRepository.findMany(filters, paginationOptions);
+      const result = await this.userRepository.findMany(
+        filters,
+        paginationOptions,
+      );
 
       // Convertir a entidades User
-      const users = result.users.map(userData => {
+      const users = result.users.map((userData) => {
         // Crear un User temporal con datos básicos (no tenemos password aquí)
         return new User(
           userData.id,
@@ -401,7 +433,7 @@ export class UserService implements IUserService {
           userData.isVerified,
           userData.lastLoginAt,
           userData.createdAt,
-          userData.updatedAt
+          userData.updatedAt,
         );
       });
 
@@ -413,10 +445,13 @@ export class UserService implements IUserService {
         totalPages: Math.ceil(result.total / (paginationOptions.limit || 20)),
       };
 
-      logger.debug({ 
-        totalUsers: result.total, 
-        returnedUsers: users.length 
-      }, 'Users found successfully');
+      logger.debug(
+        {
+          totalUsers: result.total,
+          returnedUsers: users.length,
+        },
+        'Users found successfully',
+      );
 
       return response;
     } catch (error) {
@@ -430,11 +465,11 @@ export class UserService implements IUserService {
    */
   async listUsers(options: UserListOptions = {}): Promise<UserListResponse> {
     const { page = 1, limit = 20, filters } = options;
-    
+
     const result = await this.findMany(filters, { page, limit });
 
     return {
-      users: result.users.map(user => ({
+      users: result.users.map((user) => ({
         id: user.id,
         email: user.email,
         username: user.username,
@@ -445,7 +480,7 @@ export class UserService implements IUserService {
         isVerified: user.isVerified,
         lastLoginAt: user.lastLoginAt,
         createdAt: user.createdAt,
-        updatedAt: user.updatedAt
+        updatedAt: user.updatedAt,
       })),
       pagination: {
         page,
@@ -463,7 +498,10 @@ export class UserService implements IUserService {
     try {
       return await this.userRepository.exists(email, username);
     } catch (error) {
-      logger.error({ error, email, username }, 'Failed to check user existence');
+      logger.error(
+        { error, email, username },
+        'Failed to check user existence',
+      );
       throw error;
     }
   }
@@ -590,7 +628,7 @@ export class UserService implements IUserService {
       logger.info({ userId }, 'Verifying user email with token');
 
       // TODO: Implementar validación de token cuando esté disponible
-      
+
       const updatedUser = await this.update(userId, { isVerified: true });
 
       logger.info({ userId }, 'User email verified successfully');
@@ -622,19 +660,18 @@ export class UserService implements IUserService {
     recentRegistrations: number;
   }> {
     try {
-      const [
-        totalResult,
-        activeResult,
-        verifiedResult,
-        recentResult
-      ] = await Promise.all([
-        this.findMany({}, { page: 1, limit: 1 }),
-        this.findMany({ isActive: true }, { page: 1, limit: 1 }),
-        this.findMany({ isVerified: true }, { page: 1, limit: 1 }),
-        this.findMany({ 
-          createdAfter: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Últimos 30 días
-        }, { page: 1, limit: 1 })
-      ]);
+      const [totalResult, activeResult, verifiedResult, recentResult] =
+        await Promise.all([
+          this.findMany({}, { page: 1, limit: 1 }),
+          this.findMany({ isActive: true }, { page: 1, limit: 1 }),
+          this.findMany({ isVerified: true }, { page: 1, limit: 1 }),
+          this.findMany(
+            {
+              createdAfter: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Últimos 30 días
+            },
+            { page: 1, limit: 1 },
+          ),
+        ]);
 
       const stats = {
         total: totalResult.total,
@@ -661,7 +698,9 @@ export class UserService implements IUserService {
   private async cacheUserProfile(user: User): Promise<void> {
     try {
       const cacheKey = CACHE_KEYS.USER_PROFILE(user.id);
-      await this.cacheService.set(cacheKey, JSON.stringify(user), { ttl: CACHE_TTL.USER_PROFILE });
+      await this.cacheService.set(cacheKey, JSON.stringify(user), {
+        ttl: CACHE_TTL.USER_PROFILE,
+      });
     } catch (error) {
       logger.warn({ error, userId: user.id }, 'Failed to cache user profile');
       // No lanzar error, el cache es opcional
@@ -675,12 +714,12 @@ export class UserService implements IUserService {
     try {
       const cacheKey = CACHE_KEYS.USER_PROFILE(userId);
       const cached = await this.cacheService.get<string>(cacheKey);
-      
+
       if (cached) {
         const userData = JSON.parse(cached);
         return User.fromPrisma(userData);
       }
-      
+
       return null;
     } catch (error) {
       logger.warn({ error, userId }, 'Failed to get cached user profile');

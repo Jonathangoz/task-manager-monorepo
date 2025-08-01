@@ -1,5 +1,5 @@
-// src/utils/constants.ts
-//Auth-Service Constants
+// src/utils/constants.ts - Auth-Service
+import 
 
 // HTTP Status Codes
 export const HTTP_STATUS = {
@@ -26,36 +26,36 @@ export const ERROR_CODES = {
   TOKEN_REQUIRED: 'TOKEN_REQUIRED',
   REFRESH_TOKEN_INVALID: 'REFRESH_TOKEN_INVALID',
   REFRESH_TOKEN_EXPIRED: 'REFRESH_TOKEN_EXPIRED',
-  
+
   // User errors
   USER_NOT_FOUND: 'USER_NOT_FOUND',
   USER_ALREADY_EXISTS: 'USER_ALREADY_EXISTS',
   USER_INACTIVE: 'USER_INACTIVE',
   USER_NOT_VERIFIED: 'USER_NOT_VERIFIED',
-  
+
   // Validation errors
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INVALID_EMAIL: 'INVALID_EMAIL',
   INVALID_PASSWORD: 'INVALID_PASSWORD',
   INVALID_USERNAME: 'INVALID_USERNAME',
   PASSWORD_TOO_WEAK: 'PASSWORD_TOO_WEAK',
-  
+
   // Session errors
   SESSION_NOT_FOUND: 'SESSION_NOT_FOUND',
   SESSION_EXPIRED: 'SESSION_EXPIRED',
   SESSION_INVALID: 'SESSION_INVALID',
   MAX_SESSIONS_EXCEEDED: 'MAX_SESSIONS_EXCEEDED',
-  
+
   // Rate limiting
   RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
   TOO_MANY_LOGIN_ATTEMPTS: 'TOO_MANY_LOGIN_ATTEMPTS',
-  
+
   // System errors
   DATABASE_ERROR: 'DATABASE_ERROR',
   REDIS_ERROR: 'REDIS_ERROR',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
-  
+
   // Additional errors needed by middlewares
   NOT_FOUND: 'NOT_FOUND',
   FORBIDDEN: 'FORBIDDEN',
@@ -80,11 +80,13 @@ export const ERROR_MESSAGES = {
   TOKEN_INVALID: 'Token inválido',
   TOKEN_REQUIRED: 'Se requiere un token de autenticación',
   USER_NOT_FOUND: 'Usuario no encontrado',
-  USER_ALREADY_EXISTS: 'El usuario ya existe con este correo electrónico o nombre de usuario',
+  USER_ALREADY_EXISTS:
+    'El usuario ya existe con este correo electrónico o nombre de usuario',
   USER_INACTIVE: 'La cuenta de usuario está inactiva',
   PASSWORD_TOO_WEAK: 'La contraseña no cumple con los requisitos de seguridad',
   VALIDATION_ERROR: 'La validación falló',
-  RATE_LIMIT_EXCEEDED: 'Demasiadas solicitudes, por favor inténtalo de nuevo más tarde',
+  RATE_LIMIT_EXCEEDED:
+    'Demasiadas solicitudes, por favor inténtalo de nuevo más tarde',
   INTERNAL_ERROR: 'Error interno del servidor',
   SERVICE_UNAVAILABLE: 'Servicio temporalmente no disponible',
   DATABASE_CONNECTION_ERROR: 'Error de conexión con la base de datos',
@@ -148,7 +150,8 @@ export const CACHE_TTL = {
 export const VALIDATION_PATTERNS = {
   EMAIL: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
   USERNAME: /^[a-zA-Z0-9_]+$/,
-  PASSWORD_STRONG: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
+  PASSWORD_STRONG:
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
   CUID: /^c[a-z0-9]{24}$/,
 } as const;
 
@@ -159,20 +162,20 @@ export const EVENT_TYPES = {
   TASK_DELETED: 'task.deleted',
   TASK_STATUS_CHANGED: 'task.status.changed',
   TASK_COMPLETED: 'task.completed',
-  
+
   CATEGORY_CREATED: 'category.created',
   CATEGORY_UPDATED: 'category.updated',
   CATEGORY_DELETED: 'category.deleted',
-  
+
   USER_STATS_UPDATED: 'stats.updated',
-  
+
   AUTH_TOKEN_VALIDATED: 'auth.token.validated',
   AUTH_SERVICE_ERROR: 'auth.service.error',
-  
+
   CACHE_HIT: 'cache.hit',
   CACHE_MISS: 'cache.miss',
   CACHE_ERROR: 'cache.error',
-  
+
   RATE_LIMIT_EXCEEDED: 'security.rate_limit_exceeded',
 } as const;
 
@@ -347,7 +350,8 @@ export const ADDITIONAL_ERROR_MESSAGES = {
   EMAIL_ALREADY_VERIFIED: 'El correo electrónico ya está verificado',
   VERIFICATION_TOKEN_EXPIRED: 'El token de verificación de correo ha expirado',
   VERIFICATION_TOKEN_INVALID: 'Token de verificación de correo inválido',
-  PASSWORD_RESET_TOKEN_EXPIRED: 'El token para restablecer la contraseña ha expirado',
+  PASSWORD_RESET_TOKEN_EXPIRED:
+    'El token para restablecer la contraseña ha expirado',
   PASSWORD_RESET_TOKEN_INVALID: 'Token para restablecer la contraseña inválido',
   SAME_PASSWORD: 'La nueva contraseña debe ser diferente a la actual',
   EMAIL_ALREADY_EXISTS: 'El correo electrónico ya está en uso',
@@ -481,25 +485,25 @@ export const RATE_LIMIT_CONFIG = {
 export const TIMEOUT_CONFIG = {
   // HTTP requests normales
   HTTP_REQUEST: 30000, // 30 segundos (era 10s, muy agresivo)
-  
+
   // Health checks - MUY RÁPIDOS
   HEALTH_CHECK_BASIC: 2000, // 2 segundos para health check básico
   HEALTH_CHECK_DETAILED: 5000, // 5 segundos para health check detallado
-  
+
   // Database operations
   DATABASE_QUERY: 15000, // 15 segundos (era 30s, reducido)
   DATABASE_HEALTH_CHECK: 3000, // 3 segundos para health check de DB
   DATABASE_CONNECTION: 10000, // 10 segundos para conectar
-  
+
   // Redis operations
   REDIS_OPERATION: 5000, // 5 segundos (era 10s)
   REDIS_HEALTH_CHECK: 2000, // 2 segundos para health check de Redis
   REDIS_CONNECTION: 5000, // 5 segundos para conectar
-  
+
   // Email y operaciones externas
   EMAIL_SEND: 15000, // 15 segundos
   EXTERNAL_API: 10000, // 10 segundos
-  
+
   // Server timeouts
   SERVER_REQUEST: 30000, // 30 segundos
   SERVER_KEEP_ALIVE: 65000, // 65 segundos
@@ -529,7 +533,7 @@ export const HEALTH_CHECK_CONFIG = {
     TIMEOUT: 5000, // 5 segundos
     START_PERIOD: 30000, // 30 segundos
     RETRIES: 3,
-  }
+  },
 } as const;
 
 // Límites de sistema
@@ -577,7 +581,7 @@ export const MIDDLEWARE_CONFIG = {
   REQUEST_TIMEOUT: 30000, // 30 segundos (era muy bajo)
   MAX_REQUEST_SIZE: '10mb',
   COMPRESSION_THRESHOLD: 1024,
-  
+
   // Paths que NO deben tener timeouts agresivos
   TIMEOUT_EXEMPT_PATHS: [
     '/health',
@@ -585,25 +589,25 @@ export const MIDDLEWARE_CONFIG = {
     '/api/v1/health/live',
     '/api/v1/health/ready',
     '/metrics',
-    '/favicon.ico'
+    '/favicon.ico',
   ],
-  
+
   // Paths que NO deben tener rate limiting
   RATE_LIMIT_EXEMPT_PATHS: [
     '/health',
     '/api/v1/health',
-    '/api/v1/health/live', 
+    '/api/v1/health/live',
     '/api/v1/health/ready',
-    '/metrics'
+    '/metrics',
   ],
-  
+
   // Paths que NO deben tener logging detallado
   MINIMAL_LOGGING_PATHS: [
     '/health',
     '/api/v1/health',
     '/metrics',
-    '/favicon.ico'
-  ]
+    '/favicon.ico',
+  ],
 } as const;
 
 export const VALIDATION_MESSAGES = {

@@ -4,12 +4,27 @@
 // HTTP & API CORE TYPES
 // ==============================================
 
-export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS';
+export type HttpMethod =
+  | 'GET'
+  | 'POST'
+  | 'PUT'
+  | 'PATCH'
+  | 'DELETE'
+  | 'OPTIONS';
 
-export type HttpStatus = 
-  | 200 | 201 | 204 
-  | 400 | 401 | 403 | 404 | 409 | 422 | 429 
-  | 500 | 503;
+export type HttpStatus =
+  | 200
+  | 201
+  | 204
+  | 400
+  | 401
+  | 403
+  | 404
+  | 409
+  | 422
+  | 429
+  | 500
+  | 503;
 
 // ==============================================
 // GENERIC API RESPONSE TYPES
@@ -395,25 +410,21 @@ export interface UploadAttachmentResponse {
 // ENUM TYPES
 // ==============================================
 
-export type TaskStatus = 
-  | 'PENDING' 
-  | 'IN_PROGRESS' 
-  | 'COMPLETED' 
-  | 'CANCELLED' 
+export type TaskStatus =
+  | 'PENDING'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'CANCELLED'
   | 'ON_HOLD';
 
-export type TaskPriority = 
-  | 'LOW' 
-  | 'MEDIUM' 
-  | 'HIGH' 
-  | 'URGENT';
+export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
-export type TaskSortField = 
-  | 'createdAt' 
-  | 'updatedAt' 
-  | 'dueDate' 
-  | 'priority' 
-  | 'status' 
+export type TaskSortField =
+  | 'createdAt'
+  | 'updatedAt'
+  | 'dueDate'
+  | 'priority'
+  | 'status'
   | 'title';
 
 export type SortOrder = 'asc' | 'desc';
@@ -637,7 +648,8 @@ export type WebhookEvent =
 export type Nullable<T> = T | null;
 export type Optional<T> = T | undefined;
 export type RequiredFields<T, K extends keyof T> = T & Required<Pick<T, K>>;
-export type PartialFields<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
+export type PartialFields<T, K extends keyof T> = Omit<T, K> &
+  Partial<Pick<T, K>>;
 
 // API Client Configuration
 export interface ApiClientConfig {

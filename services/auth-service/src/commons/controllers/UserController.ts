@@ -4,19 +4,23 @@ import { AuthenticatedRequest } from '@/typeExpress/express';
 import { IUserService } from '@/core/interfaces/IUserService';
 import { IAuthService } from '@/core/interfaces/IAuthService';
 import { logger } from '@/utils/logger';
-import { 
-  HTTP_STATUS, 
-  ERROR_CODES, 
-  SUCCESS_MESSAGES, 
+import {
+  HTTP_STATUS,
+  ERROR_CODES,
+  SUCCESS_MESSAGES,
   ERROR_MESSAGES,
-  DEFAULT_VALUES
+  DEFAULT_VALUES,
 } from '@/utils/constants';
-import type { ApiResponse, PaginationOptions, UserFilters } from '@/utils/constants';
+import type {
+  ApiResponse,
+  PaginationOptions,
+  UserFilters,
+} from '@/utils/constants';
 
 export class UserController {
   constructor(
     private readonly userService: IUserService,
-    private readonly authService: IAuthService
+    private readonly authService: IAuthService,
   ) {}
 
   /**
@@ -74,7 +78,11 @@ export class UserController {
    *       401:
    *         description: Unauthorized
    */
-  public getUsers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public getUsers = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const {
         page = 1,
@@ -85,7 +93,7 @@ export class UserController {
         isActive,
         isVerified,
         dateFrom,
-        dateTo
+        dateTo,
       } = req.query;
 
       const filters: UserFilters = {
@@ -98,7 +106,10 @@ export class UserController {
 
       const pagination: PaginationOptions = {
         page: parseInt(page as string, 10),
-        limit: Math.min(parseInt(limit as string, 10), DEFAULT_VALUES.PAGINATION_MAX_LIMIT),
+        limit: Math.min(
+          parseInt(limit as string, 10),
+          DEFAULT_VALUES.PAGINATION_MAX_LIMIT,
+        ),
         sortBy: sortBy as string,
         sortOrder: sortOrder as 'asc' | 'desc',
       };
@@ -109,7 +120,7 @@ export class UserController {
         success: true,
         message: 'Users retrieved successfully',
         data: {
-          users: result.users.map(user => ({
+          users: result.users.map((user) => ({
             id: user.id,
             email: user.email,
             username: user.username,
@@ -122,7 +133,7 @@ export class UserController {
             lastLoginAt: user.lastLoginAt,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
-          }))
+          })),
         },
         meta: {
           timestamp: new Date().toISOString(),
@@ -141,7 +152,7 @@ export class UserController {
       logger.error({
         event: 'get_users_error',
         error: error instanceof Error ? error.message : 'Unknown error',
-        query: req.query
+        query: req.query,
       });
       next(error);
     }
@@ -170,7 +181,11 @@ export class UserController {
    *       404:
    *         description: User not found
    */
-  public getUserById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public getUserById = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const { id } = req.params;
 
@@ -182,14 +197,14 @@ export class UserController {
           message: ERROR_MESSAGES.USER_NOT_FOUND,
           error: {
             code: ERROR_CODES.USER_NOT_FOUND,
-            message: ERROR_MESSAGES.USER_NOT_FOUND
+            message: ERROR_MESSAGES.USER_NOT_FOUND,
           },
           meta: {
             timestamp: new Date().toISOString(),
             requestId: req.headers['x-request-id'] as string,
           },
         };
-        
+
         res.status(HTTP_STATUS.NOT_FOUND).json(response);
         return;
       }
@@ -211,7 +226,7 @@ export class UserController {
             lastLoginAt: user.lastLoginAt,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
-          }
+          },
         },
         meta: {
           timestamp: new Date().toISOString(),
@@ -224,7 +239,7 @@ export class UserController {
       logger.error({
         event: 'get_user_by_id_error',
         error: error instanceof Error ? error.message : 'Unknown error',
-        userId: req.params.id
+        userId: req.params.id,
       });
       next(error);
     }
@@ -253,7 +268,11 @@ export class UserController {
    *       404:
    *         description: User not found
    */
-  public getUserProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public getUserProfile = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const { id } = req.params;
 
@@ -265,14 +284,14 @@ export class UserController {
           message: ERROR_MESSAGES.USER_NOT_FOUND,
           error: {
             code: ERROR_CODES.USER_NOT_FOUND,
-            message: ERROR_MESSAGES.USER_NOT_FOUND
+            message: ERROR_MESSAGES.USER_NOT_FOUND,
           },
           meta: {
             timestamp: new Date().toISOString(),
             requestId: req.headers['x-request-id'] as string,
           },
         };
-        
+
         res.status(HTTP_STATUS.NOT_FOUND).json(response);
         return;
       }
@@ -291,7 +310,7 @@ export class UserController {
             avatar: user.avatar,
             isVerified: user.isVerified,
             createdAt: user.createdAt,
-          }
+          },
         },
         meta: {
           timestamp: new Date().toISOString(),
@@ -304,7 +323,7 @@ export class UserController {
       logger.error({
         event: 'get_user_profile_error',
         error: error instanceof Error ? error.message : 'Unknown error',
-        userId: req.params.id
+        userId: req.params.id,
       });
       next(error);
     }
@@ -358,7 +377,11 @@ export class UserController {
    *       409:
    *         description: Email or username already exists
    */
-  public updateUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public updateUser = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -371,14 +394,14 @@ export class UserController {
           message: 'Forbidden: You can only update your own profile',
           error: {
             code: ERROR_CODES.FORBIDDEN,
-            message: 'Forbidden: You can only update your own profile'
+            message: 'Forbidden: You can only update your own profile',
           },
           meta: {
             timestamp: new Date().toISOString(),
             requestId: req.headers['x-request-id'] as string,
           },
         };
-        
+
         res.status(HTTP_STATUS.FORBIDDEN).json(response);
         return;
       }
@@ -392,14 +415,14 @@ export class UserController {
             message: ERROR_MESSAGES.USER_NOT_FOUND,
             error: {
               code: ERROR_CODES.USER_NOT_FOUND,
-              message: ERROR_MESSAGES.USER_NOT_FOUND
+              message: ERROR_MESSAGES.USER_NOT_FOUND,
             },
             meta: {
               timestamp: new Date().toISOString(),
               requestId: req.headers['x-request-id'] as string,
             },
           };
-          
+
           res.status(HTTP_STATUS.NOT_FOUND).json(response);
           return;
         }
@@ -413,14 +436,14 @@ export class UserController {
               message: ERROR_MESSAGES.USER_ALREADY_EXISTS,
               error: {
                 code: ERROR_CODES.USER_ALREADY_EXISTS,
-                message: 'Email already in use'
+                message: 'Email already in use',
               },
               meta: {
                 timestamp: new Date().toISOString(),
                 requestId: req.headers['x-request-id'] as string,
               },
             };
-            
+
             res.status(HTTP_STATUS.CONFLICT).json(response);
             return;
           }
@@ -428,21 +451,22 @@ export class UserController {
 
         // Verificar username duplicado
         if (username && username !== currentUser.username) {
-          const existingUserByUsername = await this.userService.findByUsername(username);
+          const existingUserByUsername =
+            await this.userService.findByUsername(username);
           if (existingUserByUsername) {
             const response: ApiResponse = {
               success: false,
               message: ERROR_MESSAGES.USER_ALREADY_EXISTS,
               error: {
                 code: ERROR_CODES.USER_ALREADY_EXISTS,
-                message: 'Username already in use'
+                message: 'Username already in use',
               },
               meta: {
                 timestamp: new Date().toISOString(),
                 requestId: req.headers['x-request-id'] as string,
               },
             };
-            
+
             res.status(HTTP_STATUS.CONFLICT).json(response);
             return;
           }
@@ -460,7 +484,13 @@ export class UserController {
       logger.info({
         event: 'user_updated',
         userId: id,
-        changes: { email: email ? 'updated' : 'unchanged', username, firstName, lastName, avatar: avatar ? 'updated' : 'unchanged' }
+        changes: {
+          email: email ? 'updated' : 'unchanged',
+          username,
+          firstName,
+          lastName,
+          avatar: avatar ? 'updated' : 'unchanged',
+        },
       });
 
       const response: ApiResponse = {
@@ -480,7 +510,7 @@ export class UserController {
             lastLoginAt: updatedUser.lastLoginAt,
             createdAt: updatedUser.createdAt,
             updatedAt: updatedUser.updatedAt,
-          }
+          },
         },
         meta: {
           timestamp: new Date().toISOString(),
@@ -494,7 +524,7 @@ export class UserController {
         event: 'update_user_error',
         error: error instanceof Error ? error.message : 'Unknown error',
         userId: req.params.id,
-        requesterId: req.user?.id
+        requesterId: req.user?.id,
       });
       next(error);
     }
@@ -539,7 +569,11 @@ export class UserController {
    *       404:
    *         description: User not found
    */
-  public updateAvatar = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public updateAvatar = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -552,14 +586,14 @@ export class UserController {
           message: 'Forbidden: You can only update your own avatar',
           error: {
             code: ERROR_CODES.FORBIDDEN,
-            message: 'Forbidden: You can only update your own avatar'
+            message: 'Forbidden: You can only update your own avatar',
           },
           meta: {
             timestamp: new Date().toISOString(),
             requestId: req.headers['x-request-id'] as string,
           },
         };
-        
+
         res.status(HTTP_STATUS.FORBIDDEN).json(response);
         return;
       }
@@ -568,7 +602,7 @@ export class UserController {
 
       logger.info({
         event: 'avatar_updated',
-        userId: id
+        userId: id,
       });
 
       const response: ApiResponse = {
@@ -588,7 +622,7 @@ export class UserController {
             lastLoginAt: updatedUser.lastLoginAt,
             createdAt: updatedUser.createdAt,
             updatedAt: updatedUser.updatedAt,
-          }
+          },
         },
         meta: {
           timestamp: new Date().toISOString(),
@@ -602,7 +636,7 @@ export class UserController {
         event: 'update_avatar_error',
         error: error instanceof Error ? error.message : 'Unknown error',
         userId: req.params.id,
-        requesterId: req.user?.id
+        requesterId: req.user?.id,
       });
       next(error);
     }
@@ -642,7 +676,11 @@ export class UserController {
    *       404:
    *         description: User not found
    */
-  public deactivateUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public deactivateUser = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -655,14 +693,14 @@ export class UserController {
           message: 'Forbidden: You can only deactivate your own account',
           error: {
             code: ERROR_CODES.FORBIDDEN,
-            message: 'Forbidden: You can only deactivate your own account'
+            message: 'Forbidden: You can only deactivate your own account',
           },
           meta: {
             timestamp: new Date().toISOString(),
             requestId: req.headers['x-request-id'] as string,
           },
         };
-        
+
         res.status(HTTP_STATUS.FORBIDDEN).json(response);
         return;
       }
@@ -675,7 +713,7 @@ export class UserController {
       logger.info({
         event: 'user_deactivated',
         userId: id,
-        reason: reason || 'No reason provided'
+        reason: reason || 'No reason provided',
       });
 
       const response: ApiResponse = {
@@ -693,7 +731,7 @@ export class UserController {
         event: 'deactivate_user_error',
         error: error instanceof Error ? error.message : 'Unknown error',
         userId: req.params.id,
-        requesterId: req.user?.id
+        requesterId: req.user?.id,
       });
       next(error);
     }
@@ -724,7 +762,11 @@ export class UserController {
    *       404:
    *         description: User not found
    */
-  public activateUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public activateUser = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -736,14 +778,14 @@ export class UserController {
           message: 'Forbidden: You can only reactivate your own account',
           error: {
             code: ERROR_CODES.FORBIDDEN,
-            message: 'Forbidden: You can only reactivate your own account'
+            message: 'Forbidden: You can only reactivate your own account',
           },
           meta: {
             timestamp: new Date().toISOString(),
             requestId: req.headers['x-request-id'] as string,
           },
         };
-        
+
         res.status(HTTP_STATUS.FORBIDDEN).json(response);
         return;
       }
@@ -752,7 +794,7 @@ export class UserController {
 
       logger.info({
         event: 'user_reactivated',
-        userId: id
+        userId: id,
       });
 
       const response: ApiResponse = {
@@ -770,7 +812,7 @@ export class UserController {
         event: 'activate_user_error',
         error: error instanceof Error ? error.message : 'Unknown error',
         userId: req.params.id,
-        requesterId: req.user?.id
+        requesterId: req.user?.id,
       });
       next(error);
     }
@@ -801,7 +843,11 @@ export class UserController {
    *       404:
    *         description: User not found
    */
-  public sendEmailVerification = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public sendEmailVerification = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -810,17 +856,19 @@ export class UserController {
       if (currentUserId !== id) {
         const response: ApiResponse = {
           success: false,
-          message: 'Forbidden: You can only request verification for your own email',
+          message:
+            'Forbidden: You can only request verification for your own email',
           error: {
             code: ERROR_CODES.FORBIDDEN,
-            message: 'Forbidden: You can only request verification for your own email'
+            message:
+              'Forbidden: You can only request verification for your own email',
           },
           meta: {
             timestamp: new Date().toISOString(),
             requestId: req.headers['x-request-id'] as string,
           },
         };
-        
+
         res.status(HTTP_STATUS.FORBIDDEN).json(response);
         return;
       }
@@ -829,7 +877,7 @@ export class UserController {
 
       logger.info({
         event: 'email_verification_sent',
-        userId: id
+        userId: id,
       });
 
       const response: ApiResponse = {
@@ -847,7 +895,7 @@ export class UserController {
         event: 'send_email_verification_error',
         error: error instanceof Error ? error.message : 'Unknown error',
         userId: req.params.id,
-        requesterId: req.user?.id
+        requesterId: req.user?.id,
       });
       next(error);
     }
@@ -886,7 +934,11 @@ export class UserController {
    *       404:
    *         description: User not found
    */
-  public verifyEmail = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public verifyEmail = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const { id, token } = req.params;
       const currentUserId = req.user?.id;
@@ -898,14 +950,14 @@ export class UserController {
           message: 'Forbidden: You can only verify your own email',
           error: {
             code: ERROR_CODES.FORBIDDEN,
-            message: 'Forbidden: You can only verify your own email'
+            message: 'Forbidden: You can only verify your own email',
           },
           meta: {
             timestamp: new Date().toISOString(),
             requestId: req.headers['x-request-id'] as string,
           },
         };
-        
+
         res.status(HTTP_STATUS.FORBIDDEN).json(response);
         return;
       }
@@ -914,7 +966,7 @@ export class UserController {
 
       logger.info({
         event: 'email_verified',
-        userId: id
+        userId: id,
       });
 
       const response: ApiResponse = {
@@ -932,7 +984,7 @@ export class UserController {
         event: 'verify_email_error',
         error: error instanceof Error ? error.message : 'Unknown error',
         userId: req.params.id,
-        requesterId: req.user?.id
+        requesterId: req.user?.id,
       });
       next(error);
     }

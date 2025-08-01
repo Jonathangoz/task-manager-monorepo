@@ -1,17 +1,15 @@
 // src/commons/controllers/AuthController.ts
 import { Request, Response, NextFunction } from 'express';
-import { AuthenticatedRequest } from '@/typeExpress/express';
 import { IAuthService } from '@/core/interfaces/IAuthService';
 import { IUserService } from '@/core/interfaces/IUserService';
 import { ITokenService } from '@/core/interfaces/ITokenService';
 import { logger } from '@/utils/logger';
-import { 
-  HTTP_STATUS, 
-  ERROR_CODES, 
-  SUCCESS_MESSAGES, 
+import {
+  HTTP_STATUS,
+  ERROR_CODES,
+  SUCCESS_MESSAGES,
   ERROR_MESSAGES,
-  TOKEN_CONFIG,
-  DEVICE_PATTERNS
+  DEVICE_PATTERNS,
 } from '@/utils/constants';
 import type { ApiResponse } from '@/utils/constants';
 
@@ -19,7 +17,7 @@ export class AuthController {
   constructor(
     private readonly authService: IAuthService,
     private readonly userService: IUserService,
-    private readonly tokenService: ITokenService
+    private readonly tokenService: ITokenService,
   ) {}
 
   /**
@@ -61,7 +59,11 @@ export class AuthController {
    *       409:
    *         description: User already exists
    */
-  public register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public register = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const { email, username, password, firstName, lastName } = req.body;
       const ipAddress = req.ip || req.socket.remoteAddress;
@@ -72,7 +74,7 @@ export class AuthController {
         email,
         username,
         ipAddress,
-        userAgent
+        userAgent,
       });
 
       // Verificar si el usuario ya existe
@@ -82,48 +84,49 @@ export class AuthController {
           event: 'registration_failed',
           reason: 'email_exists',
           email,
-          ipAddress
+          ipAddress,
         });
-        
+
         const response: ApiResponse = {
           success: false,
           message: ERROR_MESSAGES.USER_ALREADY_EXISTS,
           error: {
             code: ERROR_CODES.USER_ALREADY_EXISTS,
-            message: ERROR_MESSAGES.USER_ALREADY_EXISTS
+            message: ERROR_MESSAGES.USER_ALREADY_EXISTS,
           },
           meta: {
             timestamp: new Date().toISOString(),
             requestId: req.headers['x-request-id'] as string,
           },
         };
-        
+
         res.status(HTTP_STATUS.CONFLICT).json(response);
         return;
       }
 
-      const existingUserByUsername = await this.userService.findByUsername(username);
+      const existingUserByUsername =
+        await this.userService.findByUsername(username);
       if (existingUserByUsername) {
         logger.warn({
           event: 'registration_failed',
           reason: 'username_exists',
           username,
-          ipAddress
+          ipAddress,
         });
-        
+
         const response: ApiResponse = {
           success: false,
           message: ERROR_MESSAGES.USER_ALREADY_EXISTS,
           error: {
             code: ERROR_CODES.USER_ALREADY_EXISTS,
-            message: ERROR_MESSAGES.USER_ALREADY_EXISTS
+            message: ERROR_MESSAGES.USER_ALREADY_EXISTS,
           },
           meta: {
             timestamp: new Date().toISOString(),
             requestId: req.headers['x-request-id'] as string,
           },
         };
-        
+
         res.status(HTTP_STATUS.CONFLICT).json(response);
         return;
       }
@@ -141,7 +144,7 @@ export class AuthController {
         event: 'user_registered',
         userId: user.id,
         email: user.email,
-        username: user.username
+        username: user.username,
       });
 
       const response: ApiResponse = {
@@ -157,7 +160,7 @@ export class AuthController {
             isActive: user.isActive,
             isVerified: user.isVerified,
             createdAt: user.createdAt,
-          }
+          },
         },
         meta: {
           timestamp: new Date().toISOString(),
@@ -170,7 +173,7 @@ export class AuthController {
       logger.error({
         event: 'registration_error',
         error: error instanceof Error ? error.message : 'Unknown error',
-        body: req.body
+        body: req.body,
       });
       next(error);
     }
@@ -205,7 +208,11 @@ export class AuthController {
    *       429:
    *         description: Too many login attempts
    */
-  public login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public login = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const { email, password } = req.body;
       const ipAddress = req.ip || req.socket.remoteAddress;
@@ -224,13 +231,13 @@ export class AuthController {
         email,
         ipAddress,
         userAgent,
-        device
+        device,
       });
 
       // Intentar login
       const authResult = await this.authService.login(
         { email, password },
-        sessionInfo
+        sessionInfo,
       );
 
       // Registrar intento exitoso
@@ -239,7 +246,7 @@ export class AuthController {
         userId: authResult.user.id,
         ipAddress,
         userAgent,
-        success: true
+        success: true,
       });
 
       logger.info({
@@ -247,7 +254,7 @@ export class AuthController {
         userId: authResult.user.id,
         email,
         sessionId: authResult.sessionId,
-        ipAddress
+        ipAddress,
       });
 
       // Configurar cookies seguras para el refresh token
@@ -295,12 +302,15 @@ export class AuthController {
           ipAddress: req.ip,
           userAgent: req.get('User-Agent'),
           success: false,
-          reason: 'invalid_credentials'
+          reason: 'invalid_credentials',
         });
       } catch (recordError) {
         logger.error({
           event: 'login_attempt_record_failed',
-          error: recordError instanceof Error ? recordError.message : 'Unknown error'
+          error:
+            recordError instanceof Error
+              ? recordError.message
+              : 'Unknown error',
         });
       }
 
@@ -309,7 +319,7 @@ export class AuthController {
         error: error instanceof Error ? error.message : 'Unknown error',
         email: req.body.email,
         ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
+        userAgent: req.get('User-Agent'),
       });
       next(error);
     }
@@ -329,24 +339,29 @@ export class AuthController {
    *       401:
    *         description: Invalid refresh token
    */
-  public refreshToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public refreshToken = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
-      const refreshToken = req.cookies.task_manager_refresh_token || req.body.refreshToken;
-      
+      const refreshToken =
+        req.cookies.task_manager_refresh_token || req.body.refreshToken;
+
       if (!refreshToken) {
         const response: ApiResponse = {
           success: false,
           message: ERROR_MESSAGES.TOKEN_REQUIRED,
           error: {
             code: ERROR_CODES.TOKEN_REQUIRED,
-            message: ERROR_MESSAGES.TOKEN_REQUIRED
+            message: ERROR_MESSAGES.TOKEN_REQUIRED,
           },
           meta: {
             timestamp: new Date().toISOString(),
             requestId: req.headers['x-request-id'] as string,
           },
         };
-        
+
         res.status(HTTP_STATUS.UNAUTHORIZED).json(response);
         return;
       }
@@ -364,10 +379,13 @@ export class AuthController {
       logger.info({
         event: 'token_refresh_attempt',
         ipAddress,
-        userAgent
+        userAgent,
       });
 
-      const tokens = await this.authService.refreshToken(refreshToken, sessionInfo);
+      const tokens = await this.authService.refreshToken(
+        refreshToken,
+        sessionInfo,
+      );
 
       // Actualizar cookie con el nuevo refresh token
       res.cookie('task_manager_refresh_token', tokens.refreshToken, {
@@ -395,7 +413,7 @@ export class AuthController {
     } catch (error) {
       logger.warn({
         event: 'token_refresh_failed',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
       next(error);
     }
@@ -415,7 +433,11 @@ export class AuthController {
    *       401:
    *         description: Unauthorized
    */
-  public logout = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public logout = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const userId = req.user?.id;
       const sessionId = req.user?.sessionId;
@@ -426,14 +448,14 @@ export class AuthController {
           message: ERROR_MESSAGES.TOKEN_REQUIRED,
           error: {
             code: ERROR_CODES.TOKEN_REQUIRED,
-            message: ERROR_MESSAGES.TOKEN_REQUIRED
+            message: ERROR_MESSAGES.TOKEN_REQUIRED,
           },
           meta: {
             timestamp: new Date().toISOString(),
             requestId: req.headers['x-request-id'] as string,
           },
         };
-        
+
         res.status(HTTP_STATUS.UNAUTHORIZED).json(response);
         return;
       }
@@ -441,7 +463,7 @@ export class AuthController {
       logger.info({
         event: 'logout_attempt',
         userId,
-        sessionId
+        sessionId,
       });
 
       await this.authService.logout(userId, sessionId);
@@ -457,7 +479,7 @@ export class AuthController {
       logger.info({
         event: 'logout_successful',
         userId,
-        sessionId
+        sessionId,
       });
 
       const response: ApiResponse = {
@@ -474,7 +496,7 @@ export class AuthController {
       logger.error({
         event: 'logout_error',
         error: error instanceof Error ? error.message : 'Unknown error',
-        userId: req.user?.id
+        userId: req.user?.id,
       });
       next(error);
     }
@@ -494,7 +516,11 @@ export class AuthController {
    *       401:
    *         description: Unauthorized
    */
-  public logoutAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public logoutAll = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const userId = req.user?.id;
 
@@ -504,21 +530,21 @@ export class AuthController {
           message: ERROR_MESSAGES.TOKEN_REQUIRED,
           error: {
             code: ERROR_CODES.TOKEN_REQUIRED,
-            message: ERROR_MESSAGES.TOKEN_REQUIRED
+            message: ERROR_MESSAGES.TOKEN_REQUIRED,
           },
           meta: {
             timestamp: new Date().toISOString(),
             requestId: req.headers['x-request-id'] as string,
           },
         };
-        
+
         res.status(HTTP_STATUS.UNAUTHORIZED).json(response);
         return;
       }
 
       logger.info({
         event: 'logout_all_attempt',
-        userId
+        userId,
       });
 
       await this.authService.logoutAll(userId);
@@ -533,7 +559,7 @@ export class AuthController {
 
       logger.info({
         event: 'logout_all_successful',
-        userId
+        userId,
       });
 
       const response: ApiResponse = {
@@ -550,7 +576,7 @@ export class AuthController {
       logger.error({
         event: 'logout_all_error',
         error: error instanceof Error ? error.message : 'Unknown error',
-        userId: req.user?.id
+        userId: req.user?.id,
       });
       next(error);
     }
@@ -581,7 +607,11 @@ export class AuthController {
    *       401:
    *         description: Invalid token
    */
-  public verifyToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public verifyToken = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const { token, service } = req.body;
 
@@ -591,14 +621,14 @@ export class AuthController {
           message: ERROR_MESSAGES.TOKEN_REQUIRED,
           error: {
             code: ERROR_CODES.TOKEN_REQUIRED,
-            message: ERROR_MESSAGES.TOKEN_REQUIRED
+            message: ERROR_MESSAGES.TOKEN_REQUIRED,
           },
           meta: {
             timestamp: new Date().toISOString(),
             requestId: req.headers['x-request-id'] as string,
           },
         };
-        
+
         res.status(HTTP_STATUS.BAD_REQUEST).json(response);
         return;
       }
@@ -612,14 +642,14 @@ export class AuthController {
           message: ERROR_MESSAGES.USER_NOT_FOUND,
           error: {
             code: ERROR_CODES.USER_NOT_FOUND,
-            message: ERROR_MESSAGES.USER_NOT_FOUND
+            message: ERROR_MESSAGES.USER_NOT_FOUND,
           },
           meta: {
             timestamp: new Date().toISOString(),
             requestId: req.headers['x-request-id'] as string,
           },
         };
-        
+
         res.status(HTTP_STATUS.UNAUTHORIZED).json(response);
         return;
       }
@@ -627,7 +657,7 @@ export class AuthController {
       logger.info({
         event: 'token_verification_successful',
         userId: user.id,
-        service: service || 'unknown'
+        service: service || 'unknown',
       });
 
       const response: ApiResponse = {
@@ -663,7 +693,7 @@ export class AuthController {
     } catch (error) {
       logger.warn({
         event: 'token_verification_failed',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
       next(error);
     }
@@ -685,7 +715,11 @@ export class AuthController {
    *       404:
    *         description: User not found
    */
-  public getProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public getProfile = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const userId = req.user?.id;
 
@@ -695,14 +729,14 @@ export class AuthController {
           message: ERROR_MESSAGES.USER_NOT_FOUND,
           error: {
             code: ERROR_CODES.USER_NOT_FOUND,
-            message: ERROR_MESSAGES.USER_NOT_FOUND
+            message: ERROR_MESSAGES.USER_NOT_FOUND,
           },
           meta: {
             timestamp: new Date().toISOString(),
             requestId: req.headers['x-request-id'] as string,
           },
         };
-        
+
         res.status(HTTP_STATUS.UNAUTHORIZED).json(response);
         return;
       }
@@ -715,14 +749,14 @@ export class AuthController {
           message: ERROR_MESSAGES.USER_NOT_FOUND,
           error: {
             code: ERROR_CODES.USER_NOT_FOUND,
-            message: ERROR_MESSAGES.USER_NOT_FOUND
+            message: ERROR_MESSAGES.USER_NOT_FOUND,
           },
           meta: {
             timestamp: new Date().toISOString(),
             requestId: req.headers['x-request-id'] as string,
           },
         };
-        
+
         res.status(HTTP_STATUS.NOT_FOUND).json(response);
         return;
       }
@@ -744,7 +778,7 @@ export class AuthController {
             lastLoginAt: user.lastLoginAt,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
-          }
+          },
         },
         meta: {
           timestamp: new Date().toISOString(),
@@ -757,7 +791,7 @@ export class AuthController {
       logger.error({
         event: 'get_profile_error',
         error: error instanceof Error ? error.message : 'Unknown error',
-        userId: req.user?.id
+        userId: req.user?.id,
       });
       next(error);
     }
@@ -795,7 +829,11 @@ export class AuthController {
    *       404:
    *         description: User not found
    */
-  public updateProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public updateProfile = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const userId = req.user?.id;
       const { firstName, lastName, avatar } = req.body;
@@ -806,14 +844,14 @@ export class AuthController {
           message: ERROR_MESSAGES.USER_NOT_FOUND,
           error: {
             code: ERROR_CODES.USER_NOT_FOUND,
-            message: ERROR_MESSAGES.USER_NOT_FOUND
+            message: ERROR_MESSAGES.USER_NOT_FOUND,
           },
           meta: {
             timestamp: new Date().toISOString(),
             requestId: req.headers['x-request-id'] as string,
           },
         };
-        
+
         res.status(HTTP_STATUS.UNAUTHORIZED).json(response);
         return;
       }
@@ -827,7 +865,11 @@ export class AuthController {
       logger.info({
         event: 'profile_updated',
         userId,
-        changes: { firstName, lastName, avatar: avatar ? 'updated' : 'unchanged' }
+        changes: {
+          firstName,
+          lastName,
+          avatar: avatar ? 'updated' : 'unchanged',
+        },
       });
 
       const response: ApiResponse = {
@@ -847,7 +889,7 @@ export class AuthController {
             lastLoginAt: updatedUser.lastLoginAt,
             createdAt: updatedUser.createdAt,
             updatedAt: updatedUser.updatedAt,
-          }
+          },
         },
         meta: {
           timestamp: new Date().toISOString(),
@@ -860,7 +902,7 @@ export class AuthController {
       logger.error({
         event: 'update_profile_error',
         error: error instanceof Error ? error.message : 'Unknown error',
-        userId: req.user?.id
+        userId: req.user?.id,
       });
       next(error);
     }
@@ -897,7 +939,11 @@ export class AuthController {
    *       401:
    *         description: Invalid current password
    */
-  public changePassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public changePassword = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const userId = req.user?.id;
       const { currentPassword, newPassword } = req.body;
@@ -908,26 +954,30 @@ export class AuthController {
           message: ERROR_MESSAGES.USER_NOT_FOUND,
           error: {
             code: ERROR_CODES.USER_NOT_FOUND,
-            message: ERROR_MESSAGES.USER_NOT_FOUND
+            message: ERROR_MESSAGES.USER_NOT_FOUND,
           },
           meta: {
             timestamp: new Date().toISOString(),
             requestId: req.headers['x-request-id'] as string,
           },
         };
-        
+
         res.status(HTTP_STATUS.UNAUTHORIZED).json(response);
         return;
       }
 
-      await this.authService.changePassword(userId, currentPassword, newPassword);
+      await this.authService.changePassword(
+        userId,
+        currentPassword,
+        newPassword,
+      );
 
       // Log de seguridad
       logger.info({
         event: 'password_changed',
         userId,
         ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
+        userAgent: req.get('User-Agent'),
       });
 
       const response: ApiResponse = {
@@ -945,7 +995,7 @@ export class AuthController {
         event: 'password_change_failed',
         error: error instanceof Error ? error.message : 'Unknown error',
         userId: req.user?.id,
-        ipAddress: req.ip
+        ipAddress: req.ip,
       });
       next(error);
     }
@@ -965,7 +1015,11 @@ export class AuthController {
    *       401:
    *         description: Unauthorized
    */
-  public getActiveSessions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public getActiveSessions = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const userId = req.user?.id;
 
@@ -975,14 +1029,14 @@ export class AuthController {
           message: ERROR_MESSAGES.USER_NOT_FOUND,
           error: {
             code: ERROR_CODES.USER_NOT_FOUND,
-            message: ERROR_MESSAGES.USER_NOT_FOUND
+            message: ERROR_MESSAGES.USER_NOT_FOUND,
           },
           meta: {
             timestamp: new Date().toISOString(),
             requestId: req.headers['x-request-id'] as string,
           },
         };
-        
+
         res.status(HTTP_STATUS.UNAUTHORIZED).json(response);
         return;
       }
@@ -993,7 +1047,7 @@ export class AuthController {
         success: true,
         message: 'Sessions retrieved successfully',
         data: {
-          sessions: sessions.map(session => ({
+          sessions: sessions.map((session) => ({
             id: session.id,
             sessionId: session.sessionId,
             device: session.device,
@@ -1018,7 +1072,7 @@ export class AuthController {
       logger.error({
         event: 'get_sessions_error',
         error: error instanceof Error ? error.message : 'Unknown error',
-        userId: req.user?.id
+        userId: req.user?.id,
       });
       next(error);
     }
@@ -1046,7 +1100,11 @@ export class AuthController {
    *       404:
    *         description: Session not found
    */
-  public terminateSession = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public terminateSession = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const userId = req.user?.id;
       const { sessionId } = req.params;
@@ -1057,14 +1115,14 @@ export class AuthController {
           message: ERROR_MESSAGES.USER_NOT_FOUND,
           error: {
             code: ERROR_CODES.USER_NOT_FOUND,
-            message: ERROR_MESSAGES.USER_NOT_FOUND
+            message: ERROR_MESSAGES.USER_NOT_FOUND,
           },
           meta: {
             timestamp: new Date().toISOString(),
             requestId: req.headers['x-request-id'] as string,
           },
         };
-        
+
         res.status(HTTP_STATUS.UNAUTHORIZED).json(response);
         return;
       }
@@ -1075,7 +1133,7 @@ export class AuthController {
         event: 'session_terminated',
         userId,
         sessionId,
-        terminatedBy: req.user?.sessionId
+        terminatedBy: req.user?.sessionId,
       });
 
       const response: ApiResponse = {
@@ -1093,7 +1151,7 @@ export class AuthController {
         event: 'terminate_session_error',
         error: error instanceof Error ? error.message : 'Unknown error',
         userId: req.user?.id,
-        sessionId: req.params.sessionId
+        sessionId: req.params.sessionId,
       });
       next(error);
     }
@@ -1123,14 +1181,18 @@ export class AuthController {
    *       404:
    *         description: User not found
    */
-  public forgotPassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public forgotPassword = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const { email } = req.body;
 
       logger.info({
         event: 'forgot_password_request',
         email,
-        ipAddress: req.ip
+        ipAddress: req.ip,
       });
 
       await this.authService.forgotPassword(email);
@@ -1150,7 +1212,7 @@ export class AuthController {
       logger.error({
         event: 'forgot_password_error',
         error: error instanceof Error ? error.message : 'Unknown error',
-        email: req.body.email
+        email: req.body.email,
       });
       next(error);
     }
@@ -1187,21 +1249,25 @@ export class AuthController {
    *       400:
    *         description: Invalid or expired token
    */
-  public resetPassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public resetPassword = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const { token, password, email } = req.body;
 
       logger.info({
         event: 'password_reset_attempt',
         email,
-        ipAddress: req.ip
+        ipAddress: req.ip,
       });
 
       await this.authService.resetPassword(token, password, email);
 
       logger.info({
         event: 'password_reset_successful',
-        email
+        email,
       });
 
       const response: ApiResponse = {
@@ -1218,7 +1284,7 @@ export class AuthController {
       logger.warn({
         event: 'password_reset_failed',
         error: error instanceof Error ? error.message : 'Unknown error',
-        email: req.body.email
+        email: req.body.email,
       });
       next(error);
     }

@@ -54,15 +54,18 @@ class TaskServiceRedisRateLimitStore {
   async increment(key: string): Promise<RateLimitResult> {
     try {
       const redis = taskRedisConnection.getClient();
-      
+
       // Verificar conexión Redis
       if (!taskRedisConnection.isHealthy()) {
-        logger.warn({
-          event: EVENT_TYPES.CACHE_ERROR,
-          component: 'rate_limit_store',
-          key,
-        }, 'Redis not healthy, allowing request');
-        
+        logger.warn(
+          {
+            event: EVENT_TYPES.CACHE_ERROR,
+            component: 'rate_limit_store',
+            key,
+          },
+          'Redis not healthy, allowing request',
+        );
+
         // Fallback: permitir request si Redis no está disponible
         return { totalHits: 1, timeToExpire: this.windowMs };
       }
@@ -77,22 +80,25 @@ class TaskServiceRedisRateLimitStore {
       pipeline.ttl(redisKey);
 
       const results = await pipeline.exec();
-      
+
       if (!results || results.some(([err]) => err)) {
         throw new Error('Pipeline execution failed');
       }
 
       const totalHits = results[0][1] as number;
       const ttl = results[2][1] as number;
-      const resetTime = new Date(Date.now() + (ttl * 1000));
+      const resetTime = new Date(Date.now() + ttl * 1000);
 
-      logger.debug({
-        event: EVENT_TYPES.CACHE_HIT,
-        component: 'rate_limit_store',
-        key,
-        totalHits,
-        ttl,
-      }, 'Rate limit incremented');
+      logger.debug(
+        {
+          event: EVENT_TYPES.CACHE_HIT,
+          component: 'rate_limit_store',
+          key,
+          totalHits,
+          ttl,
+        },
+        'Rate limit incremented',
+      );
 
       return {
         totalHits,
@@ -100,12 +106,15 @@ class TaskServiceRedisRateLimitStore {
         resetTime,
       };
     } catch (error) {
-      logger.error({
-        error,
-        event: EVENT_TYPES.CACHE_ERROR,
-        component: 'rate_limit_store',
-        key,
-      }, 'Failed to increment rate limit counter');
+      logger.error(
+        {
+          error,
+          event: EVENT_TYPES.CACHE_ERROR,
+          component: 'rate_limit_store',
+          key,
+        },
+        'Failed to increment rate limit counter',
+      );
 
       // Fallback: permitir request en caso de error
       return { totalHits: 1, timeToExpire: this.windowMs };
@@ -118,30 +127,36 @@ class TaskServiceRedisRateLimitStore {
   async decrement(key: string): Promise<void> {
     try {
       const redis = taskRedisConnection.getClient();
-      
+
       if (!taskRedisConnection.isHealthy()) {
         return;
       }
 
       const redisKey = `${this.keyPrefix}${key}`;
       const currentValue = await redis.get(redisKey);
-      
+
       if (currentValue && parseInt(currentValue) > 0) {
         await redis.decr(redisKey);
-        
-        logger.debug({
-          event: EVENT_TYPES.CACHE_HIT,
-          component: 'rate_limit_store',
-          key,
-        }, 'Rate limit decremented');
+
+        logger.debug(
+          {
+            event: EVENT_TYPES.CACHE_HIT,
+            component: 'rate_limit_store',
+            key,
+          },
+          'Rate limit decremented',
+        );
       }
     } catch (error) {
-      logger.error({
-        error,
-        event: EVENT_TYPES.CACHE_ERROR,
-        component: 'rate_limit_store',
-        key,
-      }, 'Failed to decrement rate limit counter');
+      logger.error(
+        {
+          error,
+          event: EVENT_TYPES.CACHE_ERROR,
+          component: 'rate_limit_store',
+          key,
+        },
+        'Failed to decrement rate limit counter',
+      );
     }
   }
 
@@ -151,7 +166,7 @@ class TaskServiceRedisRateLimitStore {
   async resetKey(key: string): Promise<void> {
     try {
       const redis = taskRedisConnection.getClient();
-      
+
       if (!taskRedisConnection.isHealthy()) {
         return;
       }
@@ -159,18 +174,24 @@ class TaskServiceRedisRateLimitStore {
       const redisKey = `${this.keyPrefix}${key}`;
       await redis.del(redisKey);
 
-      logger.debug({
-        event: EVENT_TYPES.CACHE_MISS,
-        component: 'rate_limit_store',
-        key,
-      }, 'Rate limit key reset');
+      logger.debug(
+        {
+          event: EVENT_TYPES.CACHE_MISS,
+          component: 'rate_limit_store',
+          key,
+        },
+        'Rate limit key reset',
+      );
     } catch (error) {
-      logger.error({
-        error,
-        event: EVENT_TYPES.CACHE_ERROR,
-        component: 'rate_limit_store',
-        key,
-      }, 'Failed to reset rate limit key');
+      logger.error(
+        {
+          error,
+          event: EVENT_TYPES.CACHE_ERROR,
+          component: 'rate_limit_store',
+          key,
+        },
+        'Failed to reset rate limit key',
+      );
     }
   }
 
@@ -180,7 +201,7 @@ class TaskServiceRedisRateLimitStore {
   async getStatus(key: string): Promise<{ count: number; ttl: number } | null> {
     try {
       const redis = taskRedisConnection.getClient();
-      
+
       if (!taskRedisConnection.isHealthy()) {
         return null;
       }
@@ -191,29 +212,34 @@ class TaskServiceRedisRateLimitStore {
       pipeline.ttl(redisKey);
 
       const results = await pipeline.exec();
-      
+
       if (!results || results.some(([err]) => err)) {
         return null;
       }
 
-      const count = parseInt(results[0][1] as string || '0');
+      const count = parseInt((results[0][1] as string) || '0');
       const ttl = results[1][1] as number;
 
       return { count, ttl };
     } catch (error) {
-      logger.error({
-        error,
-        event: EVENT_TYPES.CACHE_ERROR,
-        component: 'rate_limit_store',
-        key,
-      }, 'Failed to get rate limit status');
+      logger.error(
+        {
+          error,
+          event: EVENT_TYPES.CACHE_ERROR,
+          component: 'rate_limit_store',
+          key,
+        },
+        'Failed to get rate limit status',
+      );
       return null;
     }
   }
 }
 
 // FACTORY FUNCTION PARA CREAR RATE LIMITERS
-export const createRateLimiter = (options: RateLimitOptions = {}): RateLimitRequestHandler => {
+export const createRateLimiter = (
+  options: RateLimitOptions = {},
+): RateLimitRequestHandler => {
   const {
     windowMs = config.rateLimit.windowMs,
     max = config.rateLimit.maxRequests,
@@ -228,7 +254,9 @@ export const createRateLimiter = (options: RateLimitOptions = {}): RateLimitRequ
     enableRedisStore = true,
   } = options;
 
-  const store = enableRedisStore ? new TaskServiceRedisRateLimitStore(windowMs) : undefined;
+  const store = enableRedisStore
+    ? new TaskServiceRedisRateLimitStore(windowMs)
+    : undefined;
 
   return rateLimit({
     windowMs,
@@ -247,11 +275,11 @@ export const createRateLimiter = (options: RateLimitOptions = {}): RateLimitRequ
         timestamp: new Date().toISOString(),
       },
     } as ApiResponse,
-    
+
     // Headers estándar de rate limiting
     standardHeaders: true,
     legacyHeaders: false,
-    
+
     keyGenerator,
     skipSuccessfulRequests,
     skipFailedRequests,
@@ -261,17 +289,20 @@ export const createRateLimiter = (options: RateLimitOptions = {}): RateLimitRequ
       const extReq = req as ExtendedRequest;
       const identifier = keyGenerator(req);
 
-      logger.warn({
-        event: EVENT_TYPES.RATE_LIMIT_EXCEEDED,
-        component: 'rate_limit_middleware',
-        identifier,
-        userId: extReq.userId,
-        ip: req.ip,
-        path: req.path,
-        method: req.method,
-        userAgent: req.get('User-Agent'),
-        rateLimitInfo: extReq.rateLimitInfo,
-      }, 'Rate limit exceeded');
+      logger.warn(
+        {
+          event: EVENT_TYPES.RATE_LIMIT_EXCEEDED,
+          component: 'rate_limit_middleware',
+          identifier,
+          userId: extReq.userId,
+          ip: req.ip,
+          path: req.path,
+          method: req.method,
+          userAgent: req.get('User-Agent'),
+          rateLimitInfo: extReq.rateLimitInfo,
+        },
+        'Rate limit exceeded',
+      );
 
       // Respuesta consistente con el formato de la API
       const response: ApiResponse = {
@@ -298,18 +329,22 @@ export const createRateLimiter = (options: RateLimitOptions = {}): RateLimitRequ
 // MIDDLEWARE DE ENRIQUECIMIENTO DE RATE LIMIT INFO
 export const enrichRateLimitInfo = (
   rateLimitStore: TaskServiceRedisRateLimitStore,
-  maxRequests: number
+  maxRequests: number,
 ) => {
-  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  return async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const extReq = req as ExtendedRequest;
       const identifier = extReq.userId || req.ip || 'unknown';
-      
+
       const status = await rateLimitStore.getStatus(identifier);
-      
+
       if (status) {
         const remaining = Math.max(0, maxRequests - status.count);
-        const resetTime = new Date(Date.now() + (status.ttl * 1000));
+        const resetTime = new Date(Date.now() + status.ttl * 1000);
 
         extReq.rateLimitInfo = {
           limit: maxRequests,
@@ -327,12 +362,15 @@ export const enrichRateLimitInfo = (
 
       next();
     } catch (error) {
-      logger.error({
-        error,
-        event: EVENT_TYPES.CACHE_ERROR,
-        component: 'rate_limit_enricher',
-      }, 'Failed to enrich rate limit info');
-      
+      logger.error(
+        {
+          error,
+          event: EVENT_TYPES.CACHE_ERROR,
+          component: 'rate_limit_enricher',
+        },
+        'Failed to enrich rate limit info',
+      );
+
       // Continuar sin enriquecimiento en caso de error
       next();
     }
@@ -424,28 +462,37 @@ export const adminRateLimit = createRateLimiter({
 /**
  * Middleware para logging de rate limit (útil en desarrollo)
  */
-export const rateLimitLogger = (req: Request, res: Response, next: NextFunction): void => {
+export const rateLimitLogger = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void => {
   if (config.app.isDevelopment) {
     const extReq = req as ExtendedRequest;
-    
+
     if (extReq.rateLimitInfo) {
-      logger.debug({
-        component: 'rate_limit_logger',
-        path: req.path,
-        method: req.method,
-        userId: extReq.userId,
-        rateLimitInfo: extReq.rateLimitInfo,
-      }, 'Rate limit status');
+      logger.debug(
+        {
+          component: 'rate_limit_logger',
+          path: req.path,
+          method: req.method,
+          userId: extReq.userId,
+          rateLimitInfo: extReq.rateLimitInfo,
+        },
+        'Rate limit status',
+      );
     }
   }
-  
+
   next();
 };
 
 /**
  * Función para obtener estadísticas de rate limiting
  */
-export const getRateLimitStats = async (identifier: string): Promise<{
+export const getRateLimitStats = async (
+  identifier: string,
+): Promise<{
   current: number;
   limit: number;
   remaining: number;
@@ -454,14 +501,15 @@ export const getRateLimitStats = async (identifier: string): Promise<{
   try {
     const store = new TaskServiceRedisRateLimitStore(config.rateLimit.windowMs);
     const status = await store.getStatus(identifier);
-    
+
     if (!status) {
       return null;
     }
 
     const limit = config.rateLimit.maxRequests;
     const remaining = Math.max(0, limit - status.count);
-    const resetTime = status.ttl > 0 ? new Date(Date.now() + (status.ttl * 1000)) : null;
+    const resetTime =
+      status.ttl > 0 ? new Date(Date.now() + status.ttl * 1000) : null;
 
     return {
       current: status.count,
@@ -470,11 +518,14 @@ export const getRateLimitStats = async (identifier: string): Promise<{
       resetTime,
     };
   } catch (error) {
-    logger.error({
-      error,
-      identifier,
-      event: EVENT_TYPES.CACHE_ERROR,
-    }, 'Failed to get rate limit stats');
+    logger.error(
+      {
+        error,
+        identifier,
+        event: EVENT_TYPES.CACHE_ERROR,
+      },
+      'Failed to get rate limit stats',
+    );
     return null;
   }
 };
@@ -486,19 +537,25 @@ export const resetRateLimit = async (identifier: string): Promise<boolean> => {
   try {
     const store = new TaskServiceRedisRateLimitStore(config.rateLimit.windowMs);
     await store.resetKey(identifier);
-    
-    logger.info({
-      component: 'rate_limit_admin',
-      identifier,
-    }, 'Rate limit reset manually');
-    
+
+    logger.info(
+      {
+        component: 'rate_limit_admin',
+        identifier,
+      },
+      'Rate limit reset manually',
+    );
+
     return true;
   } catch (error) {
-    logger.error({
-      error,
-      identifier,
-      event: EVENT_TYPES.CACHE_ERROR,
-    }, 'Failed to reset rate limit');
+    logger.error(
+      {
+        error,
+        identifier,
+        event: EVENT_TYPES.CACHE_ERROR,
+      },
+      'Failed to reset rate limit',
+    );
     return false;
   }
 };
