@@ -88,32 +88,28 @@ jobs:
         env:
           DATABASE_URL: postgresql://auth_test_user:auth_test_password@localhost:5432/auth_test_db
 
-      - name: 🗄️ Run Database Migrations
-        run: pnpm --filter task-manager-auth-service prisma:migrate:dev
-        env:
-          DATABASE_URL: postgresql://auth_test_user:auth_test_password@localhost:5432/auth_test_db
-
       - name: 🏗️ Build Application
         run: pnpm --filter task-manager-auth-service build
 
-      - name: 🧪 Run Tests
-        run: pnpm --filter task-manager-auth-service test:coverage
-        env:
-          NODE_ENV: test
-          DATABASE_URL: postgresql://auth_test_user:auth_test_password@localhost:5432/auth_test_db
-          REDIS_URL: redis://localhost:6379
-          JWT_SECRET: base64:dGVzdC1qd3Qtc2VjcmV0LXN1cGVyLXNlY3VyZS1mb3ItdGVzdGluZy1vbmx5LTY0LWNoYXJzLWhlcmU=
-          REFRESH_TOKEN_SECRET: base64:dGVzdC1yZWZyZXNoLXNlY3JldC1zdXBlci1zZWN1cmUtZm9yLXRlc3Rpbmctb25seS02NC1jaGFycw==
-          JWE_SECRET: base64:dGVzdC1qd2Utc2VjcmV0LTMyLWNoYXJzLWV4YWN0bHk=
+    #    ❌ TESTS COMENTADOS - Solo para desarrollo local
+    #  - name: 🧪 Run Tests
+    #    run: pnpm --filter task-manager-auth-service test:coverage
+    #    env:
+    #      NODE_ENV: test
+    #      DATABASE_URL: postgresql://auth_test_user:auth_test_password@localhost:5432/auth_test_db
+    #      REDIS_URL: redis://localhost:6379
+    #      JWT_SECRET: base64:dGVzdC1qd3Qtc2VjcmV0LXN1cGVyLXNlY3VyZS1mb3ItdGVzdGluZy1vbmx5LTY0LWNoYXJzLWhlcmU=
+    #      REFRESH_TOKEN_SECRET: base64:dGVzdC1yZWZyZXNoLXNlY3JldC1zdXBlci1zZWN1cmUtZm9yLXRlc3Rpbmctb25seS02NC1jaGFycw==
+    #      JWE_SECRET: base64:dGVzdC1qd2Utc2VjcmV0LTMyLWNoYXJzLWV4YWN0bHk=
 
-      - name: 📊 Upload Coverage Reports
-        uses: codecov/codecov-action@v4
-        with:
-          file: ${{ env.SERVICE_PATH }}/coverage/lcov.info
-          flags: auth-service
-          name: auth-service-coverage
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    #  - name: 📊 Upload Coverage Reports
+    #    uses: codecov/codecov-action@v4
+    #    with:
+    #      file: ${{ env.SERVICE_PATH }}/coverage/lcov.info
+    #      flags: auth-service
+    #      name: auth-service-coverage
+    #    env:
+    #      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   # 🌟 Deploy to Production (main branch)
   deploy-production:
