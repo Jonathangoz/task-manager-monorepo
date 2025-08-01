@@ -21,22 +21,20 @@ import { environment } from '@/config/environment';
 
 // Utils
 import {
-  logger,
   httpLogger,
   securityLogger,
-  createContextLogger
+  createContextLogger,
 } from '@/utils/logger';
 import {
   swaggerSpec,
   swaggerUiOptions,
   validateSwaggerSpec,
-  getSwaggerInfo
+  getSwaggerInfo,
 } from '@/utils/swagger';
 import {
   REQUEST_HEADERS,
   MIDDLEWARE_CONFIG,
-  TIMEOUT_CONFIG,
-  RATE_LIMIT_CONFIG
+  RATE_LIMIT_CONFIG,
 } from '@/utils/constants';
 
 // Middlewares
@@ -45,7 +43,7 @@ import {
   notFoundHandler,
   payloadTooLargeHandler,
   timeoutHandler,
-  jsonErrorHandler
+  jsonErrorHandler,
 } from '@/commons/middlewares/error.middleware';
 
 // Services and Dependencies
@@ -92,7 +90,7 @@ const RequestHeadersSchema = z.object({
   'x-real-ip': z.string().optional(),
   'correlation-id': z.string().optional(),
   'request-id': z.string().optional(),
-  'authorization': z.string().optional(),
+  authorization: z.string().optional(),
   'x-api-key': z.string().optional(),
 });
 
@@ -100,7 +98,7 @@ const CorsOriginSchema = z.union([
   z.string().url(),
   z.literal('*'),
   z.boolean(),
-  z.array(z.string().url())
+  z.array(z.string().url()),
 ]);
 
 // HELPER FUNCTIONS
@@ -108,23 +106,23 @@ const CorsOriginSchema = z.union([
  * Convierte un string de tamaño (e.g., '10mb') a bytes.
  */
 const parseSize = (sizeStr: string): number => {
-    const sizeRegex = /^(\d+)(mb|kb|gb)$/i;
-    const match = sizeStr.match(sizeRegex);
-    if (!match) return 10485760; // Default 10mb
+  const sizeRegex = /^(\d+)(mb|kb|gb)$/i;
+  const match = sizeStr.match(sizeRegex);
+  if (!match) return 10485760; // Default 10mb
 
-    const size = parseInt(match[1], 10);
-    const unit = match[2].toLowerCase();
+  const size = parseInt(match[1], 10);
+  const unit = match[2].toLowerCase();
 
-    switch (unit) {
-        case 'gb':
-            return size * 1024 * 1024 * 1024;
-        case 'mb':
-            return size * 1024 * 1024;
-        case 'kb':
-            return size * 1024;
-        default:
-            return size;
-    }
+  switch (unit) {
+    case 'gb':
+      return size * 1024 * 1024 * 1024;
+    case 'mb':
+      return size * 1024 * 1024;
+    case 'kb':
+      return size * 1024;
+    default:
+      return size;
+  }
 };
 
 // CLASE PRINCIPAL DE LA APLICACIÓN
@@ -147,7 +145,7 @@ class App {
         nodeVersion: process.version,
         environment: environment.app.env,
         port: environment.app.port,
-        swaggerEnabled: environment.features?.swaggerEnabled
+        swaggerEnabled: environment.features?.swaggerEnabled,
       });
 
       await this.validateConfiguration();
@@ -172,16 +170,26 @@ class App {
     try {
       const userRepository: IUserRepository = new UserRepository(db);
       const cacheService: ICacheService = new RedisCache();
-      const tokenService: ITokenService = new TokenService(userRepository, cacheService);
-      const userService: IUserService = new UserService(userRepository, cacheService);
-      const authService: IAuthService = new AuthService(userRepository, tokenService, cacheService);
+      const tokenService: ITokenService = new TokenService(
+        userRepository,
+        cacheService,
+      );
+      const userService: IUserService = new UserService(
+        userRepository,
+        cacheService,
+      );
+      const authService: IAuthService = new AuthService(
+        userRepository,
+        tokenService,
+        cacheService,
+      );
 
       this.services = {
         userRepository,
         cacheService,
         tokenService,
         userService,
-        authService
+        authService,
       };
 
       this.appLogger.info('Services initialized successfully');
@@ -196,17 +204,24 @@ class App {
 
     try {
       const requiredEnvVars = ['JWT_SECRET', 'DATABASE_URL'];
-      const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+      const missingVars = requiredEnvVars.filter(
+        (varName) => !process.env[varName],
+      );
 
       if (missingVars.length > 0) {
-        throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
+        throw new Error(
+          `Missing required environment variables: ${missingVars.join(', ')}`,
+        );
       }
 
       if (environment.cors?.origin) {
         CorsOriginSchema.parse(environment.cors.origin);
       }
 
-      if (environment.features?.swaggerEnabled && !environment.app.isProduction) {
+      if (
+        environment.features?.swaggerEnabled &&
+        !environment.app.isProduction
+      ) {
         if (!validateSwaggerSpec()) {
           throw new Error('Invalid Swagger specification');
         }
@@ -220,47 +235,55 @@ class App {
   }
 
   private buildSecurityConfig(): SecurityConfig {
-    const helmetConfig = environment.app.isProduction ? {
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-          scriptSrc: ["'self'", "'unsafe-inline'"],
-          imgSrc: ["'self'", "data:", "https:", "blob:"],
-          connectSrc: ["'self'", "https://api.github.com"],
-          fontSrc: ["'self'", "https://fonts.gstatic.com"],
-          objectSrc: ["'none'"],
-          mediaSrc: ["'self'"],
-          frameSrc: ["'none'"],
-          childSrc: ["'none'"],
-          formAction: ["'self'"],
-          frameAncestors: ["'none'"],
-          baseUri: ["'self'"],
-          manifestSrc: ["'self'"]
-        },
-      },
-      crossOriginEmbedderPolicy: { policy: "credentialless" as const },
-      crossOriginOpenerPolicy: { policy: "same-origin" as const },
-      crossOriginResourcePolicy: { policy: "cross-origin" as const },
-      dnsPrefetchControl: { allow: false },
-      frameguard: { action: 'deny' as const },
-      hidePoweredBy: true,
-      hsts: {
-        maxAge: 31536000,
-        includeSubDomains: true,
-        preload: true
-      },
-      ieNoOpen: true,
-      noSniff: true,
-      originAgentCluster: true,
-      permittedCrossDomainPolicies: false,
-      referrerPolicy: { policy: "strict-origin-when-cross-origin" as const },
-      xssFilter: true
-    } : {
-      contentSecurityPolicy: false,
-      crossOriginEmbedderPolicy: false,
-      hsts: false
-    };
+    const helmetConfig = environment.app.isProduction
+      ? {
+          contentSecurityPolicy: {
+            directives: {
+              defaultSrc: ["'self'"],
+              styleSrc: [
+                "'self'",
+                "'unsafe-inline'",
+                'https://fonts.googleapis.com',
+              ],
+              scriptSrc: ["'self'", "'unsafe-inline'"],
+              imgSrc: ["'self'", 'data:', 'https:', 'blob:'],
+              connectSrc: ["'self'", 'https://api.github.com'],
+              fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+              objectSrc: ["'none'"],
+              mediaSrc: ["'self'"],
+              frameSrc: ["'none'"],
+              childSrc: ["'none'"],
+              formAction: ["'self'"],
+              frameAncestors: ["'none'"],
+              baseUri: ["'self'"],
+              manifestSrc: ["'self'"],
+            },
+          },
+          crossOriginEmbedderPolicy: { policy: 'credentialless' as const },
+          crossOriginOpenerPolicy: { policy: 'same-origin' as const },
+          crossOriginResourcePolicy: { policy: 'cross-origin' as const },
+          dnsPrefetchControl: { allow: false },
+          frameguard: { action: 'deny' as const },
+          hidePoweredBy: true,
+          hsts: {
+            maxAge: 31536000,
+            includeSubDomains: true,
+            preload: true,
+          },
+          ieNoOpen: true,
+          noSniff: true,
+          originAgentCluster: true,
+          permittedCrossDomainPolicies: false,
+          referrerPolicy: {
+            policy: 'strict-origin-when-cross-origin' as const,
+          },
+          xssFilter: true,
+        }
+      : {
+          contentSecurityPolicy: false,
+          crossOriginEmbedderPolicy: false,
+          hsts: false,
+        };
 
     const corsConfig: cors.CorsOptions = {
       origin: this.getCorsOrigins(),
@@ -280,7 +303,7 @@ class App {
         REQUEST_HEADERS.REQUEST_ID,
         REQUEST_HEADERS.USER_AGENT,
         'X-Client-Version',
-        'X-Device-Id'
+        'X-Device-Id',
       ],
       exposedHeaders: [
         'X-Total-Count',
@@ -290,11 +313,11 @@ class App {
         'X-RateLimit-Reset',
         'X-Response-Time',
         REQUEST_HEADERS.CORRELATION_ID,
-        REQUEST_HEADERS.REQUEST_ID
+        REQUEST_HEADERS.REQUEST_ID,
       ],
       maxAge: 86400,
       optionsSuccessStatus: 200,
-      preflightContinue: false
+      preflightContinue: false,
     };
 
     const rateLimitConfig = rateLimit({
@@ -305,8 +328,8 @@ class App {
         message: 'Too many requests from this IP, please try again later',
         error: {
           code: 'RATE_LIMIT_EXCEEDED',
-          details: 'Maximum requests per window exceeded'
-        }
+          details: 'Maximum requests per window exceeded',
+        },
       },
       standardHeaders: true,
       legacyHeaders: false,
@@ -315,17 +338,17 @@ class App {
           ip: req.ip,
           userAgent: req.get('User-Agent'),
           path: req.path,
-          method: req.method
+          method: req.method,
         });
         res.status(429).json({
           success: false,
           message: 'Too many requests, please try again later',
-          error: { code: 'RATE_LIMIT_EXCEEDED' }
+          error: { code: 'RATE_LIMIT_EXCEEDED' },
         });
       },
       skip: (req: Request) => {
         return req.path.startsWith('/health');
-      }
+      },
     });
 
     const slowDownConfig = slowDown({
@@ -339,7 +362,7 @@ class App {
       helmet: helmetConfig,
       cors: corsConfig,
       rateLimit: rateLimitConfig,
-      slowDown: slowDownConfig
+      slowDown: slowDownConfig,
     };
   }
 
@@ -365,50 +388,62 @@ class App {
     // ✅ TIMEOUT OPTIMIZADO PARA RENDER - excluir health checks
     this.app.use((req: Request, res: Response, next: NextFunction) => {
       // ✅ NO aplicar timeout a health checks (muy importante para Render)
-      if (req.path.includes('/health') || 
-          req.path.includes('/api/v1/health') ||
-          req.path === '/' ||
-          req.path.includes('/metrics')) {
+      if (
+        req.path.includes('/health') ||
+        req.path.includes('/api/v1/health') ||
+        req.path === '/' ||
+        req.path.includes('/metrics')
+      ) {
         return next();
       }
-      
+
       // ✅ Timeout más generoso para requests normales en cloud
       const timeoutValue = environment.app.isProduction ? '120000' : '30000'; // 2 min en prod, 30s en dev
       return timeout(timeoutValue)(req, res, next);
     });
 
     // ✅ Compression optimizado
-    this.app.use(compression({
-      threshold: MIDDLEWARE_CONFIG?.COMPRESSION_THRESHOLD || 1024,
-      level: environment.app.isProduction ? 6 : 1,
-      filter: (req, res) => {
-        if (req.headers['x-no-compression']) {
-          return false;
-        }
-        // ✅ No comprimir health checks para mayor velocidad
-        if (req.path.includes('/health')) {
-          return false;
-        }
-        const contentType = res.getHeader('content-type');
-        if (typeof contentType === 'string') {
-          const skipTypes = ['image/', 'video/', 'audio/', 'application/zip', 'application/gzip'];
-          if (skipTypes.some(type => contentType.includes(type))) {
+    this.app.use(
+      compression({
+        threshold: MIDDLEWARE_CONFIG?.COMPRESSION_THRESHOLD || 1024,
+        level: environment.app.isProduction ? 6 : 1,
+        filter: (req, res) => {
+          if (req.headers['x-no-compression']) {
             return false;
           }
-        }
-        return compression.filter(req, res);
-      }
-    }));
+          // ✅ No comprimir health checks para mayor velocidad
+          if (req.path.includes('/health')) {
+            return false;
+          }
+          const contentType = res.getHeader('content-type');
+          if (typeof contentType === 'string') {
+            const skipTypes = [
+              'image/',
+              'video/',
+              'audio/',
+              'application/zip',
+              'application/gzip',
+            ];
+            if (skipTypes.some((type) => contentType.includes(type))) {
+              return false;
+            }
+          }
+          return compression.filter(req, res);
+        },
+      }),
+    );
 
-    const maxRequestSizeBytes = parseSize(MIDDLEWARE_CONFIG?.MAX_REQUEST_SIZE || '10mb');
-    
+    const maxRequestSizeBytes = parseSize(
+      MIDDLEWARE_CONFIG?.MAX_REQUEST_SIZE || '10mb',
+    );
+
     // ✅ JSON parser optimizado
     this.app.use((req: Request, res: Response, next: NextFunction) => {
       // ✅ Health checks no necesitan parsing JSON
       if (req.path.includes('/health')) {
         return next();
       }
-      
+
       return express.json({
         limit: maxRequestSizeBytes,
         strict: true,
@@ -417,11 +452,14 @@ class App {
           if (buf && buf.length === 0) {
             throw new Error('Request body cannot be empty');
           }
-          const contentLength = parseInt(req.headers['content-length'] || '0', 10);
+          const contentLength = parseInt(
+            req.headers['content-length'] || '0',
+            10,
+          );
           if (contentLength > maxRequestSizeBytes) {
             throw new Error('Payload too large');
           }
-        }
+        },
       })(req, res, next);
     });
 
@@ -430,12 +468,12 @@ class App {
       if (req.path.includes('/health')) {
         return next();
       }
-      
+
       return express.urlencoded({
         extended: true,
         limit: maxRequestSizeBytes,
         parameterLimit: 100,
-        type: 'application/x-www-form-urlencoded'
+        type: 'application/x-www-form-urlencoded',
       })(req, res, next);
     });
 
@@ -450,52 +488,71 @@ class App {
   }
 
   private setupMorganLogging(): void {
-    morgan.token('correlation-id', (req: Request) => (req as AppRequest).correlationId || 'unknown');
-    morgan.token('request-id', (req: Request) => (req as AppRequest).requestId || 'unknown');
-    morgan.token('real-ip', (req: Request) => (req as AppRequest).clientIp || req.ip || 'unknown');
+    morgan.token(
+      'correlation-id',
+      (req: Request) => (req as AppRequest).correlationId || 'unknown',
+    );
+    morgan.token(
+      'request-id',
+      (req: Request) => (req as AppRequest).requestId || 'unknown',
+    );
+    morgan.token(
+      'real-ip',
+      (req: Request) => (req as AppRequest).clientIp || req.ip || 'unknown',
+    );
     morgan.token('user-id', (req: any) => req.user?.id || 'anonymous');
     morgan.token('response-time-ms', (req: Request, res: Response) => {
       const startTime = (req as AppRequest).startTime || Date.now();
       return `${Date.now() - startTime}ms`;
     });
 
-    const productionFormat = ':real-ip - :user-id [:date[iso]] ":method :url HTTP/:http-version" :status :res[content-length] ":referrer" ":user-agent" :response-time-ms :correlation-id';
-    const developmentFormat = ':method :url :status :response-time-ms - :res[content-length] :correlation-id';
-    const morganFormat = environment.app.isProduction ? productionFormat : developmentFormat;
+    const productionFormat =
+      ':real-ip - :user-id [:date[iso]] ":method :url HTTP/:http-version" :status :res[content-length] ":referrer" ":user-agent" :response-time-ms :correlation-id';
+    const developmentFormat =
+      ':method :url :status :response-time-ms - :res[content-length] :correlation-id';
+    const morganFormat = environment.app.isProduction
+      ? productionFormat
+      : developmentFormat;
 
-    this.app.use(morgan(morganFormat, {
-      stream: {
-        write: (message: string) => {
-          const cleanMessage = message.trim();
-          if (cleanMessage) {
-            httpLogger.info(cleanMessage);
+    this.app.use(
+      morgan(morganFormat, {
+        stream: {
+          write: (message: string) => {
+            const cleanMessage = message.trim();
+            if (cleanMessage) {
+              httpLogger.info(cleanMessage);
+            }
+          },
+        },
+        skip: (req: Request, res: Response) => {
+          // ✅ SKIP MÁS AGRESIVO para health checks y evitar spam de logs
+          const skipPaths = [
+            `/api/${environment.app.apiVersion}/health`,
+            `/health`,
+            '/metrics',
+            '/favicon.ico',
+            // ✅ Agregar más paths de health checks
+            `/api/${environment.app.apiVersion}/health/ready`,
+            `/api/${environment.app.apiVersion}/health/live`,
+            '/health/ready',
+            '/health/live',
+          ];
+
+          const shouldSkip = skipPaths.some((path) => req.url.startsWith(path));
+
+          // ✅ En producción, skip TODOS los health checks exitosos
+          if (
+            environment.app.isProduction &&
+            req.url.includes('/health') &&
+            res.statusCode < 400
+          ) {
+            return true;
           }
-        }
-      },
-      skip: (req: Request, res: Response) => {
-        // ✅ SKIP MÁS AGRESIVO para health checks y evitar spam de logs
-        const skipPaths = [
-          `/api/${environment.app.apiVersion}/health`,
-          `/health`,
-          '/metrics', 
-          '/favicon.ico',
-          // ✅ Agregar más paths de health checks
-          `/api/${environment.app.apiVersion}/health/ready`,
-          `/api/${environment.app.apiVersion}/health/live`,
-          '/health/ready',
-          '/health/live'
-        ];
-        
-        const shouldSkip = skipPaths.some(path => req.url.startsWith(path));
 
-        // ✅ En producción, skip TODOS los health checks exitosos
-        if (environment.app.isProduction && req.url.includes('/health') && res.statusCode < 400) {
-          return true;
-        }
-
-        return shouldSkip;
-      }
-    }));
+          return shouldSkip;
+        },
+      }),
+    );
   }
 
   private async initializeValidationMiddlewares(): Promise<void> {
@@ -509,15 +566,15 @@ class App {
           'x-real-ip': req.get('x-real-ip'),
           'correlation-id': req.get('correlation-id'),
           'request-id': req.get('request-id'),
-          'authorization': req.get('authorization'),
-          'x-api-key': req.get('x-api-key')
+          authorization: req.get('authorization'),
+          'x-api-key': req.get('x-api-key'),
         };
 
         const validation = RequestHeadersSchema.safeParse(headers);
         if (!validation.success) {
           this.appLogger.debug('Header validation warnings', {
             path: req.path,
-            issues: validation.error.issues
+            issues: validation.error.issues,
           });
         }
 
@@ -531,12 +588,18 @@ class App {
     this.appLogger.info('Validation middlewares initialized successfully');
   }
 
-  private requestContextMiddleware(req: AppRequest, res: Response, next: NextFunction): void {
+  private requestContextMiddleware(
+    req: AppRequest,
+    res: Response,
+    next: NextFunction,
+  ): void {
     const startTime = Date.now();
 
-    req.correlationId = req.get(REQUEST_HEADERS.CORRELATION_ID) ||
+    req.correlationId =
+      req.get(REQUEST_HEADERS.CORRELATION_ID) ||
       `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    req.requestId = req.get(REQUEST_HEADERS.REQUEST_ID) ||
+    req.requestId =
+      req.get(REQUEST_HEADERS.REQUEST_ID) ||
       `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     req.startTime = startTime;
     req.clientIp = this.getClientIP(req);
@@ -545,7 +608,7 @@ class App {
     req.deviceInfo = {
       userAgent,
       platform: this.extractPlatform(userAgent),
-      browser: this.extractBrowser(userAgent)
+      browser: this.extractBrowser(userAgent),
     };
 
     res.setHeader(REQUEST_HEADERS.CORRELATION_ID, req.correlationId);
@@ -559,14 +622,18 @@ class App {
         url: req.url,
         ip: req.clientIp,
         userAgent,
-        duration: `${Date.now() - startTime}ms`
+        duration: `${Date.now() - startTime}ms`,
       });
     });
 
     next();
   }
 
-  private requestLoggingMiddleware(req: AppRequest, res: Response, next: NextFunction): void {
+  private requestLoggingMiddleware(
+    req: AppRequest,
+    res: Response,
+    next: NextFunction,
+  ): void {
     const startTime = req.startTime || Date.now();
 
     // ✅ NO log debug para health checks en producción
@@ -576,14 +643,14 @@ class App {
         method: req.method,
         url: req.url,
         ip: req.clientIp,
-        userAgent: req.deviceInfo?.userAgent
+        userAgent: req.deviceInfo?.userAgent,
       });
     }
 
     res.on('finish', () => {
       const duration = Date.now() - startTime;
       const isHealthCheck = req.path.includes('/health');
-      
+
       const logData = {
         correlationId: req.correlationId,
         requestId: req.requestId,
@@ -595,7 +662,7 @@ class App {
         ip: req.clientIp,
         contentLength: res.get('content-length'),
         referer: req.get('referer'),
-        responseSize: res.get('content-length') || '0'
+        responseSize: res.get('content-length') || '0',
       };
 
       res.setHeader('X-Response-Time', `${duration}ms`);
@@ -607,7 +674,11 @@ class App {
         httpLogger.warn('HTTP Request Warning', logData);
       } else {
         // ✅ Solo log health checks si fallan o en desarrollo
-        if (!isHealthCheck || !environment.app.isProduction || res.statusCode >= 400) {
+        if (
+          !isHealthCheck ||
+          !environment.app.isProduction ||
+          res.statusCode >= 400
+        ) {
           httpLogger.info('HTTP Request Completed', logData);
         }
       }
@@ -616,7 +687,7 @@ class App {
       if (duration > 5000 && !isHealthCheck) {
         securityLogger.warn('Slow request detected', {
           ...logData,
-          threshold: '5000ms'
+          threshold: '5000ms',
         });
       }
     });
@@ -625,7 +696,7 @@ class App {
       if (!res.writableEnded) {
         const duration = Date.now() - startTime;
         const isHealthCheck = req.path.includes('/health');
-        
+
         // ✅ Solo log closes inesperados si no son health checks
         if (!isHealthCheck) {
           httpLogger.warn('HTTP Request closed before completion', {
@@ -634,7 +705,7 @@ class App {
             method: req.method,
             url: req.url,
             duration: `${duration}ms`,
-            event: 'REQUEST_CLOSED_EARLY'
+            event: 'REQUEST_CLOSED_EARLY',
           });
         }
       }
@@ -647,21 +718,21 @@ class App {
     this.appLogger.info('Initializing routes...');
 
     const apiVersion = `/api/${environment.app.apiVersion}`;
-    
-    this.app.use(`${apiVersion}/health`, HealthRoutes.routes); 
+
+    this.app.use(`${apiVersion}/health`, HealthRoutes.routes);
     this.app.get('/', this.createRootHandler());
 
     try {
       const authRoutes = AuthRoutes.create({
         authService: this.services.authService,
         userService: this.services.userService,
-        tokenService: this.services.tokenService
+        tokenService: this.services.tokenService,
       });
       this.app.use(`${apiVersion}/auth`, authRoutes);
 
       const userController = new UserController(
         this.services.userService,
-        this.services.authService
+        this.services.authService,
       );
 
       const userRoutesInstance = UserRoutes.create({ userController });
@@ -695,18 +766,18 @@ class App {
           uptime: `${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m ${Math.floor(uptime % 60)}s`,
           memory: {
             used: `${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`,
-            total: `${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`
+            total: `${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`,
           },
           documentation: !environment.app.isProduction ? '/api-docs' : null,
-          healthCheck: `/api/${environment.app.apiVersion}/health` 
+          healthCheck: `/api/${environment.app.apiVersion}/health`,
         },
         meta: {
           correlationId: (req as AppRequest).correlationId,
           timestamp: new Date().toISOString(),
           path: req.path,
           method: req.method,
-          version: environment.app.apiVersion
-        }
+          version: environment.app.apiVersion,
+        },
       });
     };
   }
@@ -725,20 +796,20 @@ class App {
             `${apiVersion}/auth/logout`,
             `${apiVersion}/users/profile`,
             `${apiVersion}/users/sessions`,
-            `${apiVersion}/health` 
+            `${apiVersion}/health`,
           ],
           documentation: !environment.app.isProduction ? '/api-docs' : null,
           rateLimit: {
             windowMs: '15 minutes',
-            maxRequests: 100
-          }
+            maxRequests: 100,
+          },
         },
         meta: {
           correlationId: (req as AppRequest).correlationId,
           timestamp: new Date().toISOString(),
           path: req.path,
-          method: req.method
-        }
+          method: req.method,
+        },
       });
     };
   }
@@ -756,17 +827,17 @@ class App {
           heapTotal: memUsage.heapTotal,
           heapUsed: memUsage.heapUsed,
           external: memUsage.external,
-          arrayBuffers: memUsage.arrayBuffers
+          arrayBuffers: memUsage.arrayBuffers,
         },
         cpu: {
           user: cpuUsage.user,
-          system: cpuUsage.system
+          system: cpuUsage.system,
         },
         environment: {
           nodeVersion: process.version,
           platform: process.platform,
-          arch: process.arch
-        }
+          arch: process.arch,
+        },
       });
     };
   }
@@ -795,10 +866,12 @@ class App {
       this.appLogger.info('Swagger documentation initialized successfully', {
         path: '/api-docs',
         jsonPath: '/api-docs.json',
-        ...swaggerInfo
+        ...swaggerInfo,
       });
     } catch (error) {
-      this.appLogger.error('Failed to initialize Swagger documentation', { error });
+      this.appLogger.error('Failed to initialize Swagger documentation', {
+        error,
+      });
     }
   }
 
@@ -815,12 +888,15 @@ class App {
   private setupGracefulShutdown(): void {
     process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
       this.appLogger.fatal('Unhandled Promise Rejection detected', {
-        reason: reason instanceof Error ? {
-          message: reason.message,
-          stack: reason.stack,
-          name: reason.name
-        } : reason,
-        promise: promise.toString()
+        reason:
+          reason instanceof Error
+            ? {
+                message: reason.message,
+                stack: reason.stack,
+                name: reason.name,
+              }
+            : reason,
+        promise: promise.toString(),
       });
       setTimeout(() => process.exit(1), 1000);
     });
@@ -830,8 +906,8 @@ class App {
         error: {
           message: error.message,
           stack: error.stack,
-          name: error.name
-        }
+          name: error.name,
+        },
       });
       process.exit(1);
     });
@@ -850,7 +926,7 @@ class App {
       this.appLogger.warn('Process warning detected', {
         name: warning.name,
         message: warning.message,
-        stack: warning.stack
+        stack: warning.stack,
       });
     });
   }
@@ -858,17 +934,20 @@ class App {
   private async gracefulShutdown(signal: string): Promise<void> {
     const shutdownLogger = createContextLogger({
       component: 'shutdown',
-      signal
+      signal,
     });
 
     try {
       shutdownLogger.info('Starting graceful shutdown process...', {
         signal,
         uptime: process.uptime(),
-        memoryUsage: process.memoryUsage()
+        memoryUsage: process.memoryUsage(),
       });
 
-      if (this.services.cacheService && typeof (this.services.cacheService as any).close === 'function') {
+      if (
+        this.services.cacheService &&
+        typeof (this.services.cacheService as any).close === 'function'
+      ) {
         await (this.services.cacheService as any).close();
       }
 
@@ -900,7 +979,7 @@ class App {
       'x-forwarded',
       'x-cluster-client-ip',
       'forwarded-for',
-      'forwarded'
+      'forwarded',
     ];
     for (const header of ipHeaders) {
       const value = req.get(header);
@@ -918,7 +997,7 @@ class App {
     const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
     const ipv6Regex = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/;
     if (ipv4Regex.test(ip)) {
-      return ip.split('.').every(octet => parseInt(octet, 10) <= 255);
+      return ip.split('.').every((octet) => parseInt(octet, 10) <= 255);
     }
     return ipv6Regex.test(ip);
   }
@@ -933,9 +1012,11 @@ class App {
   }
 
   private extractBrowser(userAgent: string): string {
-    const browserMatches = userAgent.match(/(Chrome|Firefox|Safari|Edge|Opera|Brave)\/([\d.]+)/);
+    const browserMatches = userAgent.match(
+      /(Chrome|Firefox|Safari|Edge|Opera|Brave)\/([\d.]+)/,
+    );
     if (browserMatches) {
-        return `${browserMatches[1]} ${browserMatches[2].split('.')[0]}`;
+      return `${browserMatches[1]} ${browserMatches[2].split('.')[0]}`;
     }
     return 'Unknown';
   }
@@ -964,13 +1045,14 @@ class App {
       memory: {
         used: Math.round(memUsage.heapUsed / 1024 / 1024),
         total: Math.round(memUsage.heapTotal / 1024 / 1024),
-        rss: Math.round(memUsage.rss / 1024 / 1024)
+        rss: Math.round(memUsage.rss / 1024 / 1024),
       },
       features: {
-        swagger: !environment.app.isProduction && environment.features?.swaggerEnabled,
+        swagger:
+          !environment.app.isProduction && environment.features?.swaggerEnabled,
         rateLimit: !environment.app.isTest,
         compression: true,
-        security: environment.app.isProduction
+        security: environment.app.isProduction,
       },
       routes: this.getRoutesCount(),
       services: {
@@ -978,8 +1060,8 @@ class App {
         authService: !!this.services.authService,
         tokenService: !!this.services.tokenService,
         cacheService: !!this.services.cacheService,
-        userRepository: !!this.services.userRepository
-      }
+        userRepository: !!this.services.userRepository,
+      },
     };
   }
 
@@ -1006,18 +1088,21 @@ export const AppValidators = {
   CorsOrigin: CorsOriginSchema,
   EnvironmentConfig: z.object({
     NODE_ENV: z.enum(['development', 'production', 'test']),
-    PORT: z.string().transform(Number).refine(n => n > 0 && n < 65536),
+    PORT: z
+      .string()
+      .transform(Number)
+      .refine((n) => n > 0 && n < 65536),
     JWT_SECRET: z.string().min(32),
     DATABASE_URL: z.string().url(),
     REDIS_URL: z.string().url().optional(),
-    CORS_ORIGIN: z.union([z.string(), z.array(z.string())]).optional()
+    CORS_ORIGIN: z.union([z.string(), z.array(z.string())]).optional(),
   }),
   BasicRequest: z.object({
     correlationId: z.string().optional(),
     requestId: z.string().optional(),
     userAgent: z.string().optional(),
-    ip: z.string().ip().optional()
-  })
+    ip: z.string().ip().optional(),
+  }),
 };
 
 // TIPOS TYPESCRIPT PARA EXPORT
@@ -1037,7 +1122,7 @@ export const APP_CONSTANTS = {
   CORS_MAX_AGE: 86400,
   HSTS_MAX_AGE: 31536000,
   SKIP_LOGGING_PATHS: ['/health', '/metrics', '/favicon.ico'],
-  SKIP_RATE_LIMIT_PATHS: ['/health']
+  SKIP_RATE_LIMIT_PATHS: ['/health'],
 } as const;
 
 export default App;

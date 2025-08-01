@@ -4,23 +4,23 @@
 
 El Task Service ofrece una serie de funcionalidades robustas para la gestión eficiente de tareas:
 
-  * Gestión Completa de Tareas (CRUD): Permite crear, leer, actualizar y eliminar tareas con atributos detallados como título, descripción, estado, prioridad, fecha de vencimiento y etiquetas.
-  * Gestión de Categorías (CRUD): Facilita la organización de tareas mediante la creación, consulta, actualización y eliminación de categorías.
-  * Filtrado y Búsqueda Avanzada: Soporta filtros por estado, prioridad, categoría, rango de fechas de vencimiento, tareas vencidas, tareas con o sin fecha de vencimiento, y búsqueda por texto.
-  * Paginación y Ordenamiento: Implementa paginación para manejar grandes volúmenes de tareas y opciones de ordenamiento personalizables.
-  * Validación de Datos: Asegura la integridad de los datos mediante validación robusta de los datos de entrada.
-  * Caché de Alto Rendimiento: Utiliza Redis para cachear datos frecuentemente accedidos, mejorando la velocidad de respuesta.
-  * Comunicación Segura: Interactúa con otros microservicios de forma segura, validando tokens de autenticación.
+- Gestión Completa de Tareas (CRUD): Permite crear, leer, actualizar y eliminar tareas con atributos detallados como título, descripción, estado, prioridad, fecha de vencimiento y etiquetas.
+- Gestión de Categorías (CRUD): Facilita la organización de tareas mediante la creación, consulta, actualización y eliminación de categorías.
+- Filtrado y Búsqueda Avanzada: Soporta filtros por estado, prioridad, categoría, rango de fechas de vencimiento, tareas vencidas, tareas con o sin fecha de vencimiento, y búsqueda por texto.
+- Paginación y Ordenamiento: Implementa paginación para manejar grandes volúmenes de tareas y opciones de ordenamiento personalizables.
+- Validación de Datos: Asegura la integridad de los datos mediante validación robusta de los datos de entrada.
+- Caché de Alto Rendimiento: Utiliza Redis para cachear datos frecuentemente accedidos, mejorando la velocidad de respuesta.
+- Comunicación Segura: Interactúa con otros microservicios de forma segura, validando tokens de autenticación.
 
 ## 🛠️ Tecnologías
 
 El Task Service está construido con las siguientes tecnologías clave:
 
-  * Backend: Node.js, Express.js, TypeScript
-  * ORM: Prisma con PostgreSQL
-  * Caché: Redis
-  * Validación de Datos: Zod
-  * Contenerización: Docker
+- Backend: Node.js, Express.js, TypeScript
+- ORM: Prisma con PostgreSQL
+- Caché: Redis
+- Validación de Datos: Zod
+- Contenerización: Docker
 
 ## 🏗️ Project Structure
 
@@ -101,18 +101,18 @@ services/task-service/
 
 Para ejecutar el servicio, crea un archivo `.env` en la raíz de este servicio, basándote en el archivo `.env.example`. Las variables clave son:
 
-  * `DATABASE_URL`: Cadena de conexión a la base de datos PostgreSQL.
-  * `REDIS_URL`: URL de conexión al servidor Redis.
-  * `PORT`: Puerto en el que se ejecutará el servicio (e.g., `3001`).
-  * `AUTH_SERVICE_URL`: URL del microservicio de autenticación para la validación de tokens.
-  * `JWT_PUBLIC_KEY`: Clave pública para verificar los tokens JWE/JWT emitidos por el Auth Service.
-  * `CORS_ORIGIN`: Orígenes permitidos para las peticiones CORS.
+- `DATABASE_URL`: Cadena de conexión a la base de datos PostgreSQL.
+- `REDIS_URL`: URL de conexión al servidor Redis.
+- `PORT`: Puerto en el que se ejecutará el servicio (e.g., `3001`).
+- `AUTH_SERVICE_URL`: URL del microservicio de autenticación para la validación de tokens.
+- `JWT_PUBLIC_KEY`: Clave pública para verificar los tokens JWE/JWT emitidos por el Auth Service.
+- `CORS_ORIGIN`: Orígenes permitidos para las peticiones CORS.
 
- 🚀 Ejecución
+🚀 Ejecución
 
 El despliegue y ejecución del `task-service` se gestiona a través del monorepo principal, utilizando Docker Compose para entornos de desarrollo local.
 
- Con Docker (Recomendado para Desarrollo Local)
+Con Docker (Recomendado para Desarrollo Local)
 
 Desde la raíz del monorepo, puedes levantar todos los servicios, incluyendo el Task Service:
 
@@ -122,7 +122,7 @@ docker-compose -f docker-compose.dev.yml up --build
 
 Esto construirá las imágenes necesarias y levantará los contenedores para el `auth-service`, `task-service` y sus dependencias (PostgreSQL, Redis).
 
- Desarrollo Local (sin Docker Compose)
+Desarrollo Local (sin Docker Compose)
 
 Para ejecutar el servicio individualmente en desarrollo (asumiendo que las dependencias de DB y Redis están corriendo):
 
@@ -141,28 +141,27 @@ Para ejecutar el servicio individualmente en desarrollo (asumiendo que las depen
     pnpm --filter=task-manager-task-service dev
     ```
 
- 📡 Endpoints de la API
+📡 Endpoints de la API
 
 La API del Task Service está versionada bajo `/api/v1`.
 
- Endpoints de Tareas
+Endpoints de Tareas
 
-  * `POST /api/v1/tasks`: Crea una nueva tarea.
-  * `GET /api/v1/tasks`: Obtiene todas las tareas, con soporte para filtrado, paginación y ordenamiento.
-  * `GET /api/v1/tasks/:id`: Obtiene una tarea por su ID.
-  * `PUT /api/v1/tasks/:id`: Actualiza una tarea existente por su ID.
-  * `DELETE /api/v1/tasks/:id`: Elimina una tarea por su ID.
-  * `PATCH /api/v1/tasks/:id/status`: Actualiza el estado de una tarea (e.g., a "completed").
+- `POST /api/v1/tasks`: Crea una nueva tarea.
+- `GET /api/v1/tasks`: Obtiene todas las tareas, con soporte para filtrado, paginación y ordenamiento.
+- `GET /api/v1/tasks/:id`: Obtiene una tarea por su ID.
+- `PUT /api/v1/tasks/:id`: Actualiza una tarea existente por su ID.
+- `DELETE /api/v1/tasks/:id`: Elimina una tarea por su ID.
+- `PATCH /api/v1/tasks/:id/status`: Actualiza el estado de una tarea (e.g., a "completed").
 
- Endpoints de Categorías
+Endpoints de Categorías
 
-  * `POST /api/v1/categories`: Crea una nueva categoría.
-  * `GET /api/v1/categories`: Obtiene todas las categorías.
-  * `GET /api/v1/categories/:id`: Obtiene una categoría por su ID.
-  * `PUT /api/v1/categories/:id`: Actualiza una categoría existente por su ID.
-  * `DELETE /api/v1/categories/:id`: Elimina una categoría por su ID.
+- `POST /api/v1/categories`: Crea una nueva categoría.
+- `GET /api/v1/categories`: Obtiene todas las categorías.
+- `GET /api/v1/categories/:id`: Obtiene una categoría por su ID.
+- `PUT /api/v1/categories/:id`: Actualiza una categoría existente por su ID.
+- `DELETE /api/v1/categories/:id`: Elimina una categoría por su ID.
 
- Endpoints de Salud
+Endpoints de Salud
 
-  * `GET /health`: Health check del servicio.
-  
+- `GET /health`: Health check del servicio.

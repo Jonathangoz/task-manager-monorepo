@@ -25,22 +25,25 @@ export interface CategoryWithTaskCount extends Category {
 
 export interface ICategoryRepository {
   create(data: CreateCategoryData): Promise<Category>;
-  
+
   findById(id: string): Promise<CategoryWithTaskCount | null>;
-  
-  findByUserId(userId: string, includeTaskCount?: boolean): Promise<CategoryWithTaskCount[]>;
-  
+
+  findByUserId(
+    userId: string,
+    includeTaskCount?: boolean,
+  ): Promise<CategoryWithTaskCount[]>;
+
   findByName(userId: string, name: string): Promise<Category | null>;
-  
+
   update(id: string, data: UpdateCategoryData): Promise<Category>;
-  
+
   delete(id: string): Promise<void>;
-  
+
   countByUserId(userId: string): Promise<number>;
-  
+
   findActiveByUserId(userId: string): Promise<Category[]>;
-  
+
   hasActiveTasks(categoryId: string): Promise<boolean>;
-  
+
   bulkDelete(ids: string[]): Promise<void>;
 }

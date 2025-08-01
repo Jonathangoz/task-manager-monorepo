@@ -4,11 +4,11 @@ import { HealthController } from '@/commons/controllers/HealthController';
 import { asyncHandler } from '@/commons/middlewares/error.middleware';
 import { config } from '@/config/environment';
 import { logger } from '@/utils/logger';
-import { 
-  healthRequestId, 
-  healthLogger, 
-  healthCache, 
-  healthTimeout 
+import {
+  healthRequestId,
+  healthLogger,
+  healthCache,
+  healthTimeout,
 } from '@/commons/middlewares/health.middleware';
 
 export class HealthRoutes {
@@ -17,19 +17,22 @@ export class HealthRoutes {
     const healthController = new HealthController();
 
     // Log de inicialización de rutas de health
-    logger.info({
-      component: 'health_routes',
-      environment: config.app.env,
-      productionMode: config.app.isProduction,
-      event: 'health_routes_initialization'
-    }, '🏥 Configurando rutas de health checks para Task Service');
+    logger.info(
+      {
+        component: 'health_routes',
+        environment: config.app.env,
+        productionMode: config.app.isProduction,
+        event: 'health_routes_initialization',
+      },
+      '🏥 Configurando rutas de health checks para Task Service',
+    );
 
     // Aplicar middlewares específicos de health
     router.use(healthRequestId);
     router.use(healthLogger);
 
     // === HEALTH CHECKS BÁSICOS (SIEMPRE DISPONIBLES) ===
-    
+
     /**
      * GET /api/v1/health
      * Health check básico - ULTRA RÁPIDO para Docker health checks
@@ -40,7 +43,7 @@ export class HealthRoutes {
       '/',
       healthCache(5), // Cache de 5 segundos
       healthTimeout(2000), // Timeout de 2 segundos
-      asyncHandler(healthController.basicHealthCheck.bind(healthController))
+      asyncHandler(healthController.basicHealthCheck.bind(healthController)),
     );
 
     /**
@@ -52,7 +55,7 @@ export class HealthRoutes {
     router.get(
       '/ready',
       healthTimeout(8000), // Timeout de 8 segundos
-      asyncHandler(healthController.readinessCheck.bind(healthController))
+      asyncHandler(healthController.readinessCheck.bind(healthController)),
     );
 
     /**
@@ -64,16 +67,19 @@ export class HealthRoutes {
       '/live',
       healthCache(3), // Cache de 3 segundos
       healthTimeout(2000), // Timeout de 2 segundos
-      asyncHandler(healthController.livenessCheck.bind(healthController))
+      asyncHandler(healthController.livenessCheck.bind(healthController)),
     );
 
     // === HEALTH CHECKS DETALLADOS (solo en desarrollo/staging) ===
     if (!config.app.isProduction) {
-      logger.info({
-        component: 'health_routes',
-        environment: config.app.env,
-        event: 'detailed_health_checks_enabled'
-      }, '🔧 Habilitando health checks detallados para desarrollo');
+      logger.info(
+        {
+          component: 'health_routes',
+          environment: config.app.env,
+          event: 'detailed_health_checks_enabled',
+        },
+        '🔧 Habilitando health checks detallados para desarrollo',
+      );
 
       /**
        * GET /api/v1/health/detailed
@@ -83,7 +89,9 @@ export class HealthRoutes {
       router.get(
         '/detailed',
         healthTimeout(15000), // Timeout de 15 segundos para checks detallados
-        asyncHandler(healthController.detailedHealthCheck.bind(healthController))
+        asyncHandler(
+          healthController.detailedHealthCheck.bind(healthController),
+        ),
       );
 
       /**
@@ -93,7 +101,9 @@ export class HealthRoutes {
       router.get(
         '/database',
         healthTimeout(10000), // Timeout de 10 segundos
-        asyncHandler(healthController.databaseHealthCheck.bind(healthController))
+        asyncHandler(
+          healthController.databaseHealthCheck.bind(healthController),
+        ),
       );
 
       /**
@@ -103,7 +113,7 @@ export class HealthRoutes {
       router.get(
         '/redis',
         healthTimeout(5000), // Timeout de 5 segundos
-        asyncHandler(healthController.redisHealthCheck.bind(healthController))
+        asyncHandler(healthController.redisHealthCheck.bind(healthController)),
       );
 
       /**
@@ -113,7 +123,9 @@ export class HealthRoutes {
       router.get(
         '/auth-service',
         healthTimeout(8000), // Timeout de 8 segundos
-        asyncHandler(healthController.authServiceHealthCheck.bind(healthController))
+        asyncHandler(
+          healthController.authServiceHealthCheck.bind(healthController),
+        ),
       );
 
       // Endpoint de documentación de health checks (solo desarrollo)
@@ -131,72 +143,82 @@ export class HealthRoutes {
                   path: '/api/v1/health',
                   purpose: 'Ultra-fast health check for Docker',
                   timeout: '~1ms',
-                  checks: ['server_response']
+                  checks: ['server_response'],
                 },
                 readiness: {
                   path: '/api/v1/health/ready',
                   purpose: 'Service readiness for traffic',
                   timeout: '~5s',
-                  checks: ['database', 'redis', 'auth_service_optional', 'server']
+                  checks: [
+                    'database',
+                    'redis',
+                    'auth_service_optional',
+                    'server',
+                  ],
                 },
                 liveness: {
                   path: '/api/v1/health/live',
                   purpose: 'Process liveness check',
                   timeout: '~1ms',
-                  checks: ['memory', 'pid', 'uptime']
-                }
+                  checks: ['memory', 'pid', 'uptime'],
+                },
               },
               development: {
                 detailed: {
                   path: '/api/v1/health/detailed',
                   purpose: 'Complete system information',
                   timeout: '~15s',
-                  checks: ['all_systems', 'metrics', 'performance']
+                  checks: ['all_systems', 'metrics', 'performance'],
                 },
                 specific: {
                   database: '/api/v1/health/database',
                   redis: '/api/v1/health/redis',
-                  authService: '/api/v1/health/auth-service'
-                }
-              }
+                  authService: '/api/v1/health/auth-service',
+                },
+              },
             },
             usage: {
               docker_compose: {
                 healthcheck: 'curl -f http://localhost:3002/api/v1/health',
-                depends_on: 'condition: service_healthy'
+                depends_on: 'condition: service_healthy',
               },
               kubernetes: {
                 livenessProbe: '/api/v1/health/live',
-                readinessProbe: '/api/v1/health/ready'
-              }
-            }
+                readinessProbe: '/api/v1/health/ready',
+              },
+            },
           },
           meta: {
             timestamp: new Date().toISOString(),
-            requestId: req.headers['x-request-id']
-          }
+            requestId: req.headers['x-request-id'],
+          },
         });
       });
-
     } else {
-      logger.info({
-        component: 'health_routes',
-        environment: config.app.env,
-        event: 'detailed_health_checks_disabled'
-      }, '🔒 Health checks detallados deshabilitados en producción');
+      logger.info(
+        {
+          component: 'health_routes',
+          environment: config.app.env,
+          event: 'detailed_health_checks_disabled',
+        },
+        '🔒 Health checks detallados deshabilitados en producción',
+      );
 
       // En producción, devolver 404 para endpoints detallados
-      const productionNotFound = (req: express.Request, res: express.Response) => {
+      const productionNotFound = (
+        req: express.Request,
+        res: express.Response,
+      ) => {
         res.status(404).json({
           success: false,
           message: 'Health check endpoint not available in production',
           error: {
-            code: 'ENDPOINT_NOT_AVAILABLE_IN_PRODUCTION'
+            code: 'ENDPOINT_NOT_AVAILABLE_IN_PRODUCTION',
           },
           meta: {
             timestamp: new Date().toISOString(),
-            requestId: req.headers['x-request-id']
-          }
+            requestId: req.headers['x-request-id'],
+          },
         });
       };
 
@@ -209,20 +231,23 @@ export class HealthRoutes {
 
     // Log de rutas configuradas
     const availableEndpoints = ['/', '/ready', '/live'];
-    const developmentEndpoints = !config.app.isProduction ? 
-      ['/detailed', '/database', '/redis', '/auth-service', '/docs'] : 
-      [];
+    const developmentEndpoints = !config.app.isProduction
+      ? ['/detailed', '/database', '/redis', '/auth-service', '/docs']
+      : [];
 
-    logger.info({
-      component: 'health_routes',
-      environment: config.app.env,
-      event: 'health_routes_configured',
-      endpoints: {
-        production: availableEndpoints,
-        development: developmentEndpoints,
-        total: availableEndpoints.length + developmentEndpoints.length
-      }
-    }, '✅ Rutas de health checks configuradas para Task Service');
+    logger.info(
+      {
+        component: 'health_routes',
+        environment: config.app.env,
+        event: 'health_routes_configured',
+        endpoints: {
+          production: availableEndpoints,
+          development: developmentEndpoints,
+          total: availableEndpoints.length + developmentEndpoints.length,
+        },
+      },
+      '✅ Rutas de health checks configuradas para Task Service',
+    );
 
     return router;
   }

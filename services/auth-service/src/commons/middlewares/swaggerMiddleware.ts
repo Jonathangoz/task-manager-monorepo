@@ -26,7 +26,7 @@ interface SwaggerMiddlewares {
 // ==============================================
 const SWAGGER_AUTH_CONFIG: SwaggerSecurityConfig = {
   username: process.env.SWAGGER_AUTH_USER || 'docs',
-  password: process.env.SWAGGER_AUTH_PASS || 'secure123'
+  password: process.env.SWAGGER_AUTH_PASS || 'secure123',
 };
 
 // ==============================================
@@ -52,10 +52,12 @@ class SwaggerAuthService {
       return false;
     }
 
-    const expectedAuth = 'Basic ' + Buffer.from(
-      `${SWAGGER_AUTH_CONFIG.username}:${SWAGGER_AUTH_CONFIG.password}`
-    ).toString('base64');
-    
+    const expectedAuth =
+      'Basic ' +
+      Buffer.from(
+        `${SWAGGER_AUTH_CONFIG.username}:${SWAGGER_AUTH_CONFIG.password}`,
+      ).toString('base64');
+
     return authHeader === expectedAuth;
   }
 
@@ -126,7 +128,7 @@ class SwaggerMiddlewareFactory {
       }
 
       const authHeader = req.headers.authorization;
-      
+
       if (!authHeader) {
         this.sendAuthChallenge(res);
         return;
@@ -149,10 +151,11 @@ class SwaggerMiddlewareFactory {
     res.status(401).json({
       success: false,
       message: 'Authentication required to access documentation',
-      error: { 
+      error: {
         code: 'AUTHENTICATION_REQUIRED',
-        details: 'Please provide valid credentials to access the API documentation'
-      }
+        details:
+          'Please provide valid credentials to access the API documentation',
+      },
     });
   }
 
@@ -163,10 +166,11 @@ class SwaggerMiddlewareFactory {
     res.status(401).json({
       success: false,
       message: 'Invalid credentials for documentation access',
-      error: { 
+      error: {
         code: 'INVALID_CREDENTIALS',
-        details: 'The provided credentials are not valid for accessing the documentation'
-      }
+        details:
+          'The provided credentials are not valid for accessing the documentation',
+      },
     });
   }
 }
@@ -183,27 +187,32 @@ const middlewareFactory = new SwaggerMiddlewareFactory();
 /**
  * Array de middlewares para servir los archivos estáticos de Swagger UI
  */
-export const swaggerServeMiddlewares: RequestHandler[] = middlewareFactory.createServeMiddlewares();
+export const swaggerServeMiddlewares: RequestHandler[] =
+  middlewareFactory.createServeMiddlewares();
 
 /**
  * Middleware para configurar y renderizar Swagger UI
  */
-export const swaggerSetupMiddleware: RequestHandler = middlewareFactory.createSetupMiddleware();
+export const swaggerSetupMiddleware: RequestHandler =
+  middlewareFactory.createSetupMiddleware();
 
 /**
  * Middleware para obtener el JSON de especificación de Swagger
  */
-export const getSwaggerJson: RequestHandler = middlewareFactory.createJsonMiddleware();
+export const getSwaggerJson: RequestHandler =
+  middlewareFactory.createJsonMiddleware();
 
 /**
  * Middleware para redireccionar /docs a /docs/
  */
-export const redirectToDocs: RequestHandler = middlewareFactory.createRedirectMiddleware();
+export const redirectToDocs: RequestHandler =
+  middlewareFactory.createRedirectMiddleware();
 
 /**
  * Middleware de seguridad para docs en producción
  */
-export const protectDocsInProduction: RequestHandler = middlewareFactory.createProtectionMiddleware();
+export const protectDocsInProduction: RequestHandler =
+  middlewareFactory.createProtectionMiddleware();
 
 // ==============================================
 // EXPORT DE CONJUNTO COMPLETO DE MIDDLEWARES
@@ -217,7 +226,7 @@ export const swaggerMiddlewares: SwaggerMiddlewares = {
   setup: swaggerSetupMiddleware,
   getJson: getSwaggerJson,
   redirectToDocs: redirectToDocs,
-  protectDocs: protectDocsInProduction
+  protectDocs: protectDocsInProduction,
 };
 
 // ==============================================
@@ -229,7 +238,9 @@ export const swaggerMiddlewares: SwaggerMiddlewares = {
  * @param includeProtection - Si incluir protección de producción (por defecto: true)
  * @returns Array de middlewares para aplicar en Express
  */
-export const getAllSwaggerMiddlewares = (includeProtection: boolean = true): RequestHandler[] => {
+export const getAllSwaggerMiddlewares = (
+  includeProtection: boolean = true,
+): RequestHandler[] => {
   const middlewares: RequestHandler[] = [];
 
   // Redirección si es necesaria
@@ -242,7 +253,7 @@ export const getAllSwaggerMiddlewares = (includeProtection: boolean = true): Req
 
   // Middlewares de Swagger UI (serve devuelve un array)
   middlewares.push(...swaggerServeMiddlewares);
-  
+
   // Setup de Swagger UI
   middlewares.push(swaggerSetupMiddleware);
 
@@ -256,5 +267,5 @@ export default {
   middlewares: swaggerMiddlewares,
   getAllMiddlewares: getAllSwaggerMiddlewares,
   factory: middlewareFactory,
-  authService: SwaggerAuthService.getInstance()
+  authService: SwaggerAuthService.getInstance(),
 };

@@ -4,15 +4,24 @@ import { AuthController } from '@/commons/controllers/AuthController';
 import { IAuthService } from '@/core/interfaces/IAuthService';
 import { IUserService } from '@/core/interfaces/IUserService';
 import { ITokenService } from '@/core/interfaces/ITokenService';
-import { verifyToken, extractSessionInfo, checkConcurrentSessions } from '@/commons/middlewares/auth.middleware';
-import { validate, requireBody, sanitizeInput, validateEmail } from '@/commons/middlewares/validation.middleware';
-import { 
-  rateLimitAuth, 
-  rateLimitRefreshToken, 
-  rateLimitRegistration, 
-  rateLimitPasswordReset 
+import {
+  verifyToken,
+  extractSessionInfo,
+  checkConcurrentSessions,
+} from '@/commons/middlewares/auth.middleware';
+import {
+  validate,
+  requireBody,
+  sanitizeInput,
+  validateEmail,
+} from '@/commons/middlewares/validation.middleware';
+import {
+  rateLimitAuth,
+  rateLimitRefreshToken,
+  rateLimitRegistration,
+  rateLimitPasswordReset,
 } from '@/commons/middlewares/rateLimit.middleware';
-import { 
+import {
   validateRegisterBody,
   validateLoginBody,
   validateRefreshTokenBody,
@@ -20,7 +29,7 @@ import {
   validateUpdateProfileBody,
   validateChangePasswordBody,
   validateForgotPasswordBody,
-  validateResetPasswordBody
+  validateResetPasswordBody,
 } from '@/commons/validators/auth.validator';
 import { asyncHandler } from '@/commons/middlewares/error.middleware';
 
@@ -34,11 +43,11 @@ export class AuthRoutes {
   static create(config: AuthRoutesConfig): Router {
     const router = Router();
     const { authService, userService, tokenService } = config;
-    
+
     const authController = new AuthController(
       authService,
       userService,
-      tokenService
+      tokenService,
     );
 
     // Middleware global para todas las rutas
@@ -56,7 +65,7 @@ export class AuthRoutes {
       rateLimitRegistration,
       requireBody,
       validateRegisterBody,
-      asyncHandler(authController.register.bind(authController))
+      asyncHandler(authController.register.bind(authController)),
     );
 
     /**
@@ -68,7 +77,7 @@ export class AuthRoutes {
       rateLimitAuth,
       requireBody,
       validateLoginBody,
-      asyncHandler(authController.login.bind(authController))
+      asyncHandler(authController.login.bind(authController)),
     );
 
     /**
@@ -80,7 +89,7 @@ export class AuthRoutes {
       rateLimitRefreshToken,
       requireBody,
       validateRefreshTokenBody,
-      asyncHandler(authController.refreshToken.bind(authController))
+      asyncHandler(authController.refreshToken.bind(authController)),
     );
 
     /**
@@ -91,7 +100,7 @@ export class AuthRoutes {
       '/verify-token',
       requireBody,
       validateVerifyTokenBody,
-      asyncHandler(authController.verifyToken.bind(authController))
+      asyncHandler(authController.verifyToken.bind(authController)),
     );
 
     /**
@@ -104,7 +113,7 @@ export class AuthRoutes {
       requireBody,
       validateEmail,
       validateForgotPasswordBody,
-      asyncHandler(authController.forgotPassword.bind(authController))
+      asyncHandler(authController.forgotPassword.bind(authController)),
     );
 
     /**
@@ -116,7 +125,7 @@ export class AuthRoutes {
       rateLimitPasswordReset,
       requireBody,
       validateResetPasswordBody,
-      asyncHandler(authController.resetPassword.bind(authController))
+      asyncHandler(authController.resetPassword.bind(authController)),
     );
 
     // === RUTAS PROTEGIDAS ===
@@ -128,7 +137,7 @@ export class AuthRoutes {
     router.post(
       '/logout',
       verifyToken,
-      asyncHandler(authController.logout.bind(authController))
+      asyncHandler(authController.logout.bind(authController)),
     );
 
     /**
@@ -138,7 +147,7 @@ export class AuthRoutes {
     router.post(
       '/logout-all',
       verifyToken,
-      asyncHandler(authController.logoutAll.bind(authController))
+      asyncHandler(authController.logoutAll.bind(authController)),
     );
 
     /**
@@ -148,7 +157,7 @@ export class AuthRoutes {
     router.get(
       '/me',
       verifyToken,
-      asyncHandler(authController.getProfile.bind(authController))
+      asyncHandler(authController.getProfile.bind(authController)),
     );
 
     /**
@@ -160,7 +169,7 @@ export class AuthRoutes {
       verifyToken,
       requireBody,
       validateUpdateProfileBody,
-      asyncHandler(authController.updateProfile.bind(authController))
+      asyncHandler(authController.updateProfile.bind(authController)),
     );
 
     /**
@@ -172,7 +181,7 @@ export class AuthRoutes {
       verifyToken,
       requireBody,
       validateChangePasswordBody,
-      asyncHandler(authController.changePassword.bind(authController))
+      asyncHandler(authController.changePassword.bind(authController)),
     );
 
     /**
@@ -182,7 +191,7 @@ export class AuthRoutes {
     router.get(
       '/sessions',
       verifyToken,
-      asyncHandler(authController.getActiveSessions.bind(authController))
+      asyncHandler(authController.getActiveSessions.bind(authController)),
     );
 
     /**
@@ -192,7 +201,7 @@ export class AuthRoutes {
     router.delete(
       '/sessions/:sessionId',
       verifyToken,
-      asyncHandler(authController.terminateSession.bind(authController))
+      asyncHandler(authController.terminateSession.bind(authController)),
     );
 
     return router;
@@ -200,12 +209,14 @@ export class AuthRoutes {
 
   // Método backward compatible (deprecated)
   static get routes(): Router {
-    console.warn('AuthRoutes.routes is deprecated. Use AuthRoutes.create(config) instead.');
-    
+    console.warn(
+      'AuthRoutes.routes is deprecated. Use AuthRoutes.create(config) instead.',
+    );
+
     // Este método necesitará las implementaciones reales de los servicios
     // Por ahora lanza un error para forzar el uso del nuevo método
     throw new Error(
-      'AuthRoutes.routes requires service implementations. Use AuthRoutes.create() with proper service instances.'
+      'AuthRoutes.routes requires service implementations. Use AuthRoutes.create() with proper service instances.',
     );
   }
 }

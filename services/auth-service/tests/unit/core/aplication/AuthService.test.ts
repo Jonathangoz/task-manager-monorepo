@@ -18,12 +18,18 @@ describe('AuthService', () => {
 
   beforeEach(() => {
     clearAllMocks();
-    
-    mockUserRepository = new UserRepository(mockPrisma as any) as jest.Mocked<UserRepository>;
+
+    mockUserRepository = new UserRepository(
+      mockPrisma as any,
+    ) as jest.Mocked<UserRepository>;
     mockTokenService = new TokenService() as jest.Mocked<TokenService>;
     mockCache = new RedisCache(mockRedis as any) as jest.Mocked<RedisCache>;
-    
-    authService = new AuthService(mockUserRepository, mockTokenService, mockCache);
+
+    authService = new AuthService(
+      mockUserRepository,
+      mockTokenService,
+      mockCache,
+    );
   });
 
   describe('login', () => {
@@ -31,15 +37,23 @@ describe('AuthService', () => {
       // Arrange
       const loginData = authFixtures.validLogin;
       const sessionInfo = sessionFixtures.validSessionInfo;
-      const mockUser = { id: 'user-123', email: loginData.email, isActive: true };
-      const mockTokens = { accessToken: 'access-token', refreshToken: 'refresh-token', expiresIn: 900 };
+      const mockUser = {
+        id: 'user-123',
+        email: loginData.email,
+        isActive: true,
+      };
+      const mockTokens = {
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        expiresIn: 900,
+      };
 
       mockUserRepository.findByEmail.mockResolvedValue(mockUser as any);
       mockTokenService.generateAccessToken.mockResolvedValue('access-token');
       mockTokenService.generateRefreshToken.mockResolvedValue({
         token: 'refresh-token',
         tokenId: 'token-123',
-        expiresAt: new Date()
+        expiresAt: new Date(),
       });
 
       // Act
@@ -49,7 +63,9 @@ describe('AuthService', () => {
       expect(result).toHaveProperty('user');
       expect(result).toHaveProperty('tokens');
       expect(result).toHaveProperty('sessionId');
-      expect(mockUserRepository.findByEmail).toHaveBeenCalledWith(loginData.email);
+      expect(mockUserRepository.findByEmail).toHaveBeenCalledWith(
+        loginData.email,
+      );
     });
 
     it('should throw error with invalid credentials', async () => {
@@ -60,8 +76,9 @@ describe('AuthService', () => {
       mockUserRepository.findByEmail.mockResolvedValue(null);
 
       // Act & Assert
-      await expect(authService.login(loginData, sessionInfo))
-        .rejects.toThrow('Invalid credentials');
+      await expect(authService.login(loginData, sessionInfo)).rejects.toThrow(
+        'Invalid credentials',
+      );
     });
   });
 
@@ -79,7 +96,10 @@ describe('AuthService', () => {
 
       // Assert
       expect(result).toEqual(mockUser);
-      expect(mockUserRepository.exists).toHaveBeenCalledWith(registerData.email, registerData.username);
+      expect(mockUserRepository.exists).toHaveBeenCalledWith(
+        registerData.email,
+        registerData.username,
+      );
       expect(mockUserRepository.create).toHaveBeenCalled();
     });
 
@@ -90,8 +110,9 @@ describe('AuthService', () => {
       mockUserRepository.exists.mockResolvedValue(true);
 
       // Act & Assert
-      await expect(authService.register(registerData))
-        .rejects.toThrow('User already exists');
+      await expect(authService.register(registerData)).rejects.toThrow(
+        'User already exists',
+      );
     });
   });
 });

@@ -1,19 +1,19 @@
 // src/lib/api/apiClient.ts
-import axios, { 
-  AxiosInstance, 
-  AxiosRequestConfig, 
-  AxiosResponse, 
-  AxiosError 
+import axios, {
+  AxiosInstance,
+  AxiosRequestConfig,
+  AxiosResponse,
+  AxiosError,
 } from 'axios';
 import Cookies from 'js-cookie';
 import { toast } from 'sonner';
 
-import { 
-  HTTP_STATUS, 
-  ERROR_CODES, 
+import {
+  HTTP_STATUS,
+  ERROR_CODES,
   TOKEN_CONFIG,
   REQUEST_HEADERS,
-  CONTENT_TYPES
+  CONTENT_TYPES,
 } from '@/lib/constants';
 
 // Types
@@ -84,15 +84,19 @@ class ApiClient {
         // Add auth token if available
         const token = this.getStoredToken();
         if (token) {
-          config.headers[REQUEST_HEADERS.AUTHORIZATION] = `${TOKEN_CONFIG.TOKEN_PREFIX}${token}`;
+          config.headers[REQUEST_HEADERS.AUTHORIZATION] =
+            `${TOKEN_CONFIG.TOKEN_PREFIX}${token}`;
         }
 
         // Log request in development
         if (process.env.NEXT_PUBLIC_DEBUG_MODE === 'true') {
-          console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, {
-            headers: config.headers,
-            data: config.data,
-          });
+          console.log(
+            `[API Request] ${config.method?.toUpperCase()} ${config.url}`,
+            {
+              headers: config.headers,
+              data: config.data,
+            },
+          );
         }
 
         return config;
@@ -100,7 +104,7 @@ class ApiClient {
       (error) => {
         console.error('[API Request Error]', error);
         return Promise.reject(error);
-      }
+      },
     );
 
     // Response interceptor
@@ -126,13 +130,17 @@ class ApiClient {
         await this.handleResponseError(error);
 
         // Retry logic for specific errors
-        if (this.shouldRetry(error) && originalRequest && !originalRequest._retry) {
+        if (
+          this.shouldRetry(error) &&
+          originalRequest &&
+          !originalRequest._retry
+        ) {
           originalRequest._retry = true;
           return this.retryRequest(originalRequest);
         }
 
         return Promise.reject(error);
-      }
+      },
     );
   }
 
@@ -141,26 +149,34 @@ class ApiClient {
   }
 
   private getStoredToken(): string | null {
-    const cookieToken = Cookies.get(process.env.NEXT_PUBLIC_TOKEN_STORAGE_KEY || 'task_manager_token');
-    const localToken = typeof window !== 'undefined' 
-      ? localStorage.getItem(process.env.NEXT_PUBLIC_TOKEN_STORAGE_KEY || 'task_manager_token')
-      : null;
-    
+    const cookieToken = Cookies.get(
+      process.env.NEXT_PUBLIC_TOKEN_STORAGE_KEY || 'task_manager_token',
+    );
+    const localToken =
+      typeof window !== 'undefined'
+        ? localStorage.getItem(
+            process.env.NEXT_PUBLIC_TOKEN_STORAGE_KEY || 'task_manager_token',
+          )
+        : null;
+
     return cookieToken || localToken;
   }
 
   private handleNetworkError(error: AxiosError): void {
     console.error('[Network Error]', error.message);
-    
+
     if (process.env.NEXT_PUBLIC_ENABLE_NOTIFICATIONS === 'true') {
       toast.error('Error de conexión', {
-        description: 'No se pudo conectar con el servidor. Verifica tu conexión a internet.',
+        description:
+          'No se pudo conectar con el servidor. Verifica tu conexión a internet.',
         duration: 5000,
       });
     }
   }
 
-  private async handleResponseError(error: AxiosError<ApiResponse>): Promise<void> {
+  private async handleResponseError(
+    error: AxiosError<ApiResponse>,
+  ): Promise<void> {
     const { response } = error;
     const status = response?.status;
     const errorData = response?.data;
@@ -192,25 +208,37 @@ class ApiClient {
     }
   }
 
-  private async handleUnauthorizedError(errorData?: ApiResponse): Promise<void> {
+  private async handleUnauthorizedError(
+    errorData?: ApiResponse,
+  ): Promise<void> {
     console.warn('[Auth Error]', errorData?.message || 'Unauthorized');
-    
+
     // Clear stored tokens
-    Cookies.remove(process.env.NEXT_PUBLIC_TOKEN_STORAGE_KEY || 'task_manager_token');
+    Cookies.remove(
+      process.env.NEXT_PUBLIC_TOKEN_STORAGE_KEY || 'task_manager_token',
+    );
     if (typeof window !== 'undefined') {
-      localStorage.removeItem(process.env.NEXT_PUBLIC_TOKEN_STORAGE_KEY || 'task_manager_token');
-      localStorage.removeItem(process.env.NEXT_PUBLIC_REFRESH_TOKEN_STORAGE_KEY || 'task_manager_refresh_token');
+      localStorage.removeItem(
+        process.env.NEXT_PUBLIC_TOKEN_STORAGE_KEY || 'task_manager_token',
+      );
+      localStorage.removeItem(
+        process.env.NEXT_PUBLIC_REFRESH_TOKEN_STORAGE_KEY ||
+          'task_manager_refresh_token',
+      );
     }
 
     // Redirect to login if not already there
-    if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+    if (
+      typeof window !== 'undefined' &&
+      !window.location.pathname.includes('/login')
+    ) {
       window.location.href = '/login';
     }
   }
 
   private handleForbiddenError(errorData?: ApiResponse): void {
     console.warn('[Access Denied]', errorData?.message || 'Forbidden');
-    
+
     if (process.env.NEXT_PUBLIC_ENABLE_NOTIFICATIONS === 'true') {
       toast.error('Acceso denegado', {
         description: 'No tienes permisos para realizar esta acción.',
@@ -220,7 +248,7 @@ class ApiClient {
 
   private handleNotFoundError(errorData?: ApiResponse): void {
     console.warn('[Not Found]', errorData?.message || 'Resource not found');
-    
+
     if (process.env.NEXT_PUBLIC_ENABLE_NOTIFICATIONS === 'true') {
       toast.error('Recurso no encontrado', {
         description: 'El recurso solicitado no existe o no está disponible.',
@@ -230,10 +258,11 @@ class ApiClient {
 
   private handleRateLimitError(errorData?: ApiResponse): void {
     console.warn('[Rate Limit]', errorData?.message || 'Too many requests');
-    
+
     if (process.env.NEXT_PUBLIC_ENABLE_NOTIFICATIONS === 'true') {
       toast.error('Límite de solicitudes excedido', {
-        description: 'Has realizado demasiadas solicitudes. Intenta nuevamente en unos minutos.',
+        description:
+          'Has realizado demasiadas solicitudes. Intenta nuevamente en unos minutos.',
         duration: 8000,
       });
     }
@@ -241,18 +270,21 @@ class ApiClient {
 
   private handleServerError(errorData?: ApiResponse): void {
     console.error('[Server Error]', errorData?.message || 'Server error');
-    
+
     if (process.env.NEXT_PUBLIC_ENABLE_NOTIFICATIONS === 'true') {
       toast.error('Error del servidor', {
-        description: 'Ocurrió un error interno. Por favor, intenta nuevamente más tarde.',
+        description:
+          'Ocurrió un error interno. Por favor, intenta nuevamente más tarde.',
         duration: 6000,
       });
     }
   }
 
   private handleGenericError(errorData?: ApiResponse, status?: number): void {
-    console.error('[API Error]', errorData?.message || 'Unknown error', { status });
-    
+    console.error('[API Error]', errorData?.message || 'Unknown error', {
+      status,
+    });
+
     if (process.env.NEXT_PUBLIC_ENABLE_NOTIFICATIONS === 'true') {
       toast.error('Error', {
         description: errorData?.message || 'Ocurrió un error inesperado.',
@@ -262,25 +294,28 @@ class ApiClient {
 
   private shouldRetry(error: AxiosError): boolean {
     if (!error.response) return true; // Network errors
-    
+
     const retryStatuses = [
       HTTP_STATUS.SERVICE_UNAVAILABLE,
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
     ];
-    
+
     return retryStatuses.includes(error.response.status);
   }
 
-  private async retryRequest(config: AxiosRequestConfig, attempt: number = 1): Promise<AxiosResponse> {
+  private async retryRequest(
+    config: AxiosRequestConfig,
+    attempt: number = 1,
+  ): Promise<AxiosResponse> {
     if (attempt > this.retryAttempts) {
       throw new Error('Max retry attempts reached');
     }
 
     console.log(`[Retry Attempt] ${attempt}/${this.retryAttempts}`);
-    
+
     // Exponential backoff
     const delay = this.retryDelay * Math.pow(2, attempt - 1);
-    await new Promise(resolve => setTimeout(resolve, delay));
+    await new Promise((resolve) => setTimeout(resolve, delay));
 
     try {
       return await this.instance.request(config);
@@ -290,28 +325,47 @@ class ApiClient {
   }
 
   // Public methods
-  public async get<T = any>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<ApiResponse<T>>> {
+  public async get<T = any>(
+    url: string,
+    config?: AxiosRequestConfig,
+  ): Promise<AxiosResponse<ApiResponse<T>>> {
     return this.instance.get(url, config);
   }
 
-  public async post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<AxiosResponse<ApiResponse<T>>> {
+  public async post<T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
+  ): Promise<AxiosResponse<ApiResponse<T>>> {
     return this.instance.post(url, data, config);
   }
 
-  public async put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<AxiosResponse<ApiResponse<T>>> {
+  public async put<T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
+  ): Promise<AxiosResponse<ApiResponse<T>>> {
     return this.instance.put(url, data, config);
   }
 
-  public async patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<AxiosResponse<ApiResponse<T>>> {
+  public async patch<T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
+  ): Promise<AxiosResponse<ApiResponse<T>>> {
     return this.instance.patch(url, data, config);
   }
 
-  public async delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<ApiResponse<T>>> {
+  public async delete<T = any>(
+    url: string,
+    config?: AxiosRequestConfig,
+  ): Promise<AxiosResponse<ApiResponse<T>>> {
     return this.instance.delete(url, config);
   }
 
   public setAuthToken(token: string): void {
-    this.instance.defaults.headers.common[REQUEST_HEADERS.AUTHORIZATION] = `${TOKEN_CONFIG.TOKEN_PREFIX}${token}`;
+    this.instance.defaults.headers.common[REQUEST_HEADERS.AUTHORIZATION] =
+      `${TOKEN_CONFIG.TOKEN_PREFIX}${token}`;
   }
 
   public removeAuthToken(): void {
@@ -326,18 +380,22 @@ class ApiClient {
 // Create instances for different services
 const getServiceUrl = (serviceName: 'auth' | 'task'): string => {
   const isDev = process.env.NODE_ENV === 'development';
-  
+
   switch (serviceName) {
     case 'auth':
-      return isDev 
-        ? process.env.NEXT_PUBLIC_AUTH_SERVICE_URL_DEV || 'http://localhost:3001/api/v1'
-        : process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'https://task-manager-auth-service.onrender.com/api/v1';
-    
+      return isDev
+        ? process.env.NEXT_PUBLIC_AUTH_SERVICE_URL_DEV ||
+            'http://localhost:3001/api/v1'
+        : process.env.NEXT_PUBLIC_AUTH_SERVICE_URL ||
+            'https://task-manager-auth-service.onrender.com/api/v1';
+
     case 'task':
       return isDev
-        ? process.env.NEXT_PUBLIC_TASK_SERVICE_URL_DEV || 'http://localhost:3002/api/v1'
-        : process.env.NEXT_PUBLIC_TASK_SERVICE_URL || 'https://task-manager-task-service.onrender.com/api/v1';
-    
+        ? process.env.NEXT_PUBLIC_TASK_SERVICE_URL_DEV ||
+            'http://localhost:3002/api/v1'
+        : process.env.NEXT_PUBLIC_TASK_SERVICE_URL ||
+            'https://task-manager-task-service.onrender.com/api/v1';
+
     default:
       throw new Error(`Unknown service: ${serviceName}`);
   }

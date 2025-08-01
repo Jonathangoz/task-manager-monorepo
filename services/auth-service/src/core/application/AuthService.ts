@@ -13,14 +13,18 @@ import { IUserRepository } from '@/core/interfaces/IUserRepository';
 import { ITokenService } from '@/core/interfaces/ITokenService';
 import { ICacheService } from '@/core/interfaces/ICacheService';
 import { User } from '@/core/entities/User';
-import { hashPassword, verifyPassword, validatePasswordStrength } from '@/utils/crypto';
+import {
+  hashPassword,
+  verifyPassword,
+  validatePasswordStrength,
+} from '@/utils/crypto';
 import { logger, authLogger } from '@/utils/logger';
 import {
   ERROR_CODES,
   ERROR_MESSAGES,
   SECURITY_CONFIG,
   CACHE_TTL,
-  CACHE_KEYS
+  CACHE_KEYS,
 } from '@/utils/constants';
 import { db } from '@/config/database';
 
@@ -28,17 +32,23 @@ export class AuthService implements IAuthService {
   constructor(
     private readonly userRepository: IUserRepository,
     private readonly tokenService: ITokenService,
-    private readonly cacheService: ICacheService
+    private readonly cacheService: ICacheService,
   ) {}
 
   /**
    * Autentica un usuario con email y contraseña
    */
-  public async login(credentials: LoginCredentials, sessionInfo: SessionInfo): Promise<AuthResult> {
+  public async login(
+    credentials: LoginCredentials,
+    sessionInfo: SessionInfo,
+  ): Promise<AuthResult> {
     const { email, password } = credentials;
 
     try {
-      authLogger.info({ email, ip: sessionInfo.ipAddress }, 'Login attempt started');
+      authLogger.info(
+        { email, ip: sessionInfo.ipAddress },
+        'Login attempt started',
+      );
 
       const ipAddress = sessionInfo.ipAddress || 'unknown';
       await this.checkLoginAttempts(email, ipAddress);
@@ -59,11 +69,16 @@ export class AuthService implements IAuthService {
           lastLoginAt: true,
           createdAt: true,
           updatedAt: true,
-        }
+        },
       });
 
       if (!user) {
-        await this.recordLoginAttempt({ email, ipAddress, success: false, reason: ERROR_MESSAGES.INVALID_CREDENTIALS });
+        await this.recordLoginAttempt({
+          email,
+          ipAddress,
+          success: false,
+          reason: ERROR_MESSAGES.INVALID_CREDENTIALS,
+        });
         throw new Error(ERROR_CODES.INVALID_CREDENTIALS);
       }
 
@@ -71,14 +86,29 @@ export class AuthService implements IAuthService {
       const userInstance = User.fromPrisma(user);
 
       if (!userInstance.isActive) {
-        await this.recordLoginAttempt({ email, userId: userInstance.id, ipAddress, success: false, reason: ERROR_MESSAGES.USER_INACTIVE });
+        await this.recordLoginAttempt({
+          email,
+          userId: userInstance.id,
+          ipAddress,
+          success: false,
+          reason: ERROR_MESSAGES.USER_INACTIVE,
+        });
         throw new Error(ERROR_CODES.USER_INACTIVE);
       }
 
       // Verificar password usando el método toPrisma() para acceder al password
-      const isPasswordValid = await verifyPassword(userInstance.toPrisma().password, password);
+      const isPasswordValid = await verifyPassword(
+        userInstance.toPrisma().password,
+        password,
+      );
       if (!isPasswordValid) {
-        await this.recordLoginAttempt({ email, userId: userInstance.id, ipAddress, success: false, reason: ERROR_MESSAGES.INVALID_CREDENTIALS });
+        await this.recordLoginAttempt({
+          email,
+          userId: userInstance.id,
+          ipAddress,
+          success: false,
+          reason: ERROR_MESSAGES.INVALID_CREDENTIALS,
+        });
         throw new Error(ERROR_CODES.INVALID_CREDENTIALS);
       }
 
@@ -90,32 +120,36 @@ export class AuthService implements IAuthService {
 
       await this.clearLoginAttempts(email);
 
-      await this.recordLoginAttempt({ email, userId: userInstance.id, ipAddress, success: true });
+      await this.recordLoginAttempt({
+        email,
+        userId: userInstance.id,
+        ipAddress,
+        success: true,
+      });
 
       authLogger.info(
         {
           userId: userInstance.id,
           email: userInstance.email,
           sessionId,
-          ip: ipAddress
+          ip: ipAddress,
         },
-        'Login successful'
+        'Login successful',
       );
 
       return {
         user: userInstance,
         tokens,
-        sessionId
+        sessionId,
       };
-
     } catch (error) {
       authLogger.error(
         {
           email,
           error: error instanceof Error ? error.message : 'Unknown error',
-          ip: sessionInfo.ipAddress
+          ip: sessionInfo.ipAddress,
         },
-        'Login failed'
+        'Login failed',
       );
       throw error;
     }
@@ -149,7 +183,7 @@ export class AuthService implements IAuthService {
           username,
           password: hashedPassword,
           firstName,
-          lastName
+          lastName,
         },
         select: {
           id: true,
@@ -164,28 +198,27 @@ export class AuthService implements IAuthService {
           lastLoginAt: true,
           createdAt: true,
           updatedAt: true,
-        }
+        },
       });
 
       authLogger.info(
         {
           userId: user.id,
           email: user.email,
-          username: user.username
+          username: user.username,
         },
-        'User registered successfully'
+        'User registered successfully',
       );
 
       return User.fromPrisma(user);
-
     } catch (error) {
       authLogger.error(
         {
           email,
           username,
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         },
-        'User registration failed'
+        'User registration failed',
       );
       throw error;
     }
@@ -204,9 +237,9 @@ export class AuthService implements IAuthService {
         {
           userId,
           sessionId,
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         },
-        'Logout failed'
+        'Logout failed',
       );
       throw error;
     }
@@ -224,9 +257,9 @@ export class AuthService implements IAuthService {
       authLogger.error(
         {
           userId,
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         },
-        'Failed to terminate all sessions'
+        'Failed to terminate all sessions',
       );
       throw error;
     }
@@ -235,15 +268,19 @@ export class AuthService implements IAuthService {
   /**
    * Refresca un access token usando un refresh token
    */
-  async refreshToken(refreshToken: string, sessionInfo: SessionInfo): Promise<AuthTokens> {
+  async refreshToken(
+    refreshToken: string,
+    sessionInfo: SessionInfo,
+  ): Promise<AuthTokens> {
     try {
       authLogger.info({ ip: sessionInfo.ipAddress }, 'Token refresh started');
 
-      const tokenPayload = await this.tokenService.validateRefreshToken(refreshToken);
+      const tokenPayload =
+        await this.tokenService.validateRefreshToken(refreshToken);
 
       const storedToken = await db.refreshToken.findUnique({
         where: { token: refreshToken },
-        include: { 
+        include: {
           user: {
             select: {
               id: true,
@@ -258,12 +295,16 @@ export class AuthService implements IAuthService {
               lastLoginAt: true,
               createdAt: true,
               updatedAt: true,
-            }
-          }
-        }
+            },
+          },
+        },
       });
 
-      if (!storedToken || storedToken.isRevoked || storedToken.expiresAt < new Date()) {
+      if (
+        !storedToken ||
+        storedToken.isRevoked ||
+        storedToken.expiresAt < new Date()
+      ) {
         throw new Error(ERROR_CODES.REFRESH_TOKEN_INVALID);
       }
 
@@ -274,28 +315,30 @@ export class AuthService implements IAuthService {
 
       await db.refreshToken.update({
         where: { id: storedToken.id },
-        data: { isRevoked: true }
+        data: { isRevoked: true },
       });
 
-      const tokens = await this.generateAuthTokens(userInstance, tokenPayload.sessionId);
+      const tokens = await this.generateAuthTokens(
+        userInstance,
+        tokenPayload.sessionId,
+      );
 
       authLogger.info(
         {
           userId: userInstance.id,
-          sessionId: tokenPayload.sessionId
+          sessionId: tokenPayload.sessionId,
         },
-        'Token refresh successful'
+        'Token refresh successful',
       );
 
       return tokens;
-
     } catch (error) {
       authLogger.error(
         {
           error: error instanceof Error ? error.message : 'Unknown error',
-          ip: sessionInfo.ipAddress
+          ip: sessionInfo.ipAddress,
         },
-        'Token refresh failed'
+        'Token refresh failed',
       );
       throw error;
     }
@@ -314,13 +357,12 @@ export class AuthService implements IAuthService {
       }
 
       return payload;
-
     } catch (error) {
       authLogger.debug(
         {
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         },
-        'Token validation failed'
+        'Token validation failed',
       );
       throw error;
     }
@@ -333,18 +375,17 @@ export class AuthService implements IAuthService {
     try {
       await db.refreshToken.update({
         where: { id: tokenId },
-        data: { isRevoked: true }
+        data: { isRevoked: true },
       });
 
       authLogger.info({ tokenId }, 'Refresh token revoked');
-
     } catch (error) {
       authLogger.error(
         {
           tokenId,
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         },
-        'Failed to revoke refresh token'
+        'Failed to revoke refresh token',
       );
       throw error;
     }
@@ -357,24 +398,23 @@ export class AuthService implements IAuthService {
     try {
       const result = await db.refreshToken.updateMany({
         where: { userId },
-        data: { isRevoked: true }
+        data: { isRevoked: true },
       });
 
       authLogger.info(
         {
           userId,
-          revokedCount: result.count
+          revokedCount: result.count,
         },
-        'All refresh tokens revoked'
+        'All refresh tokens revoked',
       );
-
     } catch (error) {
       authLogger.error(
         {
           userId,
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         },
-        'Failed to revoke all tokens'
+        'Failed to revoke all tokens',
       );
       throw error;
     }
@@ -384,7 +424,11 @@ export class AuthService implements IAuthService {
    * Cambia la contraseña de un usuario
    * Implementa la interfaz correcta de IAuthService
    */
-  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
     try {
       authLogger.info({ userId }, 'Password update started');
 
@@ -404,7 +448,7 @@ export class AuthService implements IAuthService {
           lastLoginAt: true,
           createdAt: true,
           updatedAt: true,
-        }
+        },
       });
 
       if (!user) {
@@ -413,7 +457,10 @@ export class AuthService implements IAuthService {
 
       const userInstance = User.fromPrisma(user);
 
-      const isCurrentPasswordValid = await verifyPassword(userInstance.toPrisma().password, currentPassword);
+      const isCurrentPasswordValid = await verifyPassword(
+        userInstance.toPrisma().password,
+        currentPassword,
+      );
       if (!isCurrentPasswordValid) {
         throw new Error(ERROR_CODES.INVALID_CREDENTIALS);
       }
@@ -429,17 +476,22 @@ export class AuthService implements IAuthService {
 
       await this.terminateAllSessions(userId);
 
-      authLogger.info({ userId }, 'Password updated successfully and all sessions terminated');
-
+      authLogger.info(
+        { userId },
+        'Password updated successfully and all sessions terminated',
+      );
     } catch (error) {
       authLogger.error(
-        { userId, error: error instanceof Error ? error.message : 'Unknown error' },
-        'Password update failed'
+        {
+          userId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+        'Password update failed',
       );
       throw error;
     }
   }
-  
+
   /**
    * Registra un intento de login (implementación de la interfaz)
    */
@@ -447,48 +499,56 @@ export class AuthService implements IAuthService {
     return this.recordLoginAttemptInternal(data);
   }
 
-/**
- * Implementa terminateAllSessions con parámetro opcional excludeSessionId
- */
-async terminateAllSessions(userId: string, excludeSessionId?: string): Promise<void> {
-  try {
-    let whereCondition: any = { userId, isActive: true };
-    
-    // Si se proporciona excludeSessionId, excluir esa sesión
-    if (excludeSessionId) {
-      whereCondition.sessionId = { not: excludeSessionId };
-    }
+  /**
+   * Implementa terminateAllSessions con parámetro opcional excludeSessionId
+   */
+  async terminateAllSessions(
+    userId: string,
+    excludeSessionId?: string,
+  ): Promise<void> {
+    try {
+      const whereCondition: any = { userId, isActive: true };
 
-    const sessions = await db.userSession.findMany({
-      where: whereCondition,
-      select: { sessionId: true }
-    });
-
-    await db.userSession.updateMany({
-      where: whereCondition,
-      data: { isActive: false }
-    });
-
-    // CORRECCIÓN: Llamar a la función CACHE_KEYS.USER_SESSION con cada sessionId
-    if (sessions.length > 0) {
-      for (const session of sessions) {
-        const cacheKey = CACHE_KEYS.USER_SESSION(session.sessionId);
-        await this.cacheService.del(cacheKey);
+      // Si se proporciona excludeSessionId, excluir esa sesión
+      if (excludeSessionId) {
+        whereCondition.sessionId = { not: excludeSessionId };
       }
+
+      const sessions = await db.userSession.findMany({
+        where: whereCondition,
+        select: { sessionId: true },
+      });
+
+      await db.userSession.updateMany({
+        where: whereCondition,
+        data: { isActive: false },
+      });
+
+      // CORRECCIÓN: Llamar a la función CACHE_KEYS.USER_SESSION con cada sessionId
+      if (sessions.length > 0) {
+        for (const session of sessions) {
+          const cacheKey = CACHE_KEYS.USER_SESSION(session.sessionId);
+          await this.cacheService.del(cacheKey);
+        }
+      }
+
+      await this.revokeAllTokens(userId);
+
+      authLogger.info(
+        { userId, count: sessions.length, excludedSession: excludeSessionId },
+        'Sessions terminated',
+      );
+    } catch (error) {
+      authLogger.error(
+        {
+          userId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+        'Failed to terminate sessions',
+      );
+      throw error;
     }
-
-    await this.revokeAllTokens(userId);
-
-    authLogger.info({ userId, count: sessions.length, excludedSession: excludeSessionId }, 'Sessions terminated');
-
-  } catch (error) {
-    authLogger.error(
-      { userId, error: error instanceof Error ? error.message : 'Unknown error' },
-      'Failed to terminate sessions'
-    );
-    throw error;
   }
-}
 
   /**
    * Métodos de forgot/reset password - implementación básica
@@ -498,32 +558,47 @@ async terminateAllSessions(userId: string, excludeSessionId?: string): Promise<v
       const user = await this.userRepository.findByEmail(email);
       if (!user) {
         // Por seguridad, no revelar si el email existe o no
-        authLogger.info({ email }, 'Password reset requested for non-existent email');
+        authLogger.info(
+          { email },
+          'Password reset requested for non-existent email',
+        );
         return;
       }
 
       // TODO: Implementar lógica de envío de email
-      authLogger.info({ email, userId: user.id }, 'Password reset email would be sent');
-      
+      authLogger.info(
+        { email, userId: user.id },
+        'Password reset email would be sent',
+      );
     } catch (error) {
       authLogger.error(
-        { email, error: error instanceof Error ? error.message : 'Unknown error' },
-        'Forgot password failed'
+        {
+          email,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+        'Forgot password failed',
       );
       throw error;
     }
   }
 
-  async resetPassword(token: string, newPassword: string, email: string): Promise<void> {
+  async resetPassword(
+    token: string,
+    newPassword: string,
+    email: string,
+  ): Promise<void> {
     try {
       // TODO: Implementar validación de token y reset de password
       authLogger.info({ email }, 'Password reset attempted');
       throw new Error('Not implemented');
-      
     } catch (error) {
       authLogger.error(
-        { token, email, error: error instanceof Error ? error.message : 'Unknown error' },
-        'Password reset failed'
+        {
+          token,
+          email,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+        'Password reset failed',
       );
       throw error;
     }
@@ -532,7 +607,10 @@ async terminateAllSessions(userId: string, excludeSessionId?: string): Promise<v
   /**
    * Crea una nueva sesión de usuario
    */
-  async createSession(userId: string, sessionInfo: SessionInfo): Promise<string> {
+  async createSession(
+    userId: string,
+    sessionInfo: SessionInfo,
+  ): Promise<string> {
     try {
       const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const expiresAt = new Date(Date.now() + CACHE_TTL.USER_SESSION * 1000); // Convertir a milisegundos
@@ -548,27 +626,33 @@ async terminateAllSessions(userId: string, excludeSessionId?: string): Promise<v
           device: sessionInfo.device,
           location: sessionInfo.location,
           expiresAt,
-          isActive: true
-        }
+          isActive: true,
+        },
       });
 
       await this.cacheService.setJson(
         CACHE_KEYS.USER_SESSION(sessionId),
-        { userId, sessionId, ipAddress, userAgent, isActive: true, expiresAt: expiresAt.toISOString() },
-        CACHE_TTL.USER_SESSION
+        {
+          userId,
+          sessionId,
+          ipAddress,
+          userAgent,
+          isActive: true,
+          expiresAt: expiresAt.toISOString(),
+        },
+        CACHE_TTL.USER_SESSION,
       );
 
-      authLogger.info(
-        { userId, sessionId, ip: ipAddress },
-        'Session created'
-      );
+      authLogger.info({ userId, sessionId, ip: ipAddress }, 'Session created');
 
       return sessionId;
-
     } catch (error) {
       authLogger.error(
-        { userId, error: error instanceof Error ? error.message : 'Unknown error' },
-        'Failed to create session'
+        {
+          userId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+        'Failed to create session',
       );
       throw error;
     }
@@ -579,14 +663,17 @@ async terminateAllSessions(userId: string, excludeSessionId?: string): Promise<v
    */
   async validateSession(sessionId: string): Promise<boolean> {
     try {
-      const cachedSession = await this.cacheService.getJson<{ expiresAt: string, isActive: boolean }>(CACHE_KEYS.USER_SESSION(sessionId));
+      const cachedSession = await this.cacheService.getJson<{
+        expiresAt: string;
+        isActive: boolean;
+      }>(CACHE_KEYS.USER_SESSION(sessionId));
       if (cachedSession) {
         const expiresAt = new Date(cachedSession.expiresAt);
         return cachedSession.isActive && expiresAt > new Date();
       }
 
       const session = await db.userSession.findUnique({
-        where: { sessionId }
+        where: { sessionId },
       });
       if (!session || !session.isActive || session.expiresAt < new Date()) {
         return false;
@@ -594,14 +681,24 @@ async terminateAllSessions(userId: string, excludeSessionId?: string): Promise<v
 
       await this.cacheService.setJson(
         CACHE_KEYS.USER_SESSION(sessionId),
-        { userId: session.userId, sessionId: session.sessionId, ipAddress: session.ipAddress, userAgent: session.userAgent, isActive: session.isActive, expiresAt: session.expiresAt.toISOString() },
-        CACHE_TTL.USER_SESSION
+        {
+          userId: session.userId,
+          sessionId: session.sessionId,
+          ipAddress: session.ipAddress,
+          userAgent: session.userAgent,
+          isActive: session.isActive,
+          expiresAt: session.expiresAt.toISOString(),
+        },
+        CACHE_TTL.USER_SESSION,
       );
       return true;
     } catch (error) {
       authLogger.error(
-        { sessionId, error: error instanceof Error ? error.message : 'Unknown error' },
-        'Session validation failed'
+        {
+          sessionId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+        'Session validation failed',
       );
       return false;
     }
@@ -614,17 +711,19 @@ async terminateAllSessions(userId: string, excludeSessionId?: string): Promise<v
     try {
       await db.userSession.update({
         where: { sessionId },
-        data: { isActive: false }
+        data: { isActive: false },
       });
 
       await this.cacheService.del(CACHE_KEYS.USER_SESSION(sessionId));
 
       authLogger.info({ sessionId }, 'Session terminated');
-
     } catch (error) {
       authLogger.error(
-        { sessionId, error: error instanceof Error ? error.message : 'Unknown error' },
-        'Failed to terminate session'
+        {
+          sessionId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+        'Failed to terminate session',
       );
       throw error;
     }
@@ -633,16 +732,23 @@ async terminateAllSessions(userId: string, excludeSessionId?: string): Promise<v
   /**
    * Genera tokens de autenticación para un usuario
    */
-  private async generateAuthTokens(user: User, sessionId: string): Promise<AuthTokens> {
+  private async generateAuthTokens(
+    user: User,
+    sessionId: string,
+  ): Promise<AuthTokens> {
     const accessTokenPayload: Omit<TokenPayload, 'iat' | 'exp' | 'iss'> = {
       sub: user.id,
       email: user.email,
       username: user.username,
-      sessionId
+      sessionId,
     };
 
-    const accessToken = await this.tokenService.generateAccessToken(accessTokenPayload);
-    const refreshToken = await this.tokenService.generateRefreshToken(user.id, sessionId);
+    const accessToken =
+      await this.tokenService.generateAccessToken(accessTokenPayload);
+    const refreshToken = await this.tokenService.generateRefreshToken(
+      user.id,
+      sessionId,
+    );
 
     // Obtener tiempo de expiración con el parámetro requerido
     const expirationTime = this.tokenService.getTokenExpirationTime('15m'); // 15 minutos por defecto
@@ -650,18 +756,29 @@ async terminateAllSessions(userId: string, excludeSessionId?: string): Promise<v
     return {
       accessToken,
       refreshToken: refreshToken.token,
-      expiresIn: expirationTime
+      expiresIn: expirationTime,
     };
   }
 
   /**
    * Verifica el número de intentos de login fallidos
    */
-  private async checkLoginAttempts(email: string, ipAddress: string): Promise<void> {
+  private async checkLoginAttempts(
+    email: string,
+    ipAddress: string,
+  ): Promise<void> {
     const attempts = await this.cacheService.getLoginAttempts(email);
     if (attempts && attempts >= SECURITY_CONFIG.MAX_LOGIN_ATTEMPTS) {
-      authLogger.warn({ email, ipAddress, attempts }, 'Too many login attempts, user is rate-limited');
-      await this.recordLoginAttemptInternal({ email, ipAddress, success: false, reason: ERROR_MESSAGES.TOO_MANY_LOGIN_ATTEMPTS });
+      authLogger.warn(
+        { email, ipAddress, attempts },
+        'Too many login attempts, user is rate-limited',
+      );
+      await this.recordLoginAttemptInternal({
+        email,
+        ipAddress,
+        success: false,
+        reason: ERROR_MESSAGES.TOO_MANY_LOGIN_ATTEMPTS,
+      });
       throw new Error(ERROR_CODES.TOO_MANY_LOGIN_ATTEMPTS);
     }
   }
@@ -669,7 +786,9 @@ async terminateAllSessions(userId: string, excludeSessionId?: string): Promise<v
   /**
    * Registra un intento de login (método interno)
    */
-  private async recordLoginAttemptInternal(data: LoginAttemptData): Promise<void> {
+  private async recordLoginAttemptInternal(
+    data: LoginAttemptData,
+  ): Promise<void> {
     const { email, success, ipAddress, reason } = data;
     try {
       if (success) {
@@ -686,14 +805,22 @@ async terminateAllSessions(userId: string, excludeSessionId?: string): Promise<v
           ipAddress: ipAddress || 'unknown',
           userAgent: data.userAgent,
           success,
-          reason
-        }
+          reason,
+        },
       });
 
-      authLogger.info({ email, ipAddress, success, reason, attemptCount: currentAttempts }, 'Login attempt recorded');
-
+      authLogger.info(
+        { email, ipAddress, success, reason, attemptCount: currentAttempts },
+        'Login attempt recorded',
+      );
     } catch (error) {
-      authLogger.error({ email, error: error instanceof Error ? error.message : 'Unknown error' }, 'Failed to record login attempt');
+      authLogger.error(
+        {
+          email,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+        'Failed to record login attempt',
+      );
     }
   }
 
@@ -704,7 +831,13 @@ async terminateAllSessions(userId: string, excludeSessionId?: string): Promise<v
     try {
       await this.cacheService.clearLoginAttempts(email);
     } catch (error) {
-      authLogger.error({ email, error: error instanceof Error ? error.message : 'Unknown error' }, 'Failed to clear login attempts');
+      authLogger.error(
+        {
+          email,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+        'Failed to clear login attempts',
+      );
     }
   }
 }

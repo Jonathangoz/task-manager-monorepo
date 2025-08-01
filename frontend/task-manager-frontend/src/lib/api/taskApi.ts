@@ -1,13 +1,13 @@
 // src/lib/api/taskApi.ts
 import { AxiosResponse } from 'axios';
 import { taskApiClient } from './apiClient';
-import { 
-  TASK_STATUSES, 
-  TASK_PRIORITIES, 
-  SORT_FIELDS, 
+import {
+  TASK_STATUSES,
+  TASK_PRIORITIES,
+  SORT_FIELDS,
   SORT_ORDERS,
   PAGINATION_CONFIG,
-  CACHE_TTL
+  CACHE_TTL,
 } from '@/lib/constants';
 
 // Types
@@ -156,12 +156,15 @@ class TaskApi {
   /**
    * Get paginated tasks with filters and sorting
    */
-  async getTasks(params: TaskQueryParams = {}): Promise<{ tasks: Task[]; meta: PaginationMeta }> {
+  async getTasks(
+    params: TaskQueryParams = {},
+  ): Promise<{ tasks: Task[]; meta: PaginationMeta }> {
     try {
       const queryParams = this.buildTaskQueryParams(params);
-      
-      const response: AxiosResponse<ApiResponse<{ tasks: Task[]; meta: PaginationMeta }>> = 
-        await taskApiClient.get('/tasks', { params: queryParams });
+
+      const response: AxiosResponse<
+        ApiResponse<{ tasks: Task[]; meta: PaginationMeta }>
+      > = await taskApiClient.get('/tasks', { params: queryParams });
 
       if (response.data.success && response.data.data) {
         // Cache tasks for quick access
@@ -185,7 +188,8 @@ class TaskApi {
       const cached = this.getCachedTask(taskId);
       if (cached) return cached;
 
-      const response: AxiosResponse<ApiResponse<Task>> = await taskApiClient.get(`/tasks/${taskId}`);
+      const response: AxiosResponse<ApiResponse<Task>> =
+        await taskApiClient.get(`/tasks/${taskId}`);
 
       if (response.data.success && response.data.data) {
         // Cache individual task
@@ -205,7 +209,8 @@ class TaskApi {
    */
   async createTask(taskData: CreateTaskRequest): Promise<Task> {
     try {
-      const response: AxiosResponse<ApiResponse<Task>> = await taskApiClient.post('/tasks', taskData);
+      const response: AxiosResponse<ApiResponse<Task>> =
+        await taskApiClient.post('/tasks', taskData);
 
       if (response.data.success && response.data.data) {
         // Cache new task
@@ -227,7 +232,8 @@ class TaskApi {
    */
   async updateTask(taskId: string, taskData: UpdateTaskRequest): Promise<Task> {
     try {
-      const response: AxiosResponse<ApiResponse<Task>> = await taskApiClient.put(`/tasks/${taskId}`, taskData);
+      const response: AxiosResponse<ApiResponse<Task>> =
+        await taskApiClient.put(`/tasks/${taskId}`, taskData);
 
       if (response.data.success && response.data.data) {
         // Update cache
@@ -248,7 +254,9 @@ class TaskApi {
    */
   async deleteTask(taskId: string): Promise<void> {
     try {
-      const response: AxiosResponse<ApiResponse> = await taskApiClient.delete(`/tasks/${taskId}`);
+      const response: AxiosResponse<ApiResponse> = await taskApiClient.delete(
+        `/tasks/${taskId}`,
+      );
 
       if (response.data.success) {
         // Remove from cache
@@ -267,7 +275,10 @@ class TaskApi {
   /**
    * Update task status
    */
-  async updateTaskStatus(taskId: string, status: keyof typeof TASK_STATUSES): Promise<Task> {
+  async updateTaskStatus(
+    taskId: string,
+    status: keyof typeof TASK_STATUSES,
+  ): Promise<Task> {
     return this.updateTask(taskId, { status });
   }
 
@@ -287,7 +298,8 @@ class TaskApi {
       const cached = this.getCachedStats();
       if (cached) return cached;
 
-      const response: AxiosResponse<ApiResponse<TaskStats>> = await taskApiClient.get('/tasks/stats');
+      const response: AxiosResponse<ApiResponse<TaskStats>> =
+        await taskApiClient.get('/tasks/stats');
 
       if (response.data.success && response.data.data) {
         // Cache stats
@@ -312,7 +324,8 @@ class TaskApi {
         ...filters,
       };
 
-      const response: AxiosResponse<ApiResponse<Task[]>> = await taskApiClient.get('/tasks/search', { params });
+      const response: AxiosResponse<ApiResponse<Task[]>> =
+        await taskApiClient.get('/tasks/search', { params });
 
       if (response.data.success && response.data.data) {
         return response.data.data;
@@ -336,7 +349,8 @@ class TaskApi {
       const cached = this.getCachedCategories();
       if (cached) return cached;
 
-      const response: AxiosResponse<ApiResponse<Category[]>> = await taskApiClient.get('/categories');
+      const response: AxiosResponse<ApiResponse<Category[]>> =
+        await taskApiClient.get('/categories');
 
       if (response.data.success && response.data.data) {
         // Cache categories
@@ -356,7 +370,8 @@ class TaskApi {
    */
   async getCategory(categoryId: string): Promise<Category> {
     try {
-      const response: AxiosResponse<ApiResponse<Category>> = await taskApiClient.get(`/categories/${categoryId}`);
+      const response: AxiosResponse<ApiResponse<Category>> =
+        await taskApiClient.get(`/categories/${categoryId}`);
 
       if (response.data.success && response.data.data) {
         return response.data.data;
@@ -374,7 +389,8 @@ class TaskApi {
    */
   async createCategory(categoryData: CreateCategoryRequest): Promise<Category> {
     try {
-      const response: AxiosResponse<ApiResponse<Category>> = await taskApiClient.post('/categories', categoryData);
+      const response: AxiosResponse<ApiResponse<Category>> =
+        await taskApiClient.post('/categories', categoryData);
 
       if (response.data.success && response.data.data) {
         // Invalidate categories cache
@@ -392,9 +408,13 @@ class TaskApi {
   /**
    * Update existing category
    */
-  async updateCategory(categoryId: string, categoryData: UpdateCategoryRequest): Promise<Category> {
+  async updateCategory(
+    categoryId: string,
+    categoryData: UpdateCategoryRequest,
+  ): Promise<Category> {
     try {
-      const response: AxiosResponse<ApiResponse<Category>> = await taskApiClient.put(`/categories/${categoryId}`, categoryData);
+      const response: AxiosResponse<ApiResponse<Category>> =
+        await taskApiClient.put(`/categories/${categoryId}`, categoryData);
 
       if (response.data.success && response.data.data) {
         // Invalidate cache
@@ -414,7 +434,9 @@ class TaskApi {
    */
   async deleteCategory(categoryId: string): Promise<void> {
     try {
-      const response: AxiosResponse<ApiResponse> = await taskApiClient.delete(`/categories/${categoryId}`);
+      const response: AxiosResponse<ApiResponse> = await taskApiClient.delete(
+        `/categories/${categoryId}`,
+      );
 
       if (response.data.success) {
         // Invalidate cache
@@ -435,13 +457,16 @@ class TaskApi {
    */
   async getCategoryStats(): Promise<CategoryStats> {
     try {
-      const response: AxiosResponse<ApiResponse<CategoryStats>> = await taskApiClient.get('/categories/stats');
+      const response: AxiosResponse<ApiResponse<CategoryStats>> =
+        await taskApiClient.get('/categories/stats');
 
       if (response.data.success && response.data.data) {
         return response.data.data;
       }
 
-      throw new Error(response.data.message || 'Failed to fetch category stats');
+      throw new Error(
+        response.data.message || 'Failed to fetch category stats',
+      );
     } catch (error) {
       console.error('[TaskApi] Get category stats error:', error);
       throw error;
@@ -455,7 +480,10 @@ class TaskApi {
 
     // Pagination
     queryParams.page = params.page || PAGINATION_CONFIG.DEFAULT_PAGE;
-    queryParams.limit = Math.min(params.limit || PAGINATION_CONFIG.DEFAULT_LIMIT, PAGINATION_CONFIG.MAX_LIMIT);
+    queryParams.limit = Math.min(
+      params.limit || PAGINATION_CONFIG.DEFAULT_LIMIT,
+      PAGINATION_CONFIG.MAX_LIMIT,
+    );
 
     // Sorting
     if (params.sort) {
@@ -486,7 +514,7 @@ class TaskApi {
       localStorage.setItem('tasks_cache', JSON.stringify(cacheData));
 
       // Cache individual tasks
-      tasks.forEach(task => this.cacheTask(task));
+      tasks.forEach((task) => this.cacheTask(task));
     } catch (error) {
       console.warn('[TaskApi] Failed to cache tasks:', error);
     }
@@ -554,7 +582,8 @@ class TaskApi {
       if (!cached) return null;
 
       const { data, timestamp } = JSON.parse(cached);
-      const isExpired = Date.now() - timestamp > CACHE_TTL.USER_CATEGORIES * 1000;
+      const isExpired =
+        Date.now() - timestamp > CACHE_TTL.USER_CATEGORIES * 1000;
 
       return isExpired ? null : data;
     } catch {
@@ -621,8 +650,12 @@ class TaskApi {
 
     try {
       const keys = Object.keys(localStorage);
-      keys.forEach(key => {
-        if (key.startsWith('task_') || key.startsWith('categories_') || key.includes('_cache')) {
+      keys.forEach((key) => {
+        if (
+          key.startsWith('task_') ||
+          key.startsWith('categories_') ||
+          key.includes('_cache')
+        ) {
           localStorage.removeItem(key);
         }
       });

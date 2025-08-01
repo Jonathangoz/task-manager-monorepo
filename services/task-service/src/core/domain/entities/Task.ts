@@ -1,12 +1,12 @@
-// src/core/domain/entities/Task.ts - Entidad de dominio para Task 
+// src/core/domain/entities/Task.ts - Entidad de dominio para Task
 // Esta entidad representa una tarea en el sistema, incluyendo sus propiedades, estados y comportamientos.
 
-import { 
-  TASK_STATUSES, 
-  TASK_PRIORITIES, 
+import {
+  TASK_STATUSES,
+  TASK_PRIORITIES,
   TASK_CONFIG,
   ERROR_CODES,
-  PRIORITY_WEIGHTS 
+  PRIORITY_WEIGHTS,
 } from '@/utils/constants';
 
 export type TaskStatus = keyof typeof TASK_STATUSES;
@@ -56,7 +56,7 @@ export class Task {
   constructor(props: TaskProps) {
     // Validar propiedades requeridas
     this.validateRequiredFields(props);
-    
+
     // Asignar valores con defaults
     this._id = props.id;
     this._title = this.validateAndSetTitle(props.title);
@@ -70,7 +70,9 @@ export class Task {
     this._userId = props.userId;
     this._categoryId = props.categoryId;
     this._tags = this.validateAndSetTags(props.tags || []);
-    this._estimatedHours = this.validateAndSetEstimatedHours(props.estimatedHours);
+    this._estimatedHours = this.validateAndSetEstimatedHours(
+      props.estimatedHours,
+    );
     this._actualHours = this.validateAndSetActualHours(props.actualHours);
     this._attachments = props.attachments || [];
 
@@ -79,21 +81,51 @@ export class Task {
   }
 
   // Getters
-  get id(): string | undefined { return this._id; }
-  get title(): string { return this._title; }
-  get description(): string | undefined { return this._description; }
-  get status(): TaskStatus { return this._status; }
-  get priority(): TaskPriority { return this._priority; }
-  get dueDate(): Date | undefined { return this._dueDate; }
-  get completedAt(): Date | undefined { return this._completedAt; }
-  get createdAt(): Date { return this._createdAt; }
-  get updatedAt(): Date { return this._updatedAt; }
-  get userId(): string { return this._userId; }
-  get categoryId(): string | undefined { return this._categoryId; }
-  get tags(): string[] { return [...this._tags]; }
-  get estimatedHours(): number | undefined { return this._estimatedHours; }
-  get actualHours(): number | undefined { return this._actualHours; }
-  get attachments(): string[] { return [...this._attachments]; }
+  get id(): string | undefined {
+    return this._id;
+  }
+  get title(): string {
+    return this._title;
+  }
+  get description(): string | undefined {
+    return this._description;
+  }
+  get status(): TaskStatus {
+    return this._status;
+  }
+  get priority(): TaskPriority {
+    return this._priority;
+  }
+  get dueDate(): Date | undefined {
+    return this._dueDate;
+  }
+  get completedAt(): Date | undefined {
+    return this._completedAt;
+  }
+  get createdAt(): Date {
+    return this._createdAt;
+  }
+  get updatedAt(): Date {
+    return this._updatedAt;
+  }
+  get userId(): string {
+    return this._userId;
+  }
+  get categoryId(): string | undefined {
+    return this._categoryId;
+  }
+  get tags(): string[] {
+    return [...this._tags];
+  }
+  get estimatedHours(): number | undefined {
+    return this._estimatedHours;
+  }
+  get actualHours(): number | undefined {
+    return this._actualHours;
+  }
+  get attachments(): string[] {
+    return [...this._attachments];
+  }
 
   // Métodos de dominio para cambiar estado
   public markAsInProgress(): void {
@@ -103,7 +135,7 @@ export class Task {
     if (this._status === 'CANCELLED') {
       throw new Error('Cannot change status of cancelled task to in progress');
     }
-    
+
     this._status = 'IN_PROGRESS';
     this._updatedAt = new Date();
   }
@@ -112,7 +144,7 @@ export class Task {
     if (this._status === 'CANCELLED') {
       throw new Error('Cannot complete a cancelled task');
     }
-    
+
     this._status = 'COMPLETED';
     this._completedAt = new Date();
     this._updatedAt = new Date();
@@ -122,7 +154,7 @@ export class Task {
     if (this._status === 'COMPLETED') {
       throw new Error('Cannot cancel a completed task');
     }
-    
+
     this._status = 'CANCELLED';
     this._updatedAt = new Date();
   }
@@ -134,7 +166,7 @@ export class Task {
     if (this._status === 'CANCELLED') {
       throw new Error('Cannot put cancelled task on hold');
     }
-    
+
     this._status = 'ON_HOLD';
     this._updatedAt = new Date();
   }
@@ -143,7 +175,7 @@ export class Task {
     if (this._status === 'COMPLETED') {
       throw new Error('Cannot change completed task back to pending');
     }
-    
+
     this._status = 'PENDING';
     this._completedAt = undefined;
     this._updatedAt = new Date();
@@ -180,19 +212,21 @@ export class Task {
 
   public addTag(tag: string): void {
     const cleanTag = tag.trim().toLowerCase();
-    
+
     if (!cleanTag) {
       throw new Error('Tag cannot be empty');
     }
-    
+
     if (cleanTag.length > TASK_CONFIG.MAX_TAG_LENGTH) {
-      throw new Error(`Tag too long. Maximum ${TASK_CONFIG.MAX_TAG_LENGTH} characters`);
+      throw new Error(
+        `Tag too long. Maximum ${TASK_CONFIG.MAX_TAG_LENGTH} characters`,
+      );
     }
-    
+
     if (this._tags.length >= TASK_CONFIG.MAX_TAGS_COUNT) {
       throw new Error(`Maximum ${TASK_CONFIG.MAX_TAGS_COUNT} tags allowed`);
     }
-    
+
     if (!this._tags.includes(cleanTag)) {
       this._tags.push(cleanTag);
       this._updatedAt = new Date();
@@ -202,7 +236,7 @@ export class Task {
   public removeTag(tag: string): void {
     const cleanTag = tag.trim().toLowerCase();
     const index = this._tags.indexOf(cleanTag);
-    
+
     if (index > -1) {
       this._tags.splice(index, 1);
       this._updatedAt = new Date();
@@ -228,11 +262,13 @@ export class Task {
     if (!url || typeof url !== 'string') {
       throw new Error('Attachment URL is required');
     }
-    
+
     if (this._attachments.length >= TASK_CONFIG.MAX_ATTACHMENTS_COUNT) {
-      throw new Error(`Maximum ${TASK_CONFIG.MAX_ATTACHMENTS_COUNT} attachments allowed`);
+      throw new Error(
+        `Maximum ${TASK_CONFIG.MAX_ATTACHMENTS_COUNT} attachments allowed`,
+      );
     }
-    
+
     if (!this._attachments.includes(url)) {
       this._attachments.push(url);
       this._updatedAt = new Date();
@@ -249,9 +285,9 @@ export class Task {
 
   // Métodos de consulta del dominio
   public isOverdue(): boolean {
-    return this._dueDate ? 
-      (this._dueDate < new Date() && !this.isCompleted()) : 
-      false;
+    return this._dueDate
+      ? this._dueDate < new Date() && !this.isCompleted()
+      : false;
   }
 
   public isCompleted(): boolean {
@@ -268,13 +304,13 @@ export class Task {
 
   public getDaysUntilDue(): number | null {
     if (!this._dueDate) return null;
-    
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     const due = new Date(this._dueDate);
     due.setHours(0, 0, 0, 0);
-    
+
     const diffTime = due.getTime() - today.getTime();
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   }
@@ -312,7 +348,9 @@ export class Task {
   }
 
   public isTimeTracked(): boolean {
-    return this._estimatedHours !== undefined || this._actualHours !== undefined;
+    return (
+      this._estimatedHours !== undefined || this._actualHours !== undefined
+    );
   }
 
   // Métodos de validación privados
@@ -320,7 +358,7 @@ export class Task {
     if (!props.title || props.title.trim().length === 0) {
       throw new Error('Task title is required');
     }
-    
+
     if (!props.userId || props.userId.trim().length === 0) {
       throw new Error('User ID is required');
     }
@@ -328,40 +366,48 @@ export class Task {
 
   private validateAndSetTitle(title: string): string {
     const cleanTitle = title.trim();
-    
+
     if (!cleanTitle) {
       throw new Error('Task title cannot be empty');
     }
-    
+
     if (cleanTitle.length > TASK_CONFIG.MAX_TITLE_LENGTH) {
-      throw new Error(`Title too long. Maximum ${TASK_CONFIG.MAX_TITLE_LENGTH} characters`);
+      throw new Error(
+        `Title too long. Maximum ${TASK_CONFIG.MAX_TITLE_LENGTH} characters`,
+      );
     }
-    
+
     return cleanTitle;
   }
 
   private validateAndSetDescription(description?: string): string | undefined {
     if (!description) return undefined;
-    
+
     const cleanDescription = description.trim();
-    
+
     if (cleanDescription.length > TASK_CONFIG.MAX_DESCRIPTION_LENGTH) {
-      throw new Error(`Description too long. Maximum ${TASK_CONFIG.MAX_DESCRIPTION_LENGTH} characters`);
+      throw new Error(
+        `Description too long. Maximum ${TASK_CONFIG.MAX_DESCRIPTION_LENGTH} characters`,
+      );
     }
-    
+
     return cleanDescription || undefined;
   }
 
   private validateAndSetDueDate(dueDate?: Date): Date | undefined {
     if (!dueDate) return undefined;
-    
+
     const now = new Date();
-    const minDate = new Date(now.getTime() + (TASK_CONFIG.MIN_DUE_DATE_OFFSET_MINUTES * 60 * 1000));
-    
+    const minDate = new Date(
+      now.getTime() + TASK_CONFIG.MIN_DUE_DATE_OFFSET_MINUTES * 60 * 1000,
+    );
+
     if (dueDate < minDate) {
-      throw new Error(`Due date must be at least ${TASK_CONFIG.MIN_DUE_DATE_OFFSET_MINUTES} minutes in the future`);
+      throw new Error(
+        `Due date must be at least ${TASK_CONFIG.MIN_DUE_DATE_OFFSET_MINUTES} minutes in the future`,
+      );
     }
-    
+
     return dueDate;
   }
 
@@ -369,50 +415,56 @@ export class Task {
     if (!Array.isArray(tags)) {
       throw new Error('Tags must be an array');
     }
-    
+
     if (tags.length > TASK_CONFIG.MAX_TAGS_COUNT) {
       throw new Error(`Maximum ${TASK_CONFIG.MAX_TAGS_COUNT} tags allowed`);
     }
-    
+
     const cleanTags = tags
-      .map(tag => tag.trim().toLowerCase())
-      .filter(tag => tag.length > 0)
-      .filter(tag => {
+      .map((tag) => tag.trim().toLowerCase())
+      .filter((tag) => tag.length > 0)
+      .filter((tag) => {
         if (tag.length > TASK_CONFIG.MAX_TAG_LENGTH) {
-          throw new Error(`Tag too long. Maximum ${TASK_CONFIG.MAX_TAG_LENGTH} characters`);
+          throw new Error(
+            `Tag too long. Maximum ${TASK_CONFIG.MAX_TAG_LENGTH} characters`,
+          );
         }
         return true;
       });
-    
+
     // Remover duplicados
     return [...new Set(cleanTags)];
   }
 
   private validateAndSetEstimatedHours(hours?: number): number | undefined {
     if (hours === undefined || hours === null) return undefined;
-    
+
     if (typeof hours !== 'number' || hours < 0) {
       throw new Error('Estimated hours must be a positive number');
     }
-    
+
     if (hours > TASK_CONFIG.MAX_ESTIMATED_HOURS) {
-      throw new Error(`Estimated hours cannot exceed ${TASK_CONFIG.MAX_ESTIMATED_HOURS}`);
+      throw new Error(
+        `Estimated hours cannot exceed ${TASK_CONFIG.MAX_ESTIMATED_HOURS}`,
+      );
     }
-    
+
     return Math.round(hours * 100) / 100; // Redondear a 2 decimales
   }
 
   private validateAndSetActualHours(hours?: number): number | undefined {
     if (hours === undefined || hours === null) return undefined;
-    
+
     if (typeof hours !== 'number' || hours < 0) {
       throw new Error('Actual hours must be a positive number');
     }
-    
+
     if (hours > TASK_CONFIG.MAX_ESTIMATED_HOURS) {
-      throw new Error(`Actual hours cannot exceed ${TASK_CONFIG.MAX_ESTIMATED_HOURS}`);
+      throw new Error(
+        `Actual hours cannot exceed ${TASK_CONFIG.MAX_ESTIMATED_HOURS}`,
+      );
     }
-    
+
     return Math.round(hours * 100) / 100; // Redondear a 2 decimales
   }
 
@@ -421,12 +473,12 @@ export class Task {
     if (this._status === 'COMPLETED' && !this._completedAt) {
       this._completedAt = new Date();
     }
-    
+
     // Si la tarea no está completada, no debe tener fecha de completado
     if (this._status !== 'COMPLETED' && this._completedAt) {
       this._completedAt = undefined;
     }
-    
+
     // Validar que createdAt no sea posterior a updatedAt
     if (this._createdAt > this._updatedAt) {
       this._updatedAt = this._createdAt;

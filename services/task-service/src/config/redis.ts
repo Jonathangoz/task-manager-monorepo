@@ -2,11 +2,7 @@
 import Redis, { RedisOptions } from 'ioredis';
 import { logger } from '@/utils/logger';
 import { config } from './environment';
-import {
-  ERROR_CODES,
-  ERROR_MESSAGES,
-  EVENT_TYPES,
-} from '@/utils/constants';
+import { ERROR_CODES, ERROR_MESSAGES, EVENT_TYPES } from '@/utils/constants';
 
 // Configuración optimizada para producción
 const getRedisConfig = (): RedisOptions => {
@@ -16,21 +12,21 @@ const getRedisConfig = (): RedisOptions => {
     keyPrefix: config.redis.prefix,
     connectTimeout: 10000,
     commandTimeout: 5000,
-    
+
     // Pool de conexiones para alta concurrencia
     family: 4,
     keepAlive: 30000,
-    
+
     // Configuración de cluster si es necesario
     enableReadyCheck: true,
-    
+
     // Configuración de reintentos mejorada
     retryStrategy: (times: number) => {
       const delay = Math.min(times * 50, 2000);
       logger.warn(`Redis retry attempt ${times}, delay: ${delay}ms`);
       return delay;
     },
-    
+
     // Configuración de reconexión
     reconnectOnError: (err: Error) => {
       const targetError = 'READONLY';
@@ -78,59 +74,74 @@ class TaskRedisConnection {
     this.client.on('connect', () => {
       this.isConnected = true;
       this.reconnectAttempts = 0;
-      logger.info({
-        event: EVENT_TYPES.CACHE_HIT,
-        component: 'redis',
-      }, 'Task Service Redis conectado exitosamente');
+      logger.info(
+        {
+          event: EVENT_TYPES.CACHE_HIT,
+          component: 'redis',
+        },
+        'Task Service Redis conectado exitosamente',
+      );
     });
 
     this.client.on('ready', () => {
-      logger.info({
-        event: EVENT_TYPES.CACHE_HIT,
-        component: 'redis',
-      }, 'Task Service Redis listo para comandos');
+      logger.info(
+        {
+          event: EVENT_TYPES.CACHE_HIT,
+          component: 'redis',
+        },
+        'Task Service Redis listo para comandos',
+      );
     });
 
     this.client.on('error', (error) => {
       this.isConnected = false;
-      logger.error({
-        error,
-        event: EVENT_TYPES.CACHE_ERROR,
-        component: 'redis',
-        reconnectAttempts: this.reconnectAttempts,
-      }, 'Error de conexión Task Service Redis');
+      logger.error(
+        {
+          error,
+          event: EVENT_TYPES.CACHE_ERROR,
+          component: 'redis',
+          reconnectAttempts: this.reconnectAttempts,
+        },
+        'Error de conexión Task Service Redis',
+      );
     });
 
     this.client.on('close', () => {
       this.isConnected = false;
-      logger.warn({
-        event: EVENT_TYPES.CACHE_ERROR,
-        component: 'redis',
-      }, 'Conexión Task Service Redis cerrada');
+      logger.warn(
+        {
+          event: EVENT_TYPES.CACHE_ERROR,
+          component: 'redis',
+        },
+        'Conexión Task Service Redis cerrada',
+      );
     });
 
     this.client.on('reconnecting', (delay: number) => {
       this.reconnectAttempts++;
-      
+
       if (this.reconnectAttempts > this.maxReconnectAttempts) {
         logger.error('Máximo número de intentos de reconexión Redis alcanzado');
         this.client.disconnect();
         return;
       }
 
-      logger.info({
-        event: EVENT_TYPES.CACHE_ERROR,
-        component: 'redis',
-        delay,
-        attempt: this.reconnectAttempts,
-      }, 'Task Service Redis reconectando...');
+      logger.info(
+        {
+          event: EVENT_TYPES.CACHE_ERROR,
+          component: 'redis',
+          delay,
+          attempt: this.reconnectAttempts,
+        },
+        'Task Service Redis reconectando...',
+      );
     });
   }
 
   public async connect(): Promise<void> {
     try {
       await this.client.connect();
-      
+
       // Health check
       const pong = await this.client.ping();
       if (pong === 'PONG') {
@@ -182,7 +193,9 @@ class TaskRedisConnection {
         status: pong === 'PONG' ? 'healthy' : 'unhealthy',
         latency,
         memory: this.parseInfoString(info),
-        connections: parseInt(connections.split('\r\n')[1]?.split(':')[1] || '0'),
+        connections: parseInt(
+          connections.split('\r\n')[1]?.split(':')[1] || '0',
+        ),
       };
     } catch (error) {
       logger.error({ error }, 'Redis health check falló');
@@ -197,7 +210,7 @@ class TaskRedisConnection {
 
   private parseInfoString(info: string): Record<string, string> {
     const result: Record<string, string> = {};
-    info.split('\r\n').forEach(line => {
+    info.split('\r\n').forEach((line) => {
       if (line.includes(':')) {
         const [key, value] = line.split(':');
         result[key] = value;

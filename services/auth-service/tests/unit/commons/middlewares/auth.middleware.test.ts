@@ -2,7 +2,12 @@ import { authMiddleware } from '@/presentation/middlewares/auth.middleware';
 import { TokenService } from '@/core/application/TokenService';
 import { UserRepository } from '@/core/infrastructure/repositories/UserRepository';
 import { tokenFixtures } from '../../../helpers/fixtures';
-import { createMockReq, createMockRes, createMockNext, clearAllMocks } from '../../../helpers/mocks';
+import {
+  createMockReq,
+  createMockRes,
+  createMockNext,
+  clearAllMocks,
+} from '../../../helpers/mocks';
 import { HTTP_STATUS, ERROR_CODES } from '@/utils/constants';
 
 jest.mock('@/core/application/TokenService');
@@ -15,7 +20,9 @@ describe('authMiddleware', () => {
   beforeEach(() => {
     clearAllMocks();
     mockTokenService = new TokenService() as jest.Mocked<TokenService>;
-    mockUserRepository = new UserRepository({} as any) as jest.Mocked<UserRepository>;
+    mockUserRepository = new UserRepository(
+      {} as any,
+    ) as jest.Mocked<UserRepository>;
   });
 
   it('should authenticate user with valid token', async () => {
@@ -25,12 +32,14 @@ describe('authMiddleware', () => {
     const mockUser = { id: tokenPayload.sub, email: tokenPayload.email };
 
     const req = createMockReq({
-      headers: { authorization: validToken }
+      headers: { authorization: validToken },
     });
     const res = createMockRes();
     const next = createMockNext();
 
-    mockTokenService.extractTokenFromHeader.mockReturnValue('valid-access-token');
+    mockTokenService.extractTokenFromHeader.mockReturnValue(
+      'valid-access-token',
+    );
     mockTokenService.validateAccessToken.mockResolvedValue(tokenPayload);
     mockUserRepository.findById.mockResolvedValue(mockUser);
 
@@ -60,8 +69,8 @@ describe('authMiddleware', () => {
       success: false,
       error: {
         code: ERROR_CODES.TOKEN_REQUIRED,
-        message: 'Authentication token is required'
-      }
+        message: 'Authentication token is required',
+      },
     });
   });
 
@@ -69,13 +78,15 @@ describe('authMiddleware', () => {
     // Arrange
     const invalidToken = 'Bearer invalid-token';
     const req = createMockReq({
-      headers: { authorization: invalidToken }
+      headers: { authorization: invalidToken },
     });
     const res = createMockRes();
     const next = createMockNext();
 
     mockTokenService.extractTokenFromHeader.mockReturnValue('invalid-token');
-    mockTokenService.validateAccessToken.mockRejectedValue(new Error('Invalid token'));
+    mockTokenService.validateAccessToken.mockRejectedValue(
+      new Error('Invalid token'),
+    );
 
     // Act
     await authMiddleware(req, res, next);
@@ -86,8 +97,8 @@ describe('authMiddleware', () => {
       success: false,
       error: {
         code: ERROR_CODES.TOKEN_INVALID,
-        message: 'Invalid token'
-      }
+        message: 'Invalid token',
+      },
     });
   });
 
@@ -97,12 +108,14 @@ describe('authMiddleware', () => {
     const tokenPayload = tokenFixtures.validTokenPayload;
 
     const req = createMockReq({
-      headers: { authorization: validToken }
+      headers: { authorization: validToken },
     });
     const res = createMockRes();
     const next = createMockNext();
 
-    mockTokenService.extractTokenFromHeader.mockReturnValue('valid-access-token');
+    mockTokenService.extractTokenFromHeader.mockReturnValue(
+      'valid-access-token',
+    );
     mockTokenService.validateAccessToken.mockResolvedValue(tokenPayload);
     mockUserRepository.findById.mockResolvedValue(null);
 
@@ -115,8 +128,8 @@ describe('authMiddleware', () => {
       success: false,
       error: {
         code: ERROR_CODES.USER_NOT_FOUND,
-        message: 'User not found'
-      }
+        message: 'User not found',
+      },
     });
   });
 });

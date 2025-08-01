@@ -2,36 +2,36 @@
 
 Este documento describe el Microservicio Auth Service, un componente crucial dentro del monorepo Task Manager, dedicado a la gestión de identidad y acceso. Se encarga de la autenticación de usuarios, autorización, gestión de perfiles y seguridad de las sesiones.
 
- ✨ Funcionalidades
+✨ Funcionalidades
 
 El Auth Service proporciona funcionalidades robustas para una gestión segura de la identidad:
 
-  * Autenticación Robusta: Gestiona los procesos de registro, inicio de sesión y cierre de sesión de usuarios.
-  * Seguridad de Contraseña: Garantiza la seguridad de las contraseñas mediante el hashing con Argon2.
-  * Gestión de Tokens:
-      * Genera tokens de acceso (JWT) y tokens de refresco.
-      * Emplea JWE (JSON Web Encryption) para proteger el contenido de los tokens.
-      * Maneja la verificación y el refresco de tokens.
-  * Gestión de Perfil de Usuario: Permite la creación, recuperación y actualización de perfiles de usuario.
-  * Gestión de Sesiones: Rastrea y revoca las sesiones de usuario activas.
-  * Seguridad Avanzada:
-      * Implementa Limitación de Tasa (Rate Limiting) para prevenir ataques de fuerza bruta.
-      * Configura cabeceras de seguridad utilizando Helmet.
-      * Asegura la integridad de los datos con validación de entrada utilizando Zod.
-  * Caché de Alto Rendimiento: Utiliza Redis para el almacenamiento en caché de sesiones y perfiles de usuario, mejorando el rendimiento.
+- Autenticación Robusta: Gestiona los procesos de registro, inicio de sesión y cierre de sesión de usuarios.
+- Seguridad de Contraseña: Garantiza la seguridad de las contraseñas mediante el hashing con Argon2.
+- Gestión de Tokens:
+  - Genera tokens de acceso (JWT) y tokens de refresco.
+  - Emplea JWE (JSON Web Encryption) para proteger el contenido de los tokens.
+  - Maneja la verificación y el refresco de tokens.
+- Gestión de Perfil de Usuario: Permite la creación, recuperación y actualización de perfiles de usuario.
+- Gestión de Sesiones: Rastrea y revoca las sesiones de usuario activas.
+- Seguridad Avanzada:
+  - Implementa Limitación de Tasa (Rate Limiting) para prevenir ataques de fuerza bruta.
+  - Configura cabeceras de seguridad utilizando Helmet.
+  - Asegura la integridad de los datos con validación de entrada utilizando Zod.
+- Caché de Alto Rendimiento: Utiliza Redis para el almacenamiento en caché de sesiones y perfiles de usuario, mejorando el rendimiento.
 
- 🛠️ Tecnologías
+🛠️ Tecnologías
 
 El Auth Service está construido con las siguientes tecnologías clave:
 
-  * Backend: Node.js, Express.js, TypeScript
-  * ORM: Prisma con PostgreSQL
-  * Caché: Redis
-  * Autenticación: `jose` (para JWE/JWT), `argon2` para el hashing de contraseñas
-  * Contenerización: Docker
-  * Motores: Node.js `>=22.15.0`, pnpm `>=10.0.0`
+- Backend: Node.js, Express.js, TypeScript
+- ORM: Prisma con PostgreSQL
+- Caché: Redis
+- Autenticación: `jose` (para JWE/JWT), `argon2` para el hashing de contraseñas
+- Contenerización: Docker
+- Motores: Node.js `>=22.15.0`, pnpm `>=10.0.0`
 
- 🏗️ Estructura del Proyecto
+🏗️ Estructura del Proyecto
 
 El servicio se adhiere a una arquitectura limpia y modular, inspirada en los principios de diseño hexagonal (puertos y adaptadores), para mantener un código organizado y escalable.
 
@@ -106,23 +106,23 @@ services/auth-service/
     └── integration/                  # Pruebas de integración
 ```
 
- ⚙️ Variables de Entorno
+⚙️ Variables de Entorno
 
 Para ejecutar el servicio, crea un archivo `.env` en la raíz de este servicio a partir del `.env.example`. Las variables clave son:
 
-  * `DATABASE_URL`: Cadena de conexión a la base de datos PostgreSQL.
-  * `REDIS_URL`: URL de conexión al servidor Redis.
-  * `REDIS_PREFIX`: Prefijo para las claves de Redis para este servicio.
-  * `JWT_SECRET`, `REFRESH_TOKEN_SECRET`, `JWE_SECRET`: Secretos para la generación y verificación de tokens.
-  * `JWT_EXPIRES_IN`, `REFRESH_TOKEN_EXPIRES_IN`: Tiempos de expiración para los tokens.
-  * `JWE_ALGORITHM`, `JWE_ENCRYPTION`: Algoritmos para la encriptación JWE.
-  * `CORS_ORIGIN`: Orígenes permitidos para las peticiones CORS.
-  * `HELMET_ENABLED`: Habilita o deshabilita las cabeceras de seguridad.
-  * `RATE_LIMIT_WINDOW_MS`, `RATE_LIMIT_MAX_REQUESTS`: Configuración para la limitación de tasa.
-  * `LOG_LEVEL`, `LOG_PRETTY`: Configuración para el nivel de log y el formato de salida.
-  * `HEALTH_CHECK_ENABLED`, `SWAGGER_ENABLED`: Habilitar o deshabilitar health check y Swagger.
+- `DATABASE_URL`: Cadena de conexión a la base de datos PostgreSQL.
+- `REDIS_URL`: URL de conexión al servidor Redis.
+- `REDIS_PREFIX`: Prefijo para las claves de Redis para este servicio.
+- `JWT_SECRET`, `REFRESH_TOKEN_SECRET`, `JWE_SECRET`: Secretos para la generación y verificación de tokens.
+- `JWT_EXPIRES_IN`, `REFRESH_TOKEN_EXPIRES_IN`: Tiempos de expiración para los tokens.
+- `JWE_ALGORITHM`, `JWE_ENCRYPTION`: Algoritmos para la encriptación JWE.
+- `CORS_ORIGIN`: Orígenes permitidos para las peticiones CORS.
+- `HELMET_ENABLED`: Habilita o deshabilita las cabeceras de seguridad.
+- `RATE_LIMIT_WINDOW_MS`, `RATE_LIMIT_MAX_REQUESTS`: Configuración para la limitación de tasa.
+- `LOG_LEVEL`, `LOG_PRETTY`: Configuración para el nivel de log y el formato de salida.
+- `HEALTH_CHECK_ENABLED`, `SWAGGER_ENABLED`: Habilitar o deshabilitar health check y Swagger.
 
- 🚀 Ejecución
+🚀 Ejecución
 
 El despliegue y ejecución del `auth-service` se gestiona a través del monorepo principal, utilizando Docker Compose para entornos de desarrollo local.
 
@@ -155,67 +155,67 @@ Para ejecutar el servicio individualmente en desarrollo (asumiendo que las depen
     pnpm --filter=task-manager-auth-service dev
     ```
 
- 📡 Endpoints de la API
+📡 Endpoints de la API
 
 La API del Auth Service está versionada bajo `/api/v1`.
 
-  * `POST /api/v1/auth/register`: Registro de un nuevo usuario.
-  * `POST /api/v1/auth/login`: Inicio de sesión.
-  * `POST /api/v1/auth/refresh`: Renovar token de acceso.
-  * `POST /api/v1/auth/logout`: Cerrar sesión.
-  * `POST /api/v1/auth/verify-token`: Endpoint interno para validación de tokens por otros servicios.
-  * `GET /api/v1/auth/me`: Obtener perfil del usuario actual.
-  * `PUT /api/v1/auth/me`: Actualizar perfil del usuario.
-  * `GET /api/v1/health`: Health check del servicio.
-  * `GET /api/v1/docs`: Documentación interactiva de la API (Swagger).
+- `POST /api/v1/auth/register`: Registro de un nuevo usuario.
+- `POST /api/v1/auth/login`: Inicio de sesión.
+- `POST /api/v1/auth/refresh`: Renovar token de acceso.
+- `POST /api/v1/auth/logout`: Cerrar sesión.
+- `POST /api/v1/auth/verify-token`: Endpoint interno para validación de tokens por otros servicios.
+- `GET /api/v1/auth/me`: Obtener perfil del usuario actual.
+- `PUT /api/v1/auth/me`: Actualizar perfil del usuario.
+- `GET /api/v1/health`: Health check del servicio.
+- `GET /api/v1/docs`: Documentación interactiva de la API (Swagger).
 
- 📜 Scripts de Desarrollo y Producción
+📜 Scripts de Desarrollo y Producción
 
 Los siguientes scripts están disponibles para facilitar el desarrollo, la construcción y las pruebas del servicio:
 
-  * `dev`: Inicia el servicio en modo de desarrollo con `nodemon` para recarga automática.
-  * `build`: Limpia el directorio `dist` y compila el código TypeScript a JavaScript.
-  * `start`: Inicia el servicio compilado en JavaScript.
-  * `start:prod`: Inicia el servicio en modo de producción.
-  * `clean`: Elimina el directorio `dist`.
-  * `lint`: Ejecuta ESLint en el código fuente y corrige automáticamente los problemas.
-  * `lint:check`: Ejecuta ESLint en el código fuente sin corregir.
-  * `test`: Ejecuta todas las pruebas Jest en modo de prueba.
-  * `test:watch`: Ejecuta las pruebas Jest en modo de observación.
-  * `test:coverage`: Ejecuta las pruebas Jest y genera un informe de cobertura de código.
-  * `prisma:generate`: Genera el cliente Prisma a partir del `schema.prisma`.
-  * `prisma:migrate`: Aplica las migraciones pendientes a la base de datos.
-  * `prisma:migrate:dev`: Crea y aplica nuevas migraciones de desarrollo.
-  * `prisma:seed`: Ejecuta el script de siembra de datos de Prisma.
-  * `swagger:validate`: Valida el archivo de configuración de Swagger.
-  * `swagger:generate`: Genera el archivo `swagger.json` a partir de las anotaciones.
-  * `docs:serve`: Sirve la documentación de Swagger UI.
-  * `docs:build`: Construye la documentación de la API con Redoc CLI.
+- `dev`: Inicia el servicio en modo de desarrollo con `nodemon` para recarga automática.
+- `build`: Limpia el directorio `dist` y compila el código TypeScript a JavaScript.
+- `start`: Inicia el servicio compilado en JavaScript.
+- `start:prod`: Inicia el servicio en modo de producción.
+- `clean`: Elimina el directorio `dist`.
+- `lint`: Ejecuta ESLint en el código fuente y corrige automáticamente los problemas.
+- `lint:check`: Ejecuta ESLint en el código fuente sin corregir.
+- `test`: Ejecuta todas las pruebas Jest en modo de prueba.
+- `test:watch`: Ejecuta las pruebas Jest en modo de observación.
+- `test:coverage`: Ejecuta las pruebas Jest y genera un informe de cobertura de código.
+- `prisma:generate`: Genera el cliente Prisma a partir del `schema.prisma`.
+- `prisma:migrate`: Aplica las migraciones pendientes a la base de datos.
+- `prisma:migrate:dev`: Crea y aplica nuevas migraciones de desarrollo.
+- `prisma:seed`: Ejecuta el script de siembra de datos de Prisma.
+- `swagger:validate`: Valida el archivo de configuración de Swagger.
+- `swagger:generate`: Genera el archivo `swagger.json` a partir de las anotaciones.
+- `docs:serve`: Sirve la documentación de Swagger UI.
+- `docs:build`: Construye la documentación de la API con Redoc CLI.
 
- 📦 Dependencias Clave
+📦 Dependencias Clave
 
 Las principales dependencias utilizadas en este microservicio son:
 
-  * `@prisma/client`: Cliente ORM para interactuar con la base de datos PostgreSQL.
-  * `argon2`: Librería para el hashing seguro de contraseñas.
-  * `axios`: Cliente HTTP para realizar peticiones a otros servicios.
-  * `compression`: Middleware para compresión de respuestas HTTP.
-  * `connect-timeout`: Middleware para establecer un tiempo de espera en las peticiones.
-  * `cookie-parser`: Middleware para analizar las cookies de las peticiones.
-  * `cors`: Middleware para habilitar Cross-Origin Resource Sharing.
-  * `dotenv`: Carga variables de entorno desde un archivo `.env`.
-  * `express`: Framework web para Node.js.
-  * `express-rate-limit`: Middleware para limitar la tasa de peticiones.
-  * `express-slow-down`: Middleware para ralentizar las respuestas después de un número de peticiones.
-  * `helmet`: Colección de middlewares para mejorar la seguridad de la aplicación Express.
-  * `http-errors`: Utilidad para crear objetos de error HTTP.
-  * `ioredis`: Cliente de Redis de alto rendimiento.
-  * `jose`: Implementación de JavaScript Object Signing and Encryption (JOSE) para JWT/JWE.
-  * `morgan`: Middleware de logging de peticiones HTTP.
-  * `pino`: Logger de alto rendimiento.
-  * `pino-pretty`: Formateador de logs para `pino`.
-  * `prisma`: Herramienta ORM de próxima generación.
-  * `swagger-jsdoc`: Generador de especificaciones Swagger/OpenAPI.
-  * `swagger-ui-express`: Middleware para servir la documentación Swagger UI.
-  * `tsconfig-paths`: Permite el uso de alias de módulos en TypeScript.
-  * `zod`: Librería de declaración y validación de esquemas.
+- `@prisma/client`: Cliente ORM para interactuar con la base de datos PostgreSQL.
+- `argon2`: Librería para el hashing seguro de contraseñas.
+- `axios`: Cliente HTTP para realizar peticiones a otros servicios.
+- `compression`: Middleware para compresión de respuestas HTTP.
+- `connect-timeout`: Middleware para establecer un tiempo de espera en las peticiones.
+- `cookie-parser`: Middleware para analizar las cookies de las peticiones.
+- `cors`: Middleware para habilitar Cross-Origin Resource Sharing.
+- `dotenv`: Carga variables de entorno desde un archivo `.env`.
+- `express`: Framework web para Node.js.
+- `express-rate-limit`: Middleware para limitar la tasa de peticiones.
+- `express-slow-down`: Middleware para ralentizar las respuestas después de un número de peticiones.
+- `helmet`: Colección de middlewares para mejorar la seguridad de la aplicación Express.
+- `http-errors`: Utilidad para crear objetos de error HTTP.
+- `ioredis`: Cliente de Redis de alto rendimiento.
+- `jose`: Implementación de JavaScript Object Signing and Encryption (JOSE) para JWT/JWE.
+- `morgan`: Middleware de logging de peticiones HTTP.
+- `pino`: Logger de alto rendimiento.
+- `pino-pretty`: Formateador de logs para `pino`.
+- `prisma`: Herramienta ORM de próxima generación.
+- `swagger-jsdoc`: Generador de especificaciones Swagger/OpenAPI.
+- `swagger-ui-express`: Middleware para servir la documentación Swagger UI.
+- `tsconfig-paths`: Permite el uso de alias de módulos en TypeScript.
+- `zod`: Librería de declaración y validación de esquemas.

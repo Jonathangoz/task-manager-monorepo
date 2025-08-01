@@ -14,11 +14,14 @@ import taskRoutes from '@/commons/routes/task.routes';
 import { HealthRoutes } from '@/commons/routes/health.routes';
 
 // Middlewares
-import { errorHandler, notFoundHandler } from '@/commons/middlewares/error.middleware';
-import { 
-  generalRateLimit, 
+import {
+  errorHandler,
+  notFoundHandler,
+} from '@/commons/middlewares/error.middleware';
+import {
+  generalRateLimit,
   rateLimitLogger,
-  createRateLimiter 
+  createRateLimiter,
 } from '@/commons/middlewares/rateLimit.middleware';
 
 // Servicios y dependencias
@@ -28,11 +31,16 @@ import { TaskRepository } from '@/core/infrastructure/repositories/TaskRepositor
 import { RedisCache } from '@/core/infrastructure/cache/RedisCache';
 
 // Utils
-import { logger, httpLogger, startup, createRequestLogger } from '@/utils/logger';
+import {
+  logger,
+  httpLogger,
+  startup,
+  createRequestLogger,
+} from '@/utils/logger';
 import { config } from '@/config/environment';
-import { 
-  HTTP_STATUS, 
-  ERROR_CODES, 
+import {
+  HTTP_STATUS,
+  ERROR_CODES,
   ERROR_MESSAGES,
   REQUEST_HEADERS,
 } from '@/utils/constants';
@@ -88,7 +96,7 @@ interface ServerOptions {
 // CLASE PRINCIPAL DE LA APLICACIÓN
 /**
  * TaskServiceApp
- * 
+ *
  * Aplicación principal que implementa:
  * - SRP: Responsabilidad única de configurar y gestionar el servidor Express
  * - OCP: Abierto para extensión mediante inyección de dependencias
@@ -100,9 +108,9 @@ export class TaskServiceApp {
   private readonly app: Application;
   private readonly dependencies: AppDependencies;
   private readonly middlewareConfig: MiddlewareConfig;
-  private readonly appLogger = logger.child({ 
+  private readonly appLogger = logger.child({
     component: 'TaskServiceApp',
-    service: 'task-service' 
+    service: 'task-service',
   });
   private server?: Server;
 
@@ -116,19 +124,25 @@ export class TaskServiceApp {
     this.dependencies = this.initializeDependencies(dependencies);
     this.middlewareConfig = this.createMiddlewareConfig();
 
-    this.appLogger.info({
-      event: 'app_initialization_started',
-      apiPrefix: this.API_PREFIX,
-      environment: config.app.env
-    }, '🚀 Iniciando TaskServiceApp');
+    this.appLogger.info(
+      {
+        event: 'app_initialization_started',
+        apiPrefix: this.API_PREFIX,
+        environment: config.app.env,
+      },
+      '🚀 Iniciando TaskServiceApp',
+    );
 
     this.initializeApplication();
 
-    this.appLogger.info({
-      event: 'app_initialization_completed',
-      middlewareCount: this.getMiddlewareCount(),
-      routesCount: this.getRoutesCount()
-    }, '✅ TaskServiceApp inicializada correctamente');
+    this.appLogger.info(
+      {
+        event: 'app_initialization_completed',
+        middlewareCount: this.getMiddlewareCount(),
+        routesCount: this.getRoutesCount(),
+      },
+      '✅ TaskServiceApp inicializada correctamente',
+    );
   }
 
   // INICIALIZACIÓN DE DEPENDENCIAS
@@ -136,7 +150,9 @@ export class TaskServiceApp {
    * Inicializa las dependencias de la aplicación con inyección de dependencias
    * Implementa el patrón Factory y Dependency Injection
    */
-  private initializeDependencies(dependencies?: Partial<AppDependencies>): AppDependencies {
+  private initializeDependencies(
+    dependencies?: Partial<AppDependencies>,
+  ): AppDependencies {
     this.appLogger.debug('🔧 Inicializando dependencias');
 
     try {
@@ -145,29 +161,37 @@ export class TaskServiceApp {
 
       // Repository Layer
       const categoryRepository = new CategoryRepository();
-      const taskRepository = dependencies?.taskRepository || new TaskRepository();
+      const taskRepository =
+        dependencies?.taskRepository || new TaskRepository();
 
       // Service Layer con inyección de dependencias
-      const categoryService = dependencies?.categoryService ||
+      const categoryService =
+        dependencies?.categoryService ||
         new CategoryService(categoryRepository, taskRepository, cacheService);
 
       const resolvedDependencies: AppDependencies = {
         categoryService,
         cacheService,
-        taskRepository
+        taskRepository,
       };
 
-      this.appLogger.info({
-        event: 'dependencies_initialized',
-        services: Object.keys(resolvedDependencies)
-      }, '🔌 Dependencias inicializadas');
+      this.appLogger.info(
+        {
+          event: 'dependencies_initialized',
+          services: Object.keys(resolvedDependencies),
+        },
+        '🔌 Dependencias inicializadas',
+      );
 
       return resolvedDependencies;
     } catch (error) {
-      this.appLogger.fatal({
-        error: error instanceof Error ? error.message : String(error),
-        event: 'dependencies_initialization_failed'
-      }, '💀 Error crítico inicializando dependencias');
+      this.appLogger.fatal(
+        {
+          error: error instanceof Error ? error.message : String(error),
+          event: 'dependencies_initialization_failed',
+        },
+        '💀 Error crítico inicializando dependencias',
+      );
 
       throw error;
     }
@@ -182,7 +206,7 @@ export class TaskServiceApp {
       security: {
         helmet: config.security.helmetEnabled,
         csp: config.security.cspEnabled,
-        hsts: config.security.hstsEnabled
+        hsts: config.security.hstsEnabled,
       },
       cors: {
         origin: config.cors.origin,
@@ -194,21 +218,21 @@ export class TaskServiceApp {
           'Content-Type',
           'Accept',
           'Authorization',
-          'X-Request-ID'
-        ]
+          'X-Request-ID',
+        ],
       },
       rateLimit: {
         enabled: config.rateLimit.enabled,
         global: true,
         skipSuccessfulRequests: false,
-        skipFailedRequests: false
+        skipFailedRequests: false,
       },
       logging: {
         http: !config.app.isTest,
         requests: true,
         errors: true,
-        level: config.logging.level
-      }
+        level: config.logging.level,
+      },
     };
   }
 
@@ -234,7 +258,7 @@ export class TaskServiceApp {
       const helmetConfig: any = {
         contentSecurityPolicy: false, // Deshabilitado por defecto para APIs
         crossOriginEmbedderPolicy: false,
-        crossOriginResourcePolicy: { policy: "cross-origin" }
+        crossOriginResourcePolicy: { policy: 'cross-origin' },
       };
 
       // CSP personalizado si está habilitado
@@ -244,7 +268,7 @@ export class TaskServiceApp {
             defaultSrc: ["'self'"],
             styleSrc: ["'self'", "'unsafe-inline'"],
             scriptSrc: ["'self'"],
-            imgSrc: ["'self'", "data:", "https:"],
+            imgSrc: ["'self'", 'data:', 'https:'],
             connectSrc: ["'self'"],
             fontSrc: ["'self'"],
             objectSrc: ["'none'"],
@@ -259,7 +283,7 @@ export class TaskServiceApp {
         helmetConfig.hsts = {
           maxAge: config.security.hstsMaxAge,
           includeSubDomains: true,
-          preload: true
+          preload: true,
         };
       }
 
@@ -270,7 +294,10 @@ export class TaskServiceApp {
     this.app.use(cors(this.middlewareConfig.cors));
 
     // Rate limiting global
-    if (this.middlewareConfig.rateLimit.enabled && this.middlewareConfig.rateLimit.global) {
+    if (
+      this.middlewareConfig.rateLimit.enabled &&
+      this.middlewareConfig.rateLimit.global
+    ) {
       this.app.use(generalRateLimit);
       if (config.app.isDevelopment) {
         this.app.use(rateLimitLogger);
@@ -287,30 +314,36 @@ export class TaskServiceApp {
     this.appLogger.debug('⚙️ Configurando middlewares de utilidad');
 
     // Compresión de respuestas
-    this.app.use(compression({
-      filter: (req, res) => {
-        if (req.headers['x-no-compression']) {
-          return false;
-        }
-        return compression.filter(req, res);
-      },
-      threshold: 1024, // Solo comprimir si es > 1KB
-    }));
+    this.app.use(
+      compression({
+        filter: (req, res) => {
+          if (req.headers['x-no-compression']) {
+            return false;
+          }
+          return compression.filter(req, res);
+        },
+        threshold: 1024, // Solo comprimir si es > 1KB
+      }),
+    );
 
     // Parser de cookies
     this.app.use(cookieParser());
 
     // Parser de JSON con validación
-    this.app.use(express.json({
-      limit: '10mb',
-      verify: this.createJsonVerifier()
-    }));
+    this.app.use(
+      express.json({
+        limit: '10mb',
+        verify: this.createJsonVerifier(),
+      }),
+    );
 
     // Parser de URL encoded
-    this.app.use(express.urlencoded({ 
-      extended: true, 
-      limit: '10mb' 
-    }));
+    this.app.use(
+      express.urlencoded({
+        extended: true,
+        limit: '10mb',
+      }),
+    );
 
     this.appLogger.debug('✅ Middlewares de utilidad configurados');
   }
@@ -324,26 +357,29 @@ export class TaskServiceApp {
         JSON.parse(buf.toString());
       } catch (error) {
         const requestLogger = createRequestLogger(
-          req.headers[REQUEST_HEADERS.X_REQUEST_ID] as string
+          req.headers[REQUEST_HEADERS.X_REQUEST_ID] as string,
         );
 
-        requestLogger.warn({
-          error: error instanceof Error ? error.message : String(error),
-          contentType: req.headers['content-type'],
-          contentLength: req.headers['content-length']
-        }, 'Invalid JSON in request body');
+        requestLogger.warn(
+          {
+            error: error instanceof Error ? error.message : String(error),
+            contentType: req.headers['content-type'],
+            contentLength: req.headers['content-length'],
+          },
+          'Invalid JSON in request body',
+        );
 
         res.status(HTTP_STATUS.BAD_REQUEST).json({
           success: false,
           message: 'Invalid JSON format in request body',
           error: {
             code: ERROR_CODES.VALIDATION_ERROR,
-            details: 'Request body contains malformed JSON'
+            details: 'Request body contains malformed JSON',
           },
           meta: {
             timestamp: new Date().toISOString(),
-            requestId: req.headers[REQUEST_HEADERS.X_REQUEST_ID] as string
-          }
+            requestId: req.headers[REQUEST_HEADERS.X_REQUEST_ID] as string,
+          },
         });
 
         throw new Error('Invalid JSON');
@@ -359,17 +395,19 @@ export class TaskServiceApp {
 
     // Morgan HTTP logger
     if (this.middlewareConfig.logging.http) {
-      this.app.use(morgan('combined', {
-        stream: {
-          write: (message: string) => {
-            httpLogger.info(message.trim(), 'HTTP Request');
-          }
-        },
-        skip: (req: Request) => {
-          // Skip health check requests para evitar spam
-          return req.path.includes('/health');
-        }
-      }));
+      this.app.use(
+        morgan('combined', {
+          stream: {
+            write: (message: string) => {
+              httpLogger.info(message.trim(), 'HTTP Request');
+            },
+          },
+          skip: (req: Request) => {
+            // Skip health check requests para evitar spam
+            return req.path.includes('/health');
+          },
+        }),
+      );
     }
 
     // Request ID middleware
@@ -388,12 +426,13 @@ export class TaskServiceApp {
    */
   private createRequestIdMiddleware() {
     return (req: Request, res: Response, next: NextFunction): void => {
-      const requestId = req.headers[REQUEST_HEADERS.X_REQUEST_ID] as string || 
-                       `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
+      const requestId =
+        (req.headers[REQUEST_HEADERS.X_REQUEST_ID] as string) ||
+        `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
       req.headers[REQUEST_HEADERS.X_REQUEST_ID] = requestId;
       res.setHeader('X-Request-ID', requestId);
-      
+
       next();
     };
   }
@@ -405,30 +444,36 @@ export class TaskServiceApp {
     return (req: Request, res: Response, next: NextFunction): void => {
       const startTime = Date.now();
       const requestLogger = createRequestLogger(
-        req.headers[REQUEST_HEADERS.X_REQUEST_ID] as string
+        req.headers[REQUEST_HEADERS.X_REQUEST_ID] as string,
       );
 
-      requestLogger.info({
-        method: req.method,
-        url: req.url,
-        userAgent: req.get('User-Agent'),
-        ip: req.ip,
-        contentType: req.get('Content-Type'),
-        contentLength: req.get('Content-Length'),
-      }, `🌐 Request iniciado: ${req.method} ${req.path}`);
+      requestLogger.info(
+        {
+          method: req.method,
+          url: req.url,
+          userAgent: req.get('User-Agent'),
+          ip: req.ip,
+          contentType: req.get('Content-Type'),
+          contentLength: req.get('Content-Length'),
+        },
+        `🌐 Request iniciado: ${req.method} ${req.path}`,
+      );
 
       // Capturar respuesta para logging
       const originalSend = res.send;
-      res.send = function(this: Response, body: any) {
+      res.send = function (this: Response, body: any) {
         const duration = Date.now() - startTime;
-        
-        requestLogger.info({
-          method: req.method,
-          url: req.url,
-          statusCode: res.statusCode,
-          duration,
-          responseSize: Buffer.byteLength(body || ''),
-        }, `✅ Request completado: ${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
+
+        requestLogger.info(
+          {
+            method: req.method,
+            url: req.url,
+            statusCode: res.statusCode,
+            duration,
+            responseSize: Buffer.byteLength(body || ''),
+          },
+          `✅ Request completado: ${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`,
+        );
 
         return originalSend.call(this, body);
       };
@@ -450,16 +495,20 @@ export class TaskServiceApp {
     // ✅ CAMBIO CRÍTICO: Health check routes PRIMERO y SIEMPRE disponible
     // Las rutas de health check DEBEN ir antes que cualquier middleware que pueda fallar
     this.app.use(`${this.API_PREFIX}/health`, HealthRoutes.routes);
-    this.appLogger.info({
-      component: 'routes_setup',
-      healthEndpoint: `${this.API_PREFIX}/health`,
-      productionMode: config.app.isProduction
-    }, '🏥 Health check routes configuradas (siempre disponibles)');
+    this.appLogger.info(
+      {
+        component: 'routes_setup',
+        healthEndpoint: `${this.API_PREFIX}/health`,
+        productionMode: config.app.isProduction,
+      },
+      '🏥 Health check routes configuradas (siempre disponibles)',
+    );
 
     // API Routes principales
     this.app.use(`${this.API_PREFIX}/tasks`, taskRoutes);
-    this.app.use(`${this.API_PREFIX}/categories`, 
-      createCategoryRoutes(this.dependencies.categoryService)
+    this.app.use(
+      `${this.API_PREFIX}/categories`,
+      createCategoryRoutes(this.dependencies.categoryService),
     );
 
     // Swagger documentation (si está habilitado)
@@ -468,11 +517,14 @@ export class TaskServiceApp {
     // Catch-all para rutas no encontradas
     this.setupNotFoundHandler();
 
-    this.appLogger.info({
-      event: 'routes_configured',
-      apiPrefix: this.API_PREFIX,
-      availableRoutes: this.getAvailableRoutes()
-    }, '✅ Rutas configuradas correctamente');
+    this.appLogger.info(
+      {
+        event: 'routes_configured',
+        apiPrefix: this.API_PREFIX,
+        availableRoutes: this.getAvailableRoutes(),
+      },
+      '✅ Rutas configuradas correctamente',
+    );
   }
 
   /**
@@ -481,7 +533,7 @@ export class TaskServiceApp {
   private setupRootEndpoint(): void {
     this.app.get('/', (req: Request, res: Response) => {
       const requestLogger = createRequestLogger(
-        req.headers[REQUEST_HEADERS.X_REQUEST_ID] as string
+        req.headers[REQUEST_HEADERS.X_REQUEST_ID] as string,
       );
 
       requestLogger.debug('Root endpoint accessed');
@@ -499,16 +551,20 @@ export class TaskServiceApp {
             health: `${this.API_PREFIX}/health`,
             healthReady: `${this.API_PREFIX}/health/ready`,
             healthLive: `${this.API_PREFIX}/health/live`,
-            healthDetailed: !config.app.isProduction ? `${this.API_PREFIX}/health/detailed` : 'disabled',
-            docs: config.swagger.enabled ? `${this.API_PREFIX}/docs` : 'disabled',
+            healthDetailed: !config.app.isProduction
+              ? `${this.API_PREFIX}/health/detailed`
+              : 'disabled',
+            docs: config.swagger.enabled
+              ? `${this.API_PREFIX}/docs`
+              : 'disabled',
             tasks: `${this.API_PREFIX}/tasks`,
             categories: `${this.API_PREFIX}/categories`,
-          }
+          },
         },
         meta: {
           timestamp: new Date().toISOString(),
-          requestId: req.headers[REQUEST_HEADERS.X_REQUEST_ID]
-        }
+          requestId: req.headers[REQUEST_HEADERS.X_REQUEST_ID],
+        },
       });
     });
   }
@@ -522,31 +578,39 @@ export class TaskServiceApp {
         // Importación dinámica de swagger para evitar errores si no está disponible
         const swaggerUi = require('swagger-ui-express');
         const { swaggerSpec, swaggerUiOptions } = require('@/utils/swagger');
-        
+
         // Servir documentación JSON
-        this.app.get(`${this.API_PREFIX}/docs/json`, (req: Request, res: Response) => {
-          res.setHeader('Content-Type', 'application/json');
-          res.send(swaggerSpec);
-        });
+        this.app.get(
+          `${this.API_PREFIX}/docs/json`,
+          (req: Request, res: Response) => {
+            res.setHeader('Content-Type', 'application/json');
+            res.send(swaggerSpec);
+          },
+        );
 
         // Servir interfaz Swagger UI
         this.app.use(
           `${this.API_PREFIX}/docs`,
           swaggerUi.serve,
-          swaggerUi.setup(swaggerSpec, swaggerUiOptions)
+          swaggerUi.setup(swaggerSpec, swaggerUiOptions),
         );
 
-        this.appLogger.info({
-          event: 'swagger_configured',
-          docsUrl: `${this.API_PREFIX}/docs`,
-          jsonUrl: `${this.API_PREFIX}/docs/json`
-        }, `📚 Swagger documentation available at ${this.API_PREFIX}/docs`);
-        
+        this.appLogger.info(
+          {
+            event: 'swagger_configured',
+            docsUrl: `${this.API_PREFIX}/docs`,
+            jsonUrl: `${this.API_PREFIX}/docs/json`,
+          },
+          `📚 Swagger documentation available at ${this.API_PREFIX}/docs`,
+        );
       } catch (error) {
-        this.appLogger.warn({
-          error: error instanceof Error ? error.message : String(error),
-          event: 'swagger_setup_failed'
-        }, '⚠️ Swagger setup failed, continuing without documentation');
+        this.appLogger.warn(
+          {
+            error: error instanceof Error ? error.message : String(error),
+            event: 'swagger_setup_failed',
+          },
+          '⚠️ Swagger setup failed, continuing without documentation',
+        );
       }
     } else {
       this.appLogger.debug('📚 Swagger documentation disabled');
@@ -572,7 +636,7 @@ export class TaskServiceApp {
       `GET ${this.API_PREFIX}/tasks`,
       `POST ${this.API_PREFIX}/tasks`,
       `GET ${this.API_PREFIX}/categories`,
-      `POST ${this.API_PREFIX}/categories`
+      `POST ${this.API_PREFIX}/categories`,
     ];
 
     // Rutas detalladas solo en desarrollo
@@ -581,7 +645,7 @@ export class TaskServiceApp {
         `GET ${this.API_PREFIX}/health/detailed`,
         `GET ${this.API_PREFIX}/health/database`,
         `GET ${this.API_PREFIX}/health/redis`,
-        `GET ${this.API_PREFIX}/health/auth-service`
+        `GET ${this.API_PREFIX}/health/auth-service`,
       );
     }
 
@@ -615,11 +679,14 @@ export class TaskServiceApp {
   private setupUncaughtExceptionHandlers(): void {
     // Unhandled promise rejections
     process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
-      this.appLogger.error({
-        reason: reason instanceof Error ? reason.message : String(reason),
-        promise: promise.toString(),
-        event: 'unhandled_promise_rejection'
-      }, '💥 Unhandled promise rejection detected');
+      this.appLogger.error(
+        {
+          reason: reason instanceof Error ? reason.message : String(reason),
+          promise: promise.toString(),
+          event: 'unhandled_promise_rejection',
+        },
+        '💥 Unhandled promise rejection detected',
+      );
 
       // En producción, cerrar gracefully
       if (config.app.isProduction) {
@@ -629,14 +696,17 @@ export class TaskServiceApp {
 
     // Uncaught exceptions
     process.on('uncaughtException', (error: Error) => {
-      this.appLogger.fatal({
-        error: {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
+      this.appLogger.fatal(
+        {
+          error: {
+            message: error.message,
+            stack: error.stack,
+            name: error.name,
+          },
+          event: 'uncaught_exception',
         },
-        event: 'uncaught_exception'
-      }, '💀 Uncaught exception - shutting down');
+        '💀 Uncaught exception - shutting down',
+      );
 
       // Las excepciones no capturadas son críticas
       process.exit(1);
@@ -666,17 +736,16 @@ export class TaskServiceApp {
       port: options.port || config.app.port,
       hostname: options.hostname || '0.0.0.0',
       gracefulShutdown: options.gracefulShutdown ?? true,
-      shutdownTimeout: options.shutdownTimeout || this.SHUTDOWN_TIMEOUT
+      shutdownTimeout: options.shutdownTimeout || this.SHUTDOWN_TIMEOUT,
     };
 
     return new Promise((resolve, reject) => {
       try {
-        this.server = this.app.listen(
-          serverOptions.port,
-          () => {
-            startup.serviceStarted(serverOptions.port, config.app.env);
-            
-            this.appLogger.info({
+        this.server = this.app.listen(serverOptions.port, () => {
+          startup.serviceStarted(serverOptions.port, config.app.env);
+
+          this.appLogger.info(
+            {
               event: 'server_started',
               port: serverOptions.port,
               hostname: serverOptions.hostname,
@@ -684,24 +753,28 @@ export class TaskServiceApp {
               apiVersion: config.app.apiVersion,
               nodeVersion: process.version,
               pid: process.pid,
-              uptime: process.uptime()
-            }, `🚀 Task Service started successfully on ${serverOptions.hostname}:${serverOptions.port}`);
+              uptime: process.uptime(),
+            },
+            `🚀 Task Service started successfully on ${serverOptions.hostname}:${serverOptions.port}`,
+          );
 
-            // Log de configuración de features
-            this.logFeatureStatus();
-            
-            resolve();
-          }
-        );
+          // Log de configuración de features
+          this.logFeatureStatus();
+
+          resolve();
+        });
 
         this.server.on('error', (error: Error) => {
-          this.appLogger.error({
-            error: error.message,
-            event: 'server_start_error',
-            port: serverOptions.port,
-            hostname: serverOptions.hostname
-          }, '❌ Error starting server');
-          
+          this.appLogger.error(
+            {
+              error: error.message,
+              event: 'server_start_error',
+              port: serverOptions.port,
+              hostname: serverOptions.hostname,
+            },
+            '❌ Error starting server',
+          );
+
           reject(error);
         });
 
@@ -709,13 +782,15 @@ export class TaskServiceApp {
         if (serverOptions.gracefulShutdown) {
           this.setupGracefulShutdown(serverOptions.shutdownTimeout);
         }
-
       } catch (error) {
-        this.appLogger.error({
-          error: error instanceof Error ? error.message : String(error),
-          event: 'server_listen_error'
-        }, '❌ Error in listen method');
-        
+        this.appLogger.error(
+          {
+            error: error instanceof Error ? error.message : String(error),
+            event: 'server_listen_error',
+          },
+          '❌ Error in listen method',
+        );
+
         reject(error);
       }
     });
@@ -725,24 +800,28 @@ export class TaskServiceApp {
    * Log del estado de las features configuradas
    */
   private logFeatureStatus(): void {
-    this.appLogger.info({
-      event: 'features_status',
-      features: {
-        swagger: config.swagger.enabled,
-        rateLimit: config.rateLimit.enabled,
-        cors: config.cors.origin.length > 1 || !config.cors.origin.includes('*'),
-        helmet: config.security.helmetEnabled,
-        csp: config.security.cspEnabled,
-        hsts: config.security.hstsEnabled,
-        redis: this.dependencies.cacheService ? 'available' : 'unavailable',
-        compression: true,
-        healthCheck: config.features.healthCheckEnabled,
-        backgroundJobs: {
-          cleanup: config.jobs.cleanup.enabled,
-          statsUpdate: config.jobs.statsUpdate.enabled
-        }
-      }
-    }, '🎛️ Service features status logged');
+    this.appLogger.info(
+      {
+        event: 'features_status',
+        features: {
+          swagger: config.swagger.enabled,
+          rateLimit: config.rateLimit.enabled,
+          cors:
+            config.cors.origin.length > 1 || !config.cors.origin.includes('*'),
+          helmet: config.security.helmetEnabled,
+          csp: config.security.cspEnabled,
+          hsts: config.security.hstsEnabled,
+          redis: this.dependencies.cacheService ? 'available' : 'unavailable',
+          compression: true,
+          healthCheck: config.features.healthCheckEnabled,
+          backgroundJobs: {
+            cleanup: config.jobs.cleanup.enabled,
+            statsUpdate: config.jobs.statsUpdate.enabled,
+          },
+        },
+      },
+      '🎛️ Service features status logged',
+    );
   }
 
   /**
@@ -751,29 +830,38 @@ export class TaskServiceApp {
   private setupGracefulShutdown(timeout: number): void {
     const gracefulShutdown = (signal: string) => {
       startup.gracefulShutdown(signal);
-      
-      this.appLogger.info({
-        signal,
-        timeout,
-        event: 'graceful_shutdown_initiated'
-      }, `🛑 Graceful shutdown initiated (signal: ${signal})`);
-      
+
+      this.appLogger.info(
+        {
+          signal,
+          timeout,
+          event: 'graceful_shutdown_initiated',
+        },
+        `🛑 Graceful shutdown initiated (signal: ${signal})`,
+      );
+
       if (this.server) {
         this.server.close(() => {
-          this.appLogger.info({
-            event: 'http_server_closed'
-          }, '🔌 HTTP server closed');
-          
+          this.appLogger.info(
+            {
+              event: 'http_server_closed',
+            },
+            '🔌 HTTP server closed',
+          );
+
           process.exit(0);
         });
 
         // Force close after timeout
         setTimeout(() => {
-          this.appLogger.error({
-            timeout,
-            event: 'forced_shutdown'
-          }, '⏰ Forced shutdown after timeout');
-          
+          this.appLogger.error(
+            {
+              timeout,
+              event: 'forced_shutdown',
+            },
+            '⏰ Forced shutdown after timeout',
+          );
+
           process.exit(1);
         }, timeout);
       } else {
@@ -789,10 +877,13 @@ export class TaskServiceApp {
    * Graceful shutdown manual
    */
   public async gracefulShutdown(reason: string): Promise<void> {
-    this.appLogger.info({
-      reason,
-      event: 'manual_graceful_shutdown'
-    }, `🛑 Manual graceful shutdown initiated: ${reason}`);
+    this.appLogger.info(
+      {
+        reason,
+        event: 'manual_graceful_shutdown',
+      },
+      `🛑 Manual graceful shutdown initiated: ${reason}`,
+    );
 
     return new Promise((resolve) => {
       if (this.server) {
@@ -821,7 +912,7 @@ export class TaskServiceApp {
       dependencies: Object.keys(this.dependencies),
       pid: process.pid,
       uptime: process.uptime(),
-      memoryUsage: process.memoryUsage()
+      memoryUsage: process.memoryUsage(),
     };
   }
 
@@ -831,7 +922,7 @@ export class TaskServiceApp {
   private getMiddlewareCount(): number {
     // Aproximación basada en los middlewares configurados
     let count = 0;
-    
+
     if (this.middlewareConfig.security.helmet) count++;
     count++; // CORS
     if (this.middlewareConfig.rateLimit.enabled) count++;
@@ -843,7 +934,7 @@ export class TaskServiceApp {
     count++; // requestId
     if (this.middlewareConfig.logging.requests) count++;
     count++; // errorHandler
-    
+
     return count;
   }
 
@@ -861,7 +952,7 @@ export class TaskServiceApp {
     try {
       const memUsage = process.memoryUsage();
       const uptime = process.uptime();
-      
+
       return {
         status: 'healthy',
         timestamp: new Date().toISOString(),
@@ -872,18 +963,18 @@ export class TaskServiceApp {
         memory: {
           used: `${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`,
           total: `${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`,
-          external: `${Math.round(memUsage.external / 1024 / 1024)}MB`
+          external: `${Math.round(memUsage.external / 1024 / 1024)}MB`,
         },
         dependencies: {
           redis: this.dependencies.cacheService ? 'connected' : 'unavailable',
-          database: 'connected' // Asumimos conectado si la app está corriendo
-        }
+          database: 'connected', // Asumimos conectado si la app está corriendo
+        },
       };
     } catch (error) {
       return {
         status: 'unhealthy',
         timestamp: new Date().toISOString(),
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
@@ -895,25 +986,34 @@ export class TaskServiceApp {
  * Facilita la inyección de dependencias y el testing
  */
 export const createTaskServiceApp = (
-  dependencies?: Partial<AppDependencies>
+  dependencies?: Partial<AppDependencies>,
 ): TaskServiceApp => {
-  logger.info({
-    event: 'app_factory_called',
-    hasDependencies: !!dependencies
-  }, '🏭 Creating TaskServiceApp instance with factory function');
-  
+  logger.info(
+    {
+      event: 'app_factory_called',
+      hasDependencies: !!dependencies,
+    },
+    '🏭 Creating TaskServiceApp instance with factory function',
+  );
+
   try {
     const app = new TaskServiceApp(dependencies);
-    logger.info({
-      event: 'app_factory_success'
-    }, '✅ TaskServiceApp instance created successfully');
+    logger.info(
+      {
+        event: 'app_factory_success',
+      },
+      '✅ TaskServiceApp instance created successfully',
+    );
     return app;
   } catch (error) {
-    logger.fatal({
-      error: error instanceof Error ? error.message : String(error),
-      event: 'app_creation_failed'
-    }, '💀 Failed to create TaskServiceApp instance');
-    
+    logger.fatal(
+      {
+        error: error instanceof Error ? error.message : String(error),
+        event: 'app_creation_failed',
+      },
+      '💀 Failed to create TaskServiceApp instance',
+    );
+
     throw error;
   }
 };

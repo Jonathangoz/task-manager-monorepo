@@ -25,11 +25,11 @@ class TestDatabase {
   async connect(): Promise<void> {
     try {
       // Aplicar migraciones
-      execSync('npx prisma migrate deploy', { 
+      execSync('npx prisma migrate deploy', {
         env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL },
-        stdio: 'ignore'
+        stdio: 'ignore',
       });
-      
+
       await this.prisma.$connect();
     } catch (error) {
       console.error('Failed to connect to test database:', error);

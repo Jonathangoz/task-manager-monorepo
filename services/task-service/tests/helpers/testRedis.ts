@@ -36,7 +36,8 @@ class TestRedis {
 
   // Métodos helper para pruebas
   async setTestData(key: string, value: any, ttl?: number): Promise<void> {
-    const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+    const serialized =
+      typeof value === 'string' ? value : JSON.stringify(value);
     if (ttl) {
       await this.client.setex(key, ttl, serialized);
     } else {

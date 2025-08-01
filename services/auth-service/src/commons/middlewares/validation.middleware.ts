@@ -3,12 +3,12 @@ import { Request, Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '@/typeExpress/express';
 import { z } from 'zod';
 import { logger } from '@/utils/logger';
-import { 
-  HTTP_STATUS, 
-  ERROR_CODES, 
+import {
+  HTTP_STATUS,
+  ERROR_CODES,
   ERROR_MESSAGES,
   DEFAULT_VALUES,
-  VALIDATION_PATTERNS 
+  VALIDATION_PATTERNS,
 } from '@/utils/constants';
 import { AppError } from './error.middleware';
 
@@ -19,16 +19,48 @@ interface ValidationRequest extends Request {
 // Base Schemas para validaciones comunes
 
 const PaginationQuerySchema = z.object({
-  page: z.coerce.number().int().min(1, 'La página debe ser un número entero mayor a 0').default(1),
-  limit: z.coerce.number().int().min(1).max(DEFAULT_VALUES.PAGINATION_MAX_LIMIT, `El límite debe estar entre 1 y ${DEFAULT_VALUES.PAGINATION_MAX_LIMIT}`).default(DEFAULT_VALUES.PAGINATION_LIMIT),
-  sortBy: z.string().regex(/^[a-zA-Z0-9_]+$/, 'El campo de ordenamiento contiene caracteres no válidos').optional(),
-  sortOrder: z.enum(['asc', 'desc'], { errorMap: () => ({ message: 'El orden debe ser "asc" o "desc"' }) }).default('asc')
+  page: z.coerce
+    .number()
+    .int()
+    .min(1, 'La página debe ser un número entero mayor a 0')
+    .default(1),
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(
+      DEFAULT_VALUES.PAGINATION_MAX_LIMIT,
+      `El límite debe estar entre 1 y ${DEFAULT_VALUES.PAGINATION_MAX_LIMIT}`,
+    )
+    .default(DEFAULT_VALUES.PAGINATION_LIMIT),
+  sortBy: z
+    .string()
+    .regex(
+      /^[a-zA-Z0-9_]+$/,
+      'El campo de ordenamiento contiene caracteres no válidos',
+    )
+    .optional(),
+  sortOrder: z
+    .enum(['asc', 'desc'], {
+      errorMap: () => ({ message: 'El orden debe ser "asc" o "desc"' }),
+    })
+    .default('asc'),
 });
 
-const CUIDSchema = z.string().regex(VALIDATION_PATTERNS.CUID, 'Debe ser un CUID válido');
+const CUIDSchema = z
+  .string()
+  .regex(VALIDATION_PATTERNS.CUID, 'Debe ser un CUID válido');
 const UUIDSchema = z.string().uuid('Debe ser un UUID válido');
-const EmailSchema = z.string().email('Formato de email inválido').regex(VALIDATION_PATTERNS.EMAIL, 'Formato de email inválido');
-const UsernameSchema = z.string().regex(VALIDATION_PATTERNS.USERNAME, 'El username solo puede contener letras, números y guiones bajos');
+const EmailSchema = z
+  .string()
+  .email('Formato de email inválido')
+  .regex(VALIDATION_PATTERNS.EMAIL, 'Formato de email inválido');
+const UsernameSchema = z
+  .string()
+  .regex(
+    VALIDATION_PATTERNS.USERNAME,
+    'El username solo puede contener letras, números y guiones bajos',
+  );
 
 // Core Validation Middleware Class
 
@@ -55,15 +87,19 @@ export class ValidationMiddleware {
    */
   static createValidator<T extends z.ZodSchema>(
     schema: T,
-    target: 'body' | 'query' | 'params' = 'body'
+    target: 'body' | 'query' | 'params' = 'body',
   ) {
-    return (req: ValidationRequest, res: Response, next: NextFunction): void => {
+    return (
+      req: ValidationRequest,
+      res: Response,
+      next: NextFunction,
+    ): void => {
       const correlationId = ValidationMiddleware.ensureCorrelationId(req);
 
       try {
         const dataToValidate = req[target];
         const validatedData = schema.parse(dataToValidate);
-        
+
         // Reemplazar los datos originales con los validados y transformados
         (req as any)[target] = validatedData;
 
@@ -71,17 +107,20 @@ export class ValidationMiddleware {
           correlationId,
           target,
           path: req.path,
-          method: req.method
+          method: req.method,
         });
 
         next();
       } catch (error) {
         if (error instanceof z.ZodError) {
-          const formattedErrors = error.errors.map(err => ({
+          const formattedErrors = error.errors.map((err) => ({
             field: err.path.join('.'),
             message: err.message,
             code: err.code,
-            value: err.code !== 'invalid_type' ? err.path.reduce((obj, key) => obj?.[key], req[target]) : undefined
+            value:
+              err.code !== 'invalid_type'
+                ? err.path.reduce((obj, key) => obj?.[key], req[target])
+                : undefined,
           }));
 
           logger.warn('Errores de validación encontrados', {
@@ -89,7 +128,7 @@ export class ValidationMiddleware {
             target,
             errors: formattedErrors,
             path: req.path,
-            method: req.method
+            method: req.method,
           });
 
           res.status(HTTP_STATUS.BAD_REQUEST).json({
@@ -97,14 +136,14 @@ export class ValidationMiddleware {
             error: {
               code: ERROR_CODES.VALIDATION_ERROR,
               message: ERROR_MESSAGES.VALIDATION_ERROR,
-              details: formattedErrors
+              details: formattedErrors,
             },
             meta: {
               correlationId,
               timestamp: new Date().toISOString(),
               path: req.path,
-              method: req.method
-            }
+              method: req.method,
+            },
           });
           return;
         }
@@ -114,21 +153,21 @@ export class ValidationMiddleware {
           correlationId,
           error: error instanceof Error ? error.message : 'Error desconocido',
           path: req.path,
-          method: req.method
+          method: req.method,
         });
 
         res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
           success: false,
           error: {
             code: ERROR_CODES.INTERNAL_ERROR,
-            message: ERROR_MESSAGES.INTERNAL_ERROR
+            message: ERROR_MESSAGES.INTERNAL_ERROR,
           },
           meta: {
             correlationId,
             timestamp: new Date().toISOString(),
             path: req.path,
-            method: req.method
-          }
+            method: req.method,
+          },
         });
       }
     };
@@ -137,7 +176,10 @@ export class ValidationMiddleware {
   /**
    * Validador específico para paginación con lógica adicional
    */
-  static validatePagination = ValidationMiddleware.createValidator(PaginationQuerySchema, 'query');
+  static validatePagination = ValidationMiddleware.createValidator(
+    PaginationQuerySchema,
+    'query',
+  );
 
   /**
    * Valida que el cuerpo de la petición no esté vacío
@@ -145,7 +187,7 @@ export class ValidationMiddleware {
   static requireBody(
     req: ValidationRequest,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): void {
     const correlationId = ValidationMiddleware.ensureCorrelationId(req);
 
@@ -153,21 +195,21 @@ export class ValidationMiddleware {
       logger.warn('Cuerpo de petición vacío', {
         correlationId,
         path: req.path,
-        method: req.method
+        method: req.method,
       });
 
       res.status(HTTP_STATUS.BAD_REQUEST).json({
         success: false,
         error: {
           code: ERROR_CODES.VALIDATION_ERROR,
-          message: 'El cuerpo de la petición es requerido'
+          message: 'El cuerpo de la petición es requerido',
         },
         meta: {
           correlationId,
           timestamp: new Date().toISOString(),
           path: req.path,
-          method: req.method
-        }
+          method: req.method,
+        },
       });
       return;
     }
@@ -180,7 +222,7 @@ export class ValidationMiddleware {
    */
   static validateCUID(paramName: string) {
     const paramSchema = z.object({
-      [paramName]: CUIDSchema
+      [paramName]: CUIDSchema,
     });
 
     return ValidationMiddleware.createValidator(paramSchema, 'params');
@@ -191,7 +233,7 @@ export class ValidationMiddleware {
    */
   static validateUUID(paramName: string) {
     const paramSchema = z.object({
-      [paramName]: UUIDSchema
+      [paramName]: UUIDSchema,
     });
 
     return ValidationMiddleware.createValidator(paramSchema, 'params');
@@ -203,7 +245,7 @@ export class ValidationMiddleware {
   static sanitizeInput(
     req: ValidationRequest,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): void {
     const correlationId = ValidationMiddleware.ensureCorrelationId(req);
 
@@ -221,28 +263,28 @@ export class ValidationMiddleware {
       logger.debug('Sanitización completada', {
         correlationId,
         path: req.path,
-        method: req.method
+        method: req.method,
       });
 
       next();
     } catch (error) {
       logger.error('Error durante sanitización', {
         correlationId,
-        error: error instanceof Error ? error.message : 'Error desconocido'
+        error: error instanceof Error ? error.message : 'Error desconocido',
       });
 
       res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
         success: false,
         error: {
           code: ERROR_CODES.INTERNAL_ERROR,
-          message: ERROR_MESSAGES.INTERNAL_ERROR
+          message: ERROR_MESSAGES.INTERNAL_ERROR,
         },
         meta: {
           correlationId,
           timestamp: new Date().toISOString(),
           path: req.path,
-          method: req.method
-        }
+          method: req.method,
+        },
       });
     }
   }
@@ -252,7 +294,7 @@ export class ValidationMiddleware {
    */
   static validateEmail = ValidationMiddleware.createValidator(
     z.object({ email: EmailSchema }),
-    'body'
+    'body',
   );
 
   /**
@@ -260,7 +302,7 @@ export class ValidationMiddleware {
    */
   static validateUsername = ValidationMiddleware.createValidator(
     z.object({ username: UsernameSchema }),
-    'body'
+    'body',
   );
 
   /**
@@ -279,7 +321,7 @@ export class ValidationMiddleware {
     }
 
     if (Array.isArray(obj)) {
-      return obj.map(item => ValidationMiddleware.sanitizeObject(item));
+      return obj.map((item) => ValidationMiddleware.sanitizeObject(item));
     }
 
     if (typeof obj === 'object') {
@@ -299,7 +341,11 @@ export class ValidationMiddleware {
    * Middleware para validar Content-Type
    */
   static requireContentType(expectedType: string = 'application/json') {
-    return (req: ValidationRequest, res: Response, next: NextFunction): void => {
+    return (
+      req: ValidationRequest,
+      res: Response,
+      next: NextFunction,
+    ): void => {
       const correlationId = ValidationMiddleware.ensureCorrelationId(req);
       const contentType = req.get('Content-Type');
 
@@ -308,21 +354,21 @@ export class ValidationMiddleware {
           correlationId,
           expectedType,
           receivedType: contentType,
-          path: req.path
+          path: req.path,
         });
 
         res.status(HTTP_STATUS.BAD_REQUEST).json({
           success: false,
           error: {
             code: ERROR_CODES.VALIDATION_ERROR,
-            message: `Content-Type debe ser ${expectedType}`
+            message: `Content-Type debe ser ${expectedType}`,
           },
           meta: {
             correlationId,
             timestamp: new Date().toISOString(),
             path: req.path,
-            method: req.method
-          }
+            method: req.method,
+          },
         });
         return;
       }
@@ -341,22 +387,36 @@ export class AdvancedValidationUtils {
   static createConditionalValidator<T extends z.ZodSchema>(
     schema: T,
     condition: (req: ValidationRequest) => boolean,
-    target: 'body' | 'query' | 'params' = 'body'
+    target: 'body' | 'query' | 'params' = 'body',
   ) {
-    return (req: ValidationRequest, res: Response, next: NextFunction): void => {
+    return (
+      req: ValidationRequest,
+      res: Response,
+      next: NextFunction,
+    ): void => {
       if (!condition(req)) {
         return next(); // Saltar validación si no se cumple la condición
       }
 
-      return ValidationMiddleware.createValidator(schema, target)(req, res, next);
+      return ValidationMiddleware.createValidator(schema, target)(
+        req,
+        res,
+        next,
+      );
     };
   }
 
   /**
    * Combina múltiples validadores en uno solo
    */
-  static combineValidators(...validators: Array<(req: any, res: any, next: any) => void>) {
-    return (req: ValidationRequest, res: Response, next: NextFunction): void => {
+  static combineValidators(
+    ...validators: Array<(req: any, res: any, next: any) => void>
+  ) {
+    return (
+      req: ValidationRequest,
+      res: Response,
+      next: NextFunction,
+    ): void => {
       let currentIndex = 0;
 
       const runNext = (error?: any) => {
@@ -378,13 +438,21 @@ export class AdvancedValidationUtils {
    * Crea un validador que permite campos opcionales en el cuerpo
    */
   static createOptionalBodyValidator<T extends z.ZodSchema>(schema: T) {
-    return (req: ValidationRequest, res: Response, next: NextFunction): void => {
+    return (
+      req: ValidationRequest,
+      res: Response,
+      next: NextFunction,
+    ): void => {
       // Si no hay body, continúa sin validar
       if (!req.body || Object.keys(req.body).length === 0) {
         return next();
       }
 
-      return ValidationMiddleware.createValidator(schema, 'body')(req, res, next);
+      return ValidationMiddleware.createValidator(schema, 'body')(
+        req,
+        res,
+        next,
+      );
     };
   }
 
@@ -393,7 +461,7 @@ export class AdvancedValidationUtils {
    */
   static validateMultipleCUIDs(...paramNames: string[]) {
     const schemaObj: Record<string, z.ZodString> = {};
-    paramNames.forEach(param => {
+    paramNames.forEach((param) => {
       schemaObj[param] = CUIDSchema;
     });
 
@@ -404,18 +472,23 @@ export class AdvancedValidationUtils {
    * Validador para rangos de fechas en query parameters
    */
   static validateDateRange() {
-    const dateRangeSchema = z.object({
-      dateFrom: z.coerce.date().optional(),
-      dateTo: z.coerce.date().optional()
-    }).refine(data => {
-      if (data.dateFrom && data.dateTo) {
-        return data.dateTo >= data.dateFrom;
-      }
-      return true;
-    }, {
-      message: 'La fecha de fin debe ser posterior a la fecha de inicio',
-      path: ['dateTo']
-    });
+    const dateRangeSchema = z
+      .object({
+        dateFrom: z.coerce.date().optional(),
+        dateTo: z.coerce.date().optional(),
+      })
+      .refine(
+        (data) => {
+          if (data.dateFrom && data.dateTo) {
+            return data.dateTo >= data.dateFrom;
+          }
+          return true;
+        },
+        {
+          message: 'La fecha de fin debe ser posterior a la fecha de inicio',
+          path: ['dateTo'],
+        },
+      );
 
     return ValidationMiddleware.createValidator(dateRangeSchema, 'query');
   }
@@ -433,7 +506,8 @@ export const ValidationPresets = {
   // Validaciones de parámetros
   userIdParam: ValidationMiddleware.validateCUID('id'),
   sessionIdParam: ValidationMiddleware.validateCUID('sessionId'),
-  uuidParam: (paramName: string) => ValidationMiddleware.validateUUID(paramName),
+  uuidParam: (paramName: string) =>
+    ValidationMiddleware.validateUUID(paramName),
 
   // Validaciones de campos específicos
   emailField: ValidationMiddleware.validateEmail,
@@ -445,14 +519,14 @@ export const ValidationPresets = {
   // Combinaciones comunes
   paginationAndSanitize: AdvancedValidationUtils.combineValidators(
     ValidationMiddleware.validatePagination,
-    ValidationMiddleware.sanitizeInput
+    ValidationMiddleware.sanitizeInput,
   ),
 
   userResourceAccess: AdvancedValidationUtils.combineValidators(
     ValidationMiddleware.validateCUID('id'),
     ValidationMiddleware.requireBody,
-    ValidationMiddleware.sanitizeInput
-  )
+    ValidationMiddleware.sanitizeInput,
+  ),
 } as const;
 
 // Schema Factory - Para crear schemas dinámicamente
@@ -464,9 +538,14 @@ export class SchemaFactory {
   static createPaginationSchema(allowedSortFields: string[]) {
     return z.object({
       page: z.coerce.number().int().min(1).default(1),
-      limit: z.coerce.number().int().min(1).max(DEFAULT_VALUES.PAGINATION_MAX_LIMIT).default(DEFAULT_VALUES.PAGINATION_LIMIT),
+      limit: z.coerce
+        .number()
+        .int()
+        .min(1)
+        .max(DEFAULT_VALUES.PAGINATION_MAX_LIMIT)
+        .default(DEFAULT_VALUES.PAGINATION_LIMIT),
       sortBy: z.enum(allowedSortFields as [string, ...string[]]).optional(),
-      sortOrder: z.enum(['asc', 'desc']).default('asc')
+      sortOrder: z.enum(['asc', 'desc']).default('asc'),
     });
   }
 
@@ -475,23 +554,35 @@ export class SchemaFactory {
    */
   static createSearchSchema(minLength: number = 1, maxLength: number = 100) {
     return z.object({
-      q: z.string()
-        .min(minLength, `El término de búsqueda debe tener al menos ${minLength} caracteres`)
-        .max(maxLength, `El término de búsqueda no puede exceder ${maxLength} caracteres`)
-        .transform(q => q.trim()),
+      q: z
+        .string()
+        .min(
+          minLength,
+          `El término de búsqueda debe tener al menos ${minLength} caracteres`,
+        )
+        .max(
+          maxLength,
+          `El término de búsqueda no puede exceder ${maxLength} caracteres`,
+        )
+        .transform((q) => q.trim()),
       exactMatch: z.coerce.boolean().default(false),
-      caseSensitive: z.coerce.boolean().default(false)
+      caseSensitive: z.coerce.boolean().default(false),
     });
   }
 
   /**
    * Crea un schema para validar IDs múltiples
    */
-  static createMultipleIdsSchema(fieldName: string, idType: 'cuid' | 'uuid' = 'cuid') {
+  static createMultipleIdsSchema(
+    fieldName: string,
+    idType: 'cuid' | 'uuid' = 'cuid',
+  ) {
     const idSchema = idType === 'cuid' ? CUIDSchema : UUIDSchema;
-    
+
     return z.object({
-      [fieldName]: z.array(idSchema).min(1, `Debe proporcionar al menos un ${fieldName}`)
+      [fieldName]: z
+        .array(idSchema)
+        .min(1, `Debe proporcionar al menos un ${fieldName}`),
     });
   }
 }
@@ -510,7 +601,11 @@ export const validateUsername = ValidationMiddleware.validateUsername;
 export const requireContentType = ValidationMiddleware.requireContentType;
 
 // Legacy exports para compatibilidad
-export const handleValidationErrors = (req: ValidationRequest, res: Response, next: NextFunction) => {
+export const handleValidationErrors = (
+  req: ValidationRequest,
+  res: Response,
+  next: NextFunction,
+) => {
   // Esta función ya no es necesaria con Zod, pero se mantiene para compatibilidad
   logger.warn('handleValidationErrors is deprecated with Zod implementation');
   next();
@@ -536,5 +631,5 @@ export default {
   sanitizeInput,
   validateEmail,
   validateUsername,
-  requireContentType
+  requireContentType,
 };

@@ -1,17 +1,20 @@
 // src/commons/middlewares/auth.middleware.ts
 import { Request, Response, NextFunction } from 'express';
-import { AuthServiceClient, AuthUser } from '@/core/infrastructure/external/AuthServiceClient';
+import {
+  AuthServiceClient,
+  AuthUser,
+} from '@/core/infrastructure/external/AuthServiceClient';
 
 // Crear instancia del cliente de auth service
 const authServiceClient = new AuthServiceClient();
 import { RedisCache } from '@/core/infrastructure/cache/RedisCache';
 import { logger } from '@/utils/logger';
-import { 
-  HTTP_STATUS, 
-  ERROR_CODES, 
+import {
+  HTTP_STATUS,
+  ERROR_CODES,
   ERROR_MESSAGES,
   CACHE_KEYS,
-  CACHE_TTL 
+  CACHE_TTL,
 } from '@/utils/constants';
 
 // Token configuration constants
@@ -54,7 +57,8 @@ const ADDITIONAL_ERROR_CODES = {
 
 // Additional cache keys not present in constants
 const ADDITIONAL_CACHE_KEYS = {
-  USER_SESSION: (token: string) => `user_session:${Buffer.from(token).toString('base64').slice(0, 16)}`,
+  USER_SESSION: (token: string) =>
+    `user_session:${Buffer.from(token).toString('base64').slice(0, 16)}`,
 } as const;
 
 // Additional cache TTL values
@@ -69,11 +73,11 @@ const ADDITIONAL_CACHE_TTL = {
 export const authenticateToken = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const token = extractTokenFromHeader(req);
-    
+
     if (!token) {
       res.status(HTTP_STATUS.UNAUTHORIZED).json({
         success: false,
@@ -94,18 +98,21 @@ export const authenticateToken = async (
     const cachedUser = await getCachedUserData(token);
     if (cachedUser) {
       req.user = cachedUser;
-      logger.debug({
-        userId: cachedUser.id,
-        path: req.path,
-        method: req.method,
-      }, 'Token validated from cache');
+      logger.debug(
+        {
+          userId: cachedUser.id,
+          path: req.path,
+          method: req.method,
+        },
+        'Token validated from cache',
+      );
       next();
       return;
     }
 
     // Validar token con Auth Service
     const validationResult = await authServiceClient.verifyToken(token);
-    
+
     if (!validationResult.valid || !validationResult.user) {
       res.status(HTTP_STATUS.UNAUTHORIZED).json({
         success: false,
@@ -156,20 +163,26 @@ export const authenticateToken = async (
     // Agregar usuario al request
     req.user = userData;
 
-    logger.debug({
-      userId: user.id,
-      email: user.email,
-      path: req.path,
-      method: req.method,
-    }, 'Token validated successfully');
+    logger.debug(
+      {
+        userId: user.id,
+        email: user.email,
+        path: req.path,
+        method: req.method,
+      },
+      'Token validated successfully',
+    );
 
     next();
   } catch (error) {
-    logger.error({
-      error: error instanceof Error ? error.message : String(error),
-      path: req.path,
-      method: req.method,
-    }, 'Authentication middleware error');
+    logger.error(
+      {
+        error: error instanceof Error ? error.message : String(error),
+        path: req.path,
+        method: req.method,
+      },
+      'Authentication middleware error',
+    );
 
     res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
       success: false,
@@ -193,11 +206,11 @@ export const authenticateToken = async (
 export const optionalAuth = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const token = extractTokenFromHeader(req);
-    
+
     if (!token) {
       next();
       return;
@@ -205,10 +218,10 @@ export const optionalAuth = async (
 
     // Intentar validar el token
     const validationResult = await authServiceClient.verifyToken(token);
-    
+
     if (validationResult.valid && validationResult.user) {
       const user = validationResult.user;
-      
+
       if (user.isActive) {
         req.user = {
           id: user.id,
@@ -223,11 +236,14 @@ export const optionalAuth = async (
     next();
   } catch (error) {
     // En modo opcional, no fallar por errores de autenticación
-    logger.warn({
-      error: error instanceof Error ? error.message : String(error),
-      path: req.path,
-    }, 'Optional authentication failed, continuing without user');
-    
+    logger.warn(
+      {
+        error: error instanceof Error ? error.message : String(error),
+        path: req.path,
+      },
+      'Optional authentication failed, continuing without user',
+    );
+
     next();
   }
 };
@@ -236,7 +252,11 @@ export const optionalAuth = async (
  * Middleware para verificar permisos específicos
  */
 export const requirePermission = (permission: string) => {
-  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  return async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     if (!req.user) {
       res.status(HTTP_STATUS.UNAUTHORIZED).json({
         success: false,
@@ -258,8 +278,9 @@ export const requirePermission = (permission: string) => {
  * Extrae el token del header Authorization
  */
 function extractTokenFromHeader(req: Request): string | null {
-  const authHeader = req.headers[TOKEN_CONFIG.ACCESS_TOKEN_HEADER.toLowerCase()];
-  
+  const authHeader =
+    req.headers[TOKEN_CONFIG.ACCESS_TOKEN_HEADER.toLowerCase()];
+
   if (!authHeader || typeof authHeader !== 'string') {
     return null;
   }
@@ -279,11 +300,11 @@ async function getCachedUserData(token: string): Promise<any | null> {
     const cacheKey = ADDITIONAL_CACHE_KEYS.USER_SESSION(token);
     const redisCache = new RedisCache();
     const cachedData = await redisCache.get(cacheKey);
-    
+
     if (cachedData) {
       return cachedData;
     }
-    
+
     return null;
   } catch (error) {
     logger.warn({ error }, 'Failed to get cached user data');
@@ -298,11 +319,7 @@ async function cacheUserData(token: string, userData: any): Promise<void> {
   try {
     const cacheKey = ADDITIONAL_CACHE_KEYS.USER_SESSION(token);
     const redisCache = new RedisCache();
-    await redisCache.set(
-      cacheKey,
-      userData,
-      ADDITIONAL_CACHE_TTL.USER_SESSION
-    );
+    await redisCache.set(cacheKey, userData, ADDITIONAL_CACHE_TTL.USER_SESSION);
   } catch (error) {
     logger.warn({ error }, 'Failed to cache user data');
     // No lanzar error, solo log warning
@@ -315,17 +332,17 @@ async function cacheUserData(token: string, userData: any): Promise<void> {
 export const clearUserCache = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const token = extractTokenFromHeader(req);
-    
+
     if (token) {
       const cacheKey = ADDITIONAL_CACHE_KEYS.USER_SESSION(token);
       const redisCache = new RedisCache();
       await redisCache.del(cacheKey);
     }
-    
+
     next();
   } catch (error) {
     logger.warn({ error }, 'Failed to clear user cache');
@@ -336,7 +353,9 @@ export const clearUserCache = async (
 /**
  * Middleware para verificar ownership de recursos
  */
-export const verifyResourceOwnership = (getUserIdFromResource: (req: Request) => string) => {
+export const verifyResourceOwnership = (
+  getUserIdFromResource: (req: Request) => string,
+) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
       res.status(HTTP_STATUS.UNAUTHORIZED).json({
@@ -350,7 +369,7 @@ export const verifyResourceOwnership = (getUserIdFromResource: (req: Request) =>
     }
 
     const resourceUserId = getUserIdFromResource(req);
-    
+
     if (resourceUserId !== req.user.id) {
       res.status(HTTP_STATUS.FORBIDDEN).json({
         success: false,

@@ -44,7 +44,7 @@ export const connectDatabase = async (): Promise<void> => {
   try {
     await db.$connect();
     logger.info('Connected to PostgreSQL database successfully');
-    
+
     // Health check de la base de datos
     await db.$queryRaw`SELECT 1`;
     logger.info('Database health check passed');
@@ -71,14 +71,14 @@ export const cleanupExpiredTokens = async (): Promise<void> => {
     // Usar el nombre correcto del modelo: refreshToken (camelCase)
     const result = await db.refreshToken.deleteMany({
       where: {
-        OR: [
-          { expiresAt: { lt: new Date() } },
-          { isRevoked: true }
-        ]
-      }
+        OR: [{ expiresAt: { lt: new Date() } }, { isRevoked: true }],
+      },
     });
-    
-    logger.info({ deletedCount: result.count }, 'Cleaned up expired refresh tokens');
+
+    logger.info(
+      { deletedCount: result.count },
+      'Cleaned up expired refresh tokens',
+    );
   } catch (error) {
     logger.error({ error }, 'Failed to cleanup expired refresh tokens');
   }
@@ -90,13 +90,10 @@ export const cleanupExpiredSessions = async (): Promise<void> => {
     // Usar el nombre correcto del modelo: userSession (camelCase)
     const result = await db.userSession.deleteMany({
       where: {
-        OR: [
-          { expiresAt: { lt: new Date() } },
-          { isActive: false }
-        ]
-      }
+        OR: [{ expiresAt: { lt: new Date() } }, { isActive: false }],
+      },
     });
-    
+
     logger.info({ deletedCount: result.count }, 'Cleaned up expired sessions');
   } catch (error) {
     logger.error({ error }, 'Failed to cleanup expired sessions');
@@ -108,14 +105,14 @@ export const cleanupExpiredVerificationTokens = async (): Promise<void> => {
   try {
     const result = await db.verificationToken.deleteMany({
       where: {
-        OR: [
-          { expiresAt: { lt: new Date() } },
-          { usedAt: { not: null } }
-        ]
-      }
+        OR: [{ expiresAt: { lt: new Date() } }, { usedAt: { not: null } }],
+      },
     });
-    
-    logger.info({ deletedCount: result.count }, 'Cleaned up expired verification tokens');
+
+    logger.info(
+      { deletedCount: result.count },
+      'Cleaned up expired verification tokens',
+    );
   } catch (error) {
     logger.error({ error }, 'Failed to cleanup expired verification tokens');
   }
@@ -127,14 +124,17 @@ export const cleanupOldLoginAttempts = async (): Promise<void> => {
     // Eliminar intentos de login más antiguos de 30 días
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
+
     const result = await db.loginAttempt.deleteMany({
       where: {
-        createdAt: { lt: thirtyDaysAgo }
-      }
+        createdAt: { lt: thirtyDaysAgo },
+      },
     });
-    
-    logger.info({ deletedCount: result.count }, 'Cleaned up old login attempts');
+
+    logger.info(
+      { deletedCount: result.count },
+      'Cleaned up old login attempts',
+    );
   } catch (error) {
     logger.error({ error }, 'Failed to cleanup old login attempts');
   }
@@ -143,15 +143,15 @@ export const cleanupOldLoginAttempts = async (): Promise<void> => {
 // Función de cleanup completa (ejecutar periódicamente)
 export const runDatabaseCleanup = async (): Promise<void> => {
   logger.info('Starting database cleanup...');
-  
+
   try {
     await Promise.allSettled([
       cleanupExpiredTokens(),
       cleanupExpiredSessions(),
       cleanupExpiredVerificationTokens(),
-      cleanupOldLoginAttempts()
+      cleanupOldLoginAttempts(),
     ]);
-    
+
     logger.info('Database cleanup completed');
   } catch (error) {
     logger.error({ error }, 'Database cleanup failed');
@@ -165,22 +165,22 @@ export const checkDatabaseHealth = async (): Promise<{
   error?: string;
 }> => {
   const startTime = Date.now();
-  
+
   try {
     await db.$queryRaw`SELECT 1`;
     const latency = Date.now() - startTime;
-    
+
     return {
       status: 'healthy',
-      latency
+      latency,
     };
   } catch (error) {
     const latency = Date.now() - startTime;
-    
+
     return {
       status: 'unhealthy',
       latency,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 };
@@ -193,33 +193,37 @@ export const getDatabaseStats = async () => {
       activeUserCount,
       refreshTokenCount,
       activeSessionCount,
-      recentLoginAttempts
+      recentLoginAttempts,
     ] = await Promise.all([
       db.user.count(),
       db.user.count({ where: { isActive: true } }),
-      db.refreshToken.count({ where: { isRevoked: false, expiresAt: { gt: new Date() } } }),
-      db.userSession.count({ where: { isActive: true, expiresAt: { gt: new Date() } } }),
+      db.refreshToken.count({
+        where: { isRevoked: false, expiresAt: { gt: new Date() } },
+      }),
+      db.userSession.count({
+        where: { isActive: true, expiresAt: { gt: new Date() } },
+      }),
       db.loginAttempt.count({
         where: {
-          createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Últimas 24 horas
-        }
-      })
+          createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }, // Últimas 24 horas
+        },
+      }),
     ]);
 
     return {
       users: {
         total: userCount,
-        active: activeUserCount
+        active: activeUserCount,
       },
       tokens: {
-        refreshTokens: refreshTokenCount
+        refreshTokens: refreshTokenCount,
       },
       sessions: {
-        active: activeSessionCount
+        active: activeSessionCount,
       },
       security: {
-        recentLoginAttempts
-      }
+        recentLoginAttempts,
+      },
     };
   } catch (error) {
     logger.error({ error }, 'Failed to get database stats');

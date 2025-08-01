@@ -63,32 +63,35 @@ export interface PaginatedUsers {
 export interface IUserService {
   // Crear usuario
   create(data: CreateUserData): Promise<User>;
-  
+
   // Buscar usuarios - retornan null si no se encuentra
   findById(id: string): Promise<User | null>;
-  findByEmail(email: string): Promise<User | null>; 
+  findByEmail(email: string): Promise<User | null>;
   findByUsername(username: string): Promise<User | null>;
-  
+
   // Actualizar usuario
   update(id: string, data: UpdateUserData): Promise<User>;
   updateProfile(id: string, data: UpdateProfileData): Promise<User>;
   updateLastLogin(id: string): Promise<void>;
   updatePassword(id: string, hashedPassword: string): Promise<void>;
-  
+
   // Listar usuarios con paginación
-  findMany(filters?: UserFilters, pagination?: PaginationOptions): Promise<PaginatedUsers>;
-  
+  findMany(
+    filters?: UserFilters,
+    pagination?: PaginationOptions,
+  ): Promise<PaginatedUsers>;
+
   // Verificar existencia
   exists(email: string, username?: string): Promise<boolean>;
-  
+
   // Sesiones
   getUserSessions(userId: string): Promise<UserSession[]>;
-  
+
   // Gestión de estado del usuario
   deactivate(id: string, reason?: string): Promise<void>;
   activate(id: string): Promise<void>;
   delete(id: string): Promise<void>;
-  
+
   // Email verification
   sendEmailVerification(userId: string): Promise<void>;
   verifyEmail(userId: string, token: string): Promise<void>;

@@ -48,24 +48,36 @@ export class AuthServiceClient {
   private setupInterceptors(): void {
     this.client.interceptors.request.use(
       (req) => {
-        logger.debug({ req: { method: req.method, url: req.url, headers: req.headers } }, 'AuthService Request');
+        logger.debug(
+          { req: { method: req.method, url: req.url, headers: req.headers } },
+          'AuthService Request',
+        );
         return req;
       },
       (error: AxiosError) => {
-        logger.error({ error: this.extractErrorDetails(error) }, 'AuthService Request Error');
+        logger.error(
+          { error: this.extractErrorDetails(error) },
+          'AuthService Request Error',
+        );
         return Promise.reject(error);
-      }
+      },
     );
 
     this.client.interceptors.response.use(
       (res) => {
-        logger.debug({ res: { status: res.status, data: res.data } }, 'AuthService Response');
+        logger.debug(
+          { res: { status: res.status, data: res.data } },
+          'AuthService Response',
+        );
         return res;
       },
       (error: AxiosError) => {
-        logger.error({ error: this.extractErrorDetails(error) }, 'AuthService Response Error');
+        logger.error(
+          { error: this.extractErrorDetails(error) },
+          'AuthService Response Error',
+        );
         return Promise.reject(this.handleError(error));
-      }
+      },
     );
   }
 
@@ -73,7 +85,7 @@ export class AuthServiceClient {
     try {
       const response = await this.client.post<TokenValidationResponse>(
         AUTH_ENDPOINTS.VERIFY_TOKEN,
-        { token }
+        { token },
       );
       return response.data;
     } catch (error: any) {
@@ -131,7 +143,9 @@ export class AuthServiceClient {
     } else {
       // Other error
       // Asegura que error.message exista antes de acceder a ella
-      return new Error(`Auth service client error: ${error.message || 'unknown error'}`);
+      return new Error(
+        `Auth service client error: ${error.message || 'unknown error'}`,
+      );
     }
   }
 
@@ -152,15 +166,19 @@ export class AuthServiceClient {
   }
 
   // Method to update auth service configuration
-  updateConfig(newConfig: { serviceUrl?: string; apiKey?: string; timeout?: number }): void {
+  updateConfig(newConfig: {
+    serviceUrl?: string;
+    apiKey?: string;
+    timeout?: number;
+  }): void {
     if (newConfig.serviceUrl) {
       this.client.defaults.baseURL = newConfig.serviceUrl;
     }
-    
+
     if (newConfig.apiKey) {
       this.client.defaults.headers['X-Service-API-Key'] = newConfig.apiKey;
     }
-    
+
     if (newConfig.timeout) {
       this.client.defaults.timeout = newConfig.timeout;
     }

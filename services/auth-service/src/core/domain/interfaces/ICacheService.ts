@@ -2,25 +2,31 @@
 import { z } from 'zod';
 
 // Schemas de validación
-export const CacheOptionsSchema = z.object({
-  ttl: z.number().positive().optional(),
-  nx: z.boolean().optional(),
-}).strict();
+export const CacheOptionsSchema = z
+  .object({
+    ttl: z.number().positive().optional(),
+    nx: z.boolean().optional(),
+  })
+  .strict();
 
-export const RateLimitResultSchema = z.object({
-  count: z.number().nonnegative(),
-  resetTime: z.number().positive(),
-}).strict();
+export const RateLimitResultSchema = z
+  .object({
+    count: z.number().nonnegative(),
+    resetTime: z.number().positive(),
+  })
+  .strict();
 
 export const SessionDataSchema = z.record(z.unknown());
 
-export const RefreshTokenDataSchema = z.object({
-  userId: z.string().min(1),
-  tokenId: z.string().min(1),
-  issuedAt: z.number().positive(),
-  expiresAt: z.number().positive(),
-  deviceInfo: z.string().optional(),
-}).strict();
+export const RefreshTokenDataSchema = z
+  .object({
+    userId: z.string().min(1),
+    tokenId: z.string().min(1),
+    issuedAt: z.number().positive(),
+    expiresAt: z.number().positive(),
+    deviceInfo: z.string().optional(),
+  })
+  .strict();
 
 // Tipos inferidos de los schemas
 export type CacheOptions = z.infer<typeof CacheOptionsSchema>;
@@ -34,7 +40,12 @@ export interface ICacheService {
   get<T>(key: string): Promise<T | null>;
   set<T>(key: string, value: T, options?: CacheOptions): Promise<void>;
   del(key: string): Promise<number>;
-  setJson<T>(key: string, value: T, ttl?: number, options?: CacheOptions): Promise<void>;
+  setJson<T>(
+    key: string,
+    value: T,
+    ttl?: number,
+    options?: CacheOptions,
+  ): Promise<void>;
   getJson<T>(key: string): Promise<T | null>;
   exists(key: string): Promise<boolean>;
 
@@ -55,16 +66,27 @@ export interface ICacheService {
   hgetall(key: string): Promise<Record<string, string>>;
 
   // Utilidades específicas del dominio
-  storeSession(sessionId: string, sessionData: SessionData, ttl: number): Promise<void>;
+  storeSession(
+    sessionId: string,
+    sessionData: SessionData,
+    ttl: number,
+  ): Promise<void>;
   getSession<T = SessionData>(sessionId: string): Promise<T | null>;
   deleteSession(sessionId: string): Promise<boolean>;
 
-  storeRefreshToken(tokenId: string, tokenData: RefreshTokenData, ttl: number): Promise<void>;
+  storeRefreshToken(
+    tokenId: string,
+    tokenData: RefreshTokenData,
+    ttl: number,
+  ): Promise<void>;
   getRefreshToken<T = RefreshTokenData>(tokenId: string): Promise<T | null>;
   deleteRefreshToken(tokenId: string): Promise<boolean>;
 
   // Rate limiting
-  incrementRateLimit(key: string, windowSeconds: number): Promise<RateLimitResult>;
+  incrementRateLimit(
+    key: string,
+    windowSeconds: number,
+  ): Promise<RateLimitResult>;
 
   // Login attempts tracking
   recordLoginAttempt(email: string): Promise<number>;
@@ -120,19 +142,27 @@ export class CacheValidationHelpers {
     return RefreshTokenDataSchema.parse(data);
   }
 
-  static safeParseCacheOptions(data: unknown): z.SafeParseReturnType<unknown, CacheOptions> {
+  static safeParseCacheOptions(
+    data: unknown,
+  ): z.SafeParseReturnType<unknown, CacheOptions> {
     return CacheOptionsSchema.safeParse(data);
   }
 
-  static safeParseRateLimitResult(data: unknown): z.SafeParseReturnType<unknown, RateLimitResult> {
+  static safeParseRateLimitResult(
+    data: unknown,
+  ): z.SafeParseReturnType<unknown, RateLimitResult> {
     return RateLimitResultSchema.safeParse(data);
   }
 
-  static safeParseSessionData(data: unknown): z.SafeParseReturnType<unknown, SessionData> {
+  static safeParseSessionData(
+    data: unknown,
+  ): z.SafeParseReturnType<unknown, SessionData> {
     return SessionDataSchema.safeParse(data);
   }
 
-  static safeParseRefreshTokenData(data: unknown): z.SafeParseReturnType<unknown, RefreshTokenData> {
+  static safeParseRefreshTokenData(
+    data: unknown,
+  ): z.SafeParseReturnType<unknown, RefreshTokenData> {
     return RefreshTokenDataSchema.safeParse(data);
   }
 }
@@ -141,10 +171,10 @@ export class CacheValidationHelpers {
 export function validateCacheMethod<T extends (...args: any[]) => any>(
   target: any,
   propertyName: string,
-  descriptor: TypedPropertyDescriptor<T>
+  descriptor: TypedPropertyDescriptor<T>,
 ): TypedPropertyDescriptor<T> | void {
   const method = descriptor.value!;
-  
+
   descriptor.value = function (this: any, ...args: any[]) {
     // Aquí se puede agregar lógica de validación específica por método
     return method.apply(this, args);

@@ -63,7 +63,7 @@ router.use(authenticateToken);
 router.get(
   '/',
   validateSchema(getTasksSchema),
-  taskController.getTasks.bind(taskController)
+  taskController.getTasks.bind(taskController),
 );
 
 /**
@@ -87,7 +87,7 @@ router.get(
 router.post(
   '/',
   validateSchema(createTaskSchema),
-  taskController.createTask.bind(taskController)
+  taskController.createTask.bind(taskController),
 );
 
 /**
@@ -111,7 +111,7 @@ router.post(
 router.get(
   '/:id',
   validateSchema(getTaskByIdSchema),
-  taskController.getTaskById.bind(taskController)
+  taskController.getTaskById.bind(taskController),
 );
 
 /**
@@ -141,7 +141,7 @@ router.get(
 router.put(
   '/:id',
   validateSchema(updateTaskSchema),
-  taskController.updateTask.bind(taskController)
+  taskController.updateTask.bind(taskController),
 );
 
 /**
@@ -175,7 +175,7 @@ router.put(
 router.patch(
   '/:id/status',
   validateSchema(updateTaskStatusSchema),
-  taskController.updateTaskStatus.bind(taskController)
+  taskController.updateTaskStatus.bind(taskController),
 );
 
 /**
@@ -209,7 +209,7 @@ router.patch(
 router.patch(
   '/:id/priority',
   validateSchema(updateTaskPrioritySchema),
-  taskController.updateTaskPriority.bind(taskController)
+  taskController.updateTaskPriority.bind(taskController),
 );
 
 /**
@@ -233,7 +233,7 @@ router.patch(
 router.delete(
   '/:id',
   validateSchema(deleteTaskSchema),
-  taskController.deleteTask.bind(taskController)
+  taskController.deleteTask.bind(taskController),
 );
 
 // ===== RUTAS ESPECIALIZADAS =====
@@ -242,39 +242,39 @@ router.get('/overdue', taskController.getOverdueTasks.bind(taskController));
 router.get(
   '/search',
   validateSchema(searchTasksSchema),
-  taskController.searchTasks.bind(taskController)
+  taskController.searchTasks.bind(taskController),
 );
 router.get('/export', taskController.exportUserTasks.bind(taskController));
 router.get(
   '/productivity',
-  taskController.getProductivityStats.bind(taskController)
+  taskController.getProductivityStats.bind(taskController),
 );
 router.get(
   '/category/:categoryId',
   validateSchema(getTasksByCategorySchema),
-  taskController.getTasksByCategory.bind(taskController)
+  taskController.getTasksByCategory.bind(taskController),
 );
 router.patch(
   '/:id/complete',
   validateSchema(markTaskAsCompletedSchema),
-  taskController.markTaskAsCompleted.bind(taskController)
+  taskController.markTaskAsCompleted.bind(taskController),
 );
 router.post(
   '/:id/duplicate',
   validateSchema(duplicateTaskSchema),
-  taskController.duplicateTask.bind(taskController)
+  taskController.duplicateTask.bind(taskController),
 );
 
 // ===== OPERACIONES EN LOTE =====
 router.patch(
   '/bulk/status',
   validateSchema(bulkUpdateStatusSchema),
-  taskController.bulkUpdateTaskStatus.bind(taskController)
+  taskController.bulkUpdateTaskStatus.bind(taskController),
 );
 router.delete(
   '/bulk',
   validateSchema(bulkDeleteTasksSchema),
-  taskController.bulkDeleteTasks.bind(taskController)
+  taskController.bulkDeleteTasks.bind(taskController),
 );
 
 export default router;

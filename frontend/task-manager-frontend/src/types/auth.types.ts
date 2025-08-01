@@ -149,7 +149,7 @@ export interface AuthContextType {
   isLoading: boolean;
   user: User | null;
   error: string | null;
-  
+
   // Actions
   login: (credentials: LoginCredentials) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
@@ -250,7 +250,9 @@ export interface UseAuthFormReturn<T> {
   isSubmitting: boolean;
   isValid: boolean;
   handleChange: (field: keyof T, value: any) => void;
-  handleSubmit: (onSubmit: (data: T) => Promise<void>) => (e: React.FormEvent) => Promise<void>;
+  handleSubmit: (
+    onSubmit: (data: T) => Promise<void>,
+  ) => (e: React.FormEvent) => Promise<void>;
   resetForm: () => void;
   setError: (field: keyof T, message: string) => void;
   clearErrors: () => void;
@@ -296,7 +298,7 @@ export interface ProtectedRouteProps {
 }
 
 // Event Types
-export type AuthEventType = 
+export type AuthEventType =
   | 'login'
   | 'logout'
   | 'register'
@@ -314,4 +316,5 @@ export interface AuthEvent {
 
 // Constants Types
 export type AuthErrorCode = keyof typeof import('../lib/constants').ERROR_CODES;
-export type HttpStatusCode = keyof typeof import('../lib/constants').HTTP_STATUS;
+export type HttpStatusCode =
+  keyof typeof import('../lib/constants').HTTP_STATUS;

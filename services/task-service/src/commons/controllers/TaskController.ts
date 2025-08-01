@@ -44,13 +44,13 @@ export class TaskController {
   getTasks = async (
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<void> => {
     try {
       const userId = req.user!.id;
       const paginationParams = this.extractPaginationParamsWithErrorHandling(
         req,
-        res
+        res,
       );
       if (!paginationParams) return;
 
@@ -61,14 +61,14 @@ export class TaskController {
         filters,
         paginationParams.sort,
         paginationParams.page,
-        paginationParams.limit
+        paginationParams.limit,
       );
 
       const response = this.createSuccessResponse(
         SUCCESS_MESSAGES.TASKS_RETRIEVED,
         result.tasks,
         req,
-        { pagination: result.meta }
+        { pagination: result.meta },
       );
 
       res.status(HTTP_STATUS.OK).json(response);
@@ -87,7 +87,7 @@ export class TaskController {
   getTaskById = async (
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<void> => {
     try {
       const { id } = req.params;
@@ -99,7 +99,7 @@ export class TaskController {
         this.sendNotFoundResponse(
           res,
           ERROR_MESSAGES.TASK_NOT_FOUND,
-          ERROR_CODES.TASK_NOT_FOUND
+          ERROR_CODES.TASK_NOT_FOUND,
         );
         return;
       }
@@ -107,7 +107,7 @@ export class TaskController {
       const response = this.createSuccessResponse(
         'Task retrieved successfully',
         task,
-        req
+        req,
       );
 
       res.status(HTTP_STATUS.OK).json(response);
@@ -119,7 +119,7 @@ export class TaskController {
   createTask = async (
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<void> => {
     try {
       const userId = req.user!.id;
@@ -128,7 +128,7 @@ export class TaskController {
       const response = this.createSuccessResponse(
         SUCCESS_MESSAGES.TASK_CREATED,
         task,
-        req
+        req,
       );
       res.status(HTTP_STATUS.CREATED).json(response);
     } catch (error) {
@@ -139,7 +139,7 @@ export class TaskController {
   updateTask = async (
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<void> => {
     try {
       const { id } = req.params;
@@ -149,7 +149,7 @@ export class TaskController {
       const response = this.createSuccessResponse(
         SUCCESS_MESSAGES.TASK_UPDATED,
         task,
-        req
+        req,
       );
       res.status(HTTP_STATUS.OK).json(response);
     } catch (error) {
@@ -160,7 +160,7 @@ export class TaskController {
   updateTaskStatus = async (
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<void> => {
     try {
       const { id } = req.params;
@@ -171,7 +171,7 @@ export class TaskController {
         this.sendValidationErrorResponse(
           res,
           'Invalid task status provided',
-          ERROR_CODES.INVALID_TASK_STATUS
+          ERROR_CODES.INVALID_TASK_STATUS,
         );
         return;
       }
@@ -179,12 +179,12 @@ export class TaskController {
       const task = await this.taskService.updateTaskStatus(
         id,
         userId,
-        status as TaskStatus
+        status as TaskStatus,
       );
       const response = this.createSuccessResponse(
         SUCCESS_MESSAGES.TASK_STATUS_UPDATED,
         task,
-        req
+        req,
       );
       res.status(HTTP_STATUS.OK).json(response);
     } catch (error) {
@@ -195,7 +195,7 @@ export class TaskController {
   updateTaskPriority = async (
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<void> => {
     try {
       const { id } = req.params;
@@ -206,7 +206,7 @@ export class TaskController {
         this.sendValidationErrorResponse(
           res,
           'Invalid task priority provided',
-          ERROR_CODES.INVALID_TASK_PRIORITY
+          ERROR_CODES.INVALID_TASK_PRIORITY,
         );
         return;
       }
@@ -214,12 +214,12 @@ export class TaskController {
       const task = await this.taskService.updateTaskPriority(
         id,
         userId,
-        priority as TaskPriority
+        priority as TaskPriority,
       );
       const response = this.createSuccessResponse(
         SUCCESS_MESSAGES.TASK_PRIORITY_UPDATED,
         task,
-        req
+        req,
       );
       res.status(HTTP_STATUS.OK).json(response);
     } catch (error) {
@@ -230,7 +230,7 @@ export class TaskController {
   deleteTask = async (
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<void> => {
     try {
       const { id } = req.params;
@@ -239,7 +239,7 @@ export class TaskController {
       const response = this.createSuccessResponse(
         SUCCESS_MESSAGES.TASK_DELETED,
         undefined,
-        req
+        req,
       );
       res.status(HTTP_STATUS.OK).json(response);
     } catch (error) {
@@ -247,14 +247,18 @@ export class TaskController {
     }
   };
 
-  getTaskStats = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  getTaskStats = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const userId = req.user!.id;
       const stats = await this.taskService.getUserStats(userId);
       const response = this.createSuccessResponse(
         SUCCESS_MESSAGES.STATS_RETRIEVED,
         stats,
-        req
+        req,
       );
       res.status(HTTP_STATUS.OK).json(response);
     } catch (error) {
@@ -262,7 +266,11 @@ export class TaskController {
     }
   };
 
-  markTaskAsCompleted = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  markTaskAsCompleted = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const { id } = req.params;
       const userId = req.user!.id;
@@ -270,7 +278,7 @@ export class TaskController {
       const response = this.createSuccessResponse(
         SUCCESS_MESSAGES.TASK_COMPLETED,
         task,
-        req
+        req,
       );
       res.status(HTTP_STATUS.OK).json(response);
     } catch (error) {
@@ -278,23 +286,30 @@ export class TaskController {
     }
   };
 
-  getTasksByCategory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  getTasksByCategory = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const { categoryId } = req.params;
       const userId = req.user!.id;
-      const paginationParams = this.extractPaginationParamsWithErrorHandling(req, res);
+      const paginationParams = this.extractPaginationParamsWithErrorHandling(
+        req,
+        res,
+      );
       if (!paginationParams) return;
       const result = await this.taskService.getTasksByCategory(
         categoryId,
         userId,
         paginationParams.page,
-        paginationParams.limit
+        paginationParams.limit,
       );
       const response = this.createSuccessResponse(
         SUCCESS_MESSAGES.TASKS_RETRIEVED,
         result.tasks,
         req,
-        { pagination: result.meta }
+        { pagination: result.meta },
       );
       res.status(HTTP_STATUS.OK).json(response);
     } catch (error) {
@@ -302,12 +317,19 @@ export class TaskController {
     }
   };
 
-  searchTasks = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  searchTasks = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const { q: query } = req.query;
       const userId = req.user!.id;
       const validatedQuery = validateSearchQuery(query);
-      const paginationParams = this.extractPaginationParamsWithErrorHandling(req, res);
+      const paginationParams = this.extractPaginationParamsWithErrorHandling(
+        req,
+        res,
+      );
       if (!paginationParams) return;
       const filters = this.buildTaskFilters(req.query);
       const result = await this.taskService.searchTasks(
@@ -315,13 +337,13 @@ export class TaskController {
         validatedQuery,
         filters,
         paginationParams.page,
-        paginationParams.limit
+        paginationParams.limit,
       );
       const response = this.createSuccessResponse(
         'Search completed successfully',
         result.tasks,
         req,
-        { pagination: result.meta }
+        { pagination: result.meta },
       );
       res.status(HTTP_STATUS.OK).json(response);
     } catch (error) {
@@ -329,14 +351,18 @@ export class TaskController {
     }
   };
 
-  getOverdueTasks = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  getOverdueTasks = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const userId = req.user!.id;
       const tasks = await this.taskService.getOverdueTasks(userId);
       const response = this.createSuccessResponse(
         'Overdue tasks retrieved successfully',
         tasks,
-        req
+        req,
       );
       res.status(HTTP_STATUS.OK).json(response);
     } catch (error) {
@@ -344,20 +370,32 @@ export class TaskController {
     }
   };
 
-  bulkUpdateTaskStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  bulkUpdateTaskStatus = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const { taskIds, status } = req.body;
       const userId = req.user!.id;
       const validatedTaskIds = validateBulkTaskIds(taskIds);
       if (!status || !isValidTaskStatus(status)) {
-        this.sendValidationErrorResponse(res, 'Invalid task status provided', ERROR_CODES.INVALID_TASK_STATUS);
+        this.sendValidationErrorResponse(
+          res,
+          'Invalid task status provided',
+          ERROR_CODES.INVALID_TASK_STATUS,
+        );
         return;
       }
-      const result = await this.taskService.bulkUpdateStatus(validatedTaskIds, userId, status as TaskStatus);
+      const result = await this.taskService.bulkUpdateStatus(
+        validatedTaskIds,
+        userId,
+        status as TaskStatus,
+      );
       const response = this.createSuccessResponse(
         `Bulk operation completed: ${result.successfullyProcessed} tasks updated`,
         result,
-        req
+        req,
       );
       res.status(HTTP_STATUS.OK).json(response);
     } catch (error) {
@@ -365,16 +403,23 @@ export class TaskController {
     }
   };
 
-  bulkDeleteTasks = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  bulkDeleteTasks = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const { taskIds } = req.body;
       const userId = req.user!.id;
       const validatedTaskIds = validateBulkTaskIds(taskIds);
-      const result = await this.taskService.bulkDeleteTasks(validatedTaskIds, userId);
+      const result = await this.taskService.bulkDeleteTasks(
+        validatedTaskIds,
+        userId,
+      );
       const response = this.createSuccessResponse(
         `Bulk deletion completed: ${result.successfullyProcessed} tasks deleted`,
         result,
-        req
+        req,
       );
       res.status(HTTP_STATUS.OK).json(response);
     } catch (error) {
@@ -382,16 +427,26 @@ export class TaskController {
     }
   };
 
-  duplicateTask = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  duplicateTask = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const { id } = req.params;
       const userId = req.user!.id;
-      const modifications = req.body ? this.extractServiceCreateTaskData(req.body) : undefined;
-      const task = await this.taskService.duplicateTask(id, userId, modifications);
+      const modifications = req.body
+        ? this.extractServiceCreateTaskData(req.body)
+        : undefined;
+      const task = await this.taskService.duplicateTask(
+        id,
+        userId,
+        modifications,
+      );
       const response = this.createSuccessResponse(
         'Task duplicated successfully',
         task,
-        req
+        req,
       );
       res.status(HTTP_STATUS.CREATED).json(response);
     } catch (error) {
@@ -399,14 +454,18 @@ export class TaskController {
     }
   };
 
-  getProductivityStats = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  getProductivityStats = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const userId = req.user!.id;
       const stats = await this.taskService.getProductivityStats(userId);
       const response = this.createSuccessResponse(
         'Productivity statistics retrieved successfully',
         stats,
-        req
+        req,
       );
       res.status(HTTP_STATUS.OK).json(response);
     } catch (error) {
@@ -414,19 +473,27 @@ export class TaskController {
     }
   };
 
-  exportUserTasks = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  exportUserTasks = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const userId = req.user!.id;
       const { format = 'json' } = req.query;
       if (!this.isValidExportFormat(format as string)) {
-        this.sendValidationErrorResponse(res, 'Export format must be json, csv, or xml', ERROR_CODES.VALIDATION_ERROR);
+        this.sendValidationErrorResponse(
+          res,
+          'Export format must be json, csv, or xml',
+          ERROR_CODES.VALIDATION_ERROR,
+        );
         return;
       }
       const filters = this.buildTaskFilters(req.query);
       const exportData = await this.taskService.exportUserTasks(
         userId,
         format as 'json' | 'csv' | 'xml',
-        filters
+        filters,
       );
       this.setExportHeaders(res, format as string);
       res.status(HTTP_STATUS.OK).send(exportData);
@@ -445,7 +512,9 @@ export class TaskController {
     return filters;
   }
 
-  private extractServiceCreateTaskData(body: any): Partial<ServiceCreateTaskData> {
+  private extractServiceCreateTaskData(
+    body: any,
+  ): Partial<ServiceCreateTaskData> {
     const data: Partial<ServiceCreateTaskData> = {};
     if (body.title !== undefined) data.title = body.title;
     if (body.description !== undefined) data.description = body.description;
@@ -456,12 +525,16 @@ export class TaskController {
   private extractUpdateTaskData(body: any): UpdateTaskData {
     const updateData: UpdateTaskData = {};
     if (body.title !== undefined) updateData.title = body.title;
-    if (body.description !== undefined) updateData.description = body.description;
+    if (body.description !== undefined)
+      updateData.description = body.description;
     // ... more fields
     return updateData;
   }
 
-  private extractPaginationParamsWithErrorHandling(req: Request, res: Response): PaginationParams | null {
+  private extractPaginationParamsWithErrorHandling(
+    req: Request,
+    res: Response,
+  ): PaginationParams | null {
     try {
       return extractPaginationParams(req);
     } catch (error) {
@@ -469,7 +542,7 @@ export class TaskController {
         res.status(error.statusCode).json({
           success: false,
           message: error.message,
-          error: { code: error.code, details: error.message }
+          error: { code: error.code, details: error.message },
         });
         return null;
       }
@@ -485,13 +558,21 @@ export class TaskController {
     const contentTypes: { [key: string]: string } = {
       json: 'application/json',
       csv: 'text/csv',
-      xml: 'application/xml'
+      xml: 'application/xml',
     };
     res.setHeader('Content-Type', contentTypes[format]);
-    res.setHeader('Content-Disposition', `attachment; filename="tasks.${format}"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="tasks.${format}"`,
+    );
   }
 
-  private createSuccessResponse(message: string, data?: any, req?: Request, additionalMeta?: any): ApiResponse {
+  private createSuccessResponse(
+    message: string,
+    data?: any,
+    req?: Request,
+    additionalMeta?: any,
+  ): ApiResponse {
     return {
       success: true,
       message,
@@ -504,22 +585,30 @@ export class TaskController {
     };
   }
 
-  private sendNotFoundResponse(res: Response, message: string, code: string): void {
+  private sendNotFoundResponse(
+    res: Response,
+    message: string,
+    code: string,
+  ): void {
     res.status(HTTP_STATUS.NOT_FOUND).json({
       success: false,
       message,
-      error: { code }
+      error: { code },
     });
   }
 
-  private sendValidationErrorResponse(res: Response, details: string, code: string): void {
+  private sendValidationErrorResponse(
+    res: Response,
+    details: string,
+    code: string,
+  ): void {
     res.status(HTTP_STATUS.BAD_REQUEST).json({
       success: false,
       message: ERROR_MESSAGES.VALIDATION_ERROR,
       error: {
         code,
-        details
-      }
+        details,
+      },
     });
   }
 

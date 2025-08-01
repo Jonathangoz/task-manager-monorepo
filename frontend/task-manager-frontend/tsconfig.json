@@ -38,18 +38,13 @@
       "@/context/*": ["./src/context/*"],
       "@/hooks/*": ["./src/hooks/*"],
       "@/lib/*": ["./src/lib/*"],
-      "@/styles/*": ["./src/styles/*"],  
+      "@/styles/*": ["./src/styles/*"],
       "@/types/*": ["./src/types/*"]
     },
     "declaration": false,
     "sourceMap": false
   },
-  "include": [
-    "next-env.d.ts",
-    "**/*.ts", 
-    "**/*.tsx",
-    ".next/types/**/*.ts"
-  ],
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": [
     "node_modules",
     ".next",

@@ -12,7 +12,7 @@ describe('POST /api/v1/auth/login', () => {
   beforeEach(async () => {
     testDatabase = new TestDatabase(testDb);
     testRedis = new TestRedis();
-    
+
     await testDatabase.cleanAll();
     await testRedis.flush();
   });
@@ -21,7 +21,7 @@ describe('POST /api/v1/auth/login', () => {
     // Arrange
     await testDatabase.createTestUser({
       email: authFixtures.validLogin.email,
-      password: 'hashed-password' // Usar password ya hasheado
+      password: 'hashed-password', // Usar password ya hasheado
     });
 
     // Act

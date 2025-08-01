@@ -3,12 +3,12 @@
 // Tipos de dominio puros - Independientes de implementación
 // ==============================================
 
-import { 
-  TASK_STATUSES, 
-  TASK_PRIORITIES, 
-  TaskFilters, 
-  SortOptions, 
-  PaginationMeta 
+import {
+  TASK_STATUSES,
+  TASK_PRIORITIES,
+  TaskFilters,
+  SortOptions,
+  PaginationMeta,
 } from '@/utils/constants';
 
 // ==============================================
@@ -20,7 +20,9 @@ export type TaskPriority = keyof typeof TASK_PRIORITIES;
 
 // Valores literales para runtime validation
 export const TaskStatusValues = Object.keys(TASK_STATUSES) as TaskStatus[];
-export const TaskPriorityValues = Object.keys(TASK_PRIORITIES) as TaskPriority[];
+export const TaskPriorityValues = Object.keys(
+  TASK_PRIORITIES,
+) as TaskPriority[];
 
 // ==============================================
 // INTERFACES DE DOMINIO
@@ -104,29 +106,31 @@ export const isValidTaskStatus = (status: string): status is TaskStatus => {
   return TaskStatusValues.includes(status as TaskStatus);
 };
 
-export const isValidTaskPriority = (priority: string): priority is TaskPriority => {
+export const isValidTaskPriority = (
+  priority: string,
+): priority is TaskPriority => {
   return TaskPriorityValues.includes(priority as TaskPriority);
 };
 
 export const validateTaskData = (data: CreateTaskData): string[] => {
   const errors: string[] = [];
-  
+
   if (!data.title?.trim()) {
     errors.push('Title is required');
   }
-  
+
   if (data.status && !isValidTaskStatus(data.status)) {
     errors.push('Invalid task status');
   }
-  
+
   if (data.priority && !isValidTaskPriority(data.priority)) {
     errors.push('Invalid task priority');
   }
-  
+
   if (data.dueDate && data.dueDate < new Date()) {
     errors.push('Due date cannot be in the past');
   }
-  
+
   return errors;
 };
 
@@ -134,31 +138,32 @@ export const validateTaskData = (data: CreateTaskData): string[] => {
 // MAPPERS: PRISMA ↔ DOMAIN
 // ==============================================
 
-import { 
-    Task as PrismaTask, 
-    TaskStatus as PrismaTaskStatus, 
-    Priority as PrismaPriority, 
-    Category as PrismaCategory } from '@prisma/client';
+import {
+  Task as PrismaTask,
+  TaskStatus as PrismaTaskStatus,
+  Priority as PrismaPriority,
+  Category as PrismaCategory,
+} from '@prisma/client';
 
 // Mappers para Status
 export const toPrismaStatus = (status: TaskStatus): PrismaTaskStatus => {
   const statusMap: Record<TaskStatus, PrismaTaskStatus> = {
-    'PENDING': 'PENDING',
-    'IN_PROGRESS': 'IN_PROGRESS', 
-    'COMPLETED': 'COMPLETED',
-    'CANCELLED': 'CANCELLED',
-    'ON_HOLD': 'ON_HOLD',
+    PENDING: 'PENDING',
+    IN_PROGRESS: 'IN_PROGRESS',
+    COMPLETED: 'COMPLETED',
+    CANCELLED: 'CANCELLED',
+    ON_HOLD: 'ON_HOLD',
   };
   return statusMap[status];
 };
 
 export const fromPrismaStatus = (status: PrismaTaskStatus): TaskStatus => {
   const statusMap: Record<PrismaTaskStatus, TaskStatus> = {
-    'PENDING': 'PENDING',
-    'IN_PROGRESS': 'IN_PROGRESS',
-    'COMPLETED': 'COMPLETED', 
-    'CANCELLED': 'CANCELLED',
-    'ON_HOLD': 'ON_HOLD',
+    PENDING: 'PENDING',
+    IN_PROGRESS: 'IN_PROGRESS',
+    COMPLETED: 'COMPLETED',
+    CANCELLED: 'CANCELLED',
+    ON_HOLD: 'ON_HOLD',
   };
   return statusMap[status];
 };
@@ -166,20 +171,20 @@ export const fromPrismaStatus = (status: PrismaTaskStatus): TaskStatus => {
 // Mappers para Priority
 export const toPrismaPriority = (priority: TaskPriority): PrismaPriority => {
   const priorityMap: Record<TaskPriority, PrismaPriority> = {
-    'LOW': 'LOW',
-    'MEDIUM': 'MEDIUM',
-    'HIGH': 'HIGH', 
-    'URGENT': 'URGENT',
+    LOW: 'LOW',
+    MEDIUM: 'MEDIUM',
+    HIGH: 'HIGH',
+    URGENT: 'URGENT',
   };
   return priorityMap[priority];
 };
 
 export const fromPrismaPriority = (priority: PrismaPriority): TaskPriority => {
   const priorityMap: Record<PrismaPriority, TaskPriority> = {
-    'LOW': 'LOW',
-    'MEDIUM': 'MEDIUM',
-    'HIGH': 'HIGH',
-    'URGENT': 'URGENT',
+    LOW: 'LOW',
+    MEDIUM: 'MEDIUM',
+    HIGH: 'HIGH',
+    URGENT: 'URGENT',
   };
   return priorityMap[priority];
 };
@@ -207,8 +212,12 @@ export const fromPrismaTask = (prismaTask: PrismaTask): DomainTask => ({
 export const toPrismaTaskCreate = (domainData: CreateTaskData) => ({
   title: domainData.title,
   description: domainData.description,
-  status: domainData.status ? toPrismaStatus(domainData.status) : 'PENDING' as PrismaTaskStatus,
-  priority: domainData.priority ? toPrismaPriority(domainData.priority) : 'MEDIUM' as PrismaPriority,
+  status: domainData.status
+    ? toPrismaStatus(domainData.status)
+    : ('PENDING' as PrismaTaskStatus),
+  priority: domainData.priority
+    ? toPrismaPriority(domainData.priority)
+    : ('MEDIUM' as PrismaPriority),
   dueDate: domainData.dueDate,
   userId: domainData.userId,
   categoryId: domainData.categoryId,
@@ -219,19 +228,33 @@ export const toPrismaTaskCreate = (domainData: CreateTaskData) => ({
 
 export const toPrismaTaskUpdate = (domainData: UpdateTaskData) => ({
   ...(domainData.title && { title: domainData.title }),
-  ...(domainData.description !== undefined && { description: domainData.description }),
+  ...(domainData.description !== undefined && {
+    description: domainData.description,
+  }),
   ...(domainData.status && { status: toPrismaStatus(domainData.status) }),
-  ...(domainData.priority && { priority: toPrismaPriority(domainData.priority) }),
+  ...(domainData.priority && {
+    priority: toPrismaPriority(domainData.priority),
+  }),
   ...(domainData.dueDate !== undefined && { dueDate: domainData.dueDate }),
-  ...(domainData.categoryId !== undefined && { categoryId: domainData.categoryId }),
+  ...(domainData.categoryId !== undefined && {
+    categoryId: domainData.categoryId,
+  }),
   ...(domainData.tags !== undefined && { tags: domainData.tags }),
-  ...(domainData.estimatedHours !== undefined && { estimatedHours: domainData.estimatedHours }),
-  ...(domainData.actualHours !== undefined && { actualHours: domainData.actualHours }),
-  ...(domainData.attachments !== undefined && { attachments: domainData.attachments }),
+  ...(domainData.estimatedHours !== undefined && {
+    estimatedHours: domainData.estimatedHours,
+  }),
+  ...(domainData.actualHours !== undefined && {
+    actualHours: domainData.actualHours,
+  }),
+  ...(domainData.attachments !== undefined && {
+    attachments: domainData.attachments,
+  }),
 });
 
 // Mapper para Category
-export const fromPrismaCategory = (prismaCategory: PrismaCategory): DomainCategory => ({
+export const fromPrismaCategory = (
+  prismaCategory: PrismaCategory,
+): DomainCategory => ({
   id: prismaCategory.id,
   name: prismaCategory.name,
   description: prismaCategory.description || undefined,
@@ -247,7 +270,9 @@ export const fromPrismaCategory = (prismaCategory: PrismaCategory): DomainCatego
 // FACTORY FUNCTIONS
 // ==============================================
 
-export const createTaskDefaults = (partial: Partial<CreateTaskData>): CreateTaskData => ({
+export const createTaskDefaults = (
+  partial: Partial<CreateTaskData>,
+): CreateTaskData => ({
   title: '',
   status: 'PENDING',
   priority: 'MEDIUM',
@@ -258,16 +283,18 @@ export const createTaskDefaults = (partial: Partial<CreateTaskData>): CreateTask
 });
 
 export const createTaskWithCategory = (
-  task: DomainTask, 
-  category?: DomainCategory
+  task: DomainTask,
+  category?: DomainCategory,
 ): TaskWithCategory => ({
   ...task,
-  category: category ? {
-    id: category.id,
-    name: category.name,
-    color: category.color || '#6366f1',
-    icon: category.icon || 'folder',
-  } : undefined,
+  category: category
+    ? {
+        id: category.id,
+        name: category.name,
+        color: category.color || '#6366f1',
+        icon: category.icon || 'folder',
+      }
+    : undefined,
 });
 
 // ==============================================
@@ -289,11 +316,11 @@ export const isTaskOverdue = (task: DomainTask): boolean => {
 
 export const getTaskStatusPriority = (status: TaskStatus): number => {
   const priorities = {
-    'COMPLETED': 0,
-    'CANCELLED': 1,
-    'PENDING': 2,
-    'ON_HOLD': 3,
-    'IN_PROGRESS': 4,
+    COMPLETED: 0,
+    CANCELLED: 1,
+    PENDING: 2,
+    ON_HOLD: 3,
+    IN_PROGRESS: 4,
   };
   return priorities[status];
 };
@@ -304,6 +331,6 @@ export const getTaskStatusPriority = (status: TaskStatus): number => {
 
 export type {
   TaskFilters,
-  SortOptions, 
+  SortOptions,
   PaginationMeta,
 } from '@/utils/constants';

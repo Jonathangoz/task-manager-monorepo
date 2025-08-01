@@ -1,13 +1,17 @@
 // src/core/infrastructure/cache/RedisCache.ts
-import { ICacheService, CacheData, CacheStats } from '@/core/domain/interfaces/ICacheService';
+import {
+  ICacheService,
+  CacheData,
+  CacheStats,
+} from '@/core/domain/interfaces/ICacheService';
 import { taskRedisConnection } from '@/config/redis';
 import { logger } from '@/utils/logger';
-import { 
-  CACHE_TTL, 
-  CACHE_KEYS, 
-  ERROR_CODES, 
+import {
+  CACHE_TTL,
+  CACHE_KEYS,
+  ERROR_CODES,
   EVENT_TYPES,
-  ERROR_MESSAGES 
+  ERROR_MESSAGES,
 } from '@/utils/constants';
 import Redis from 'ioredis';
 
@@ -35,24 +39,30 @@ export class RedisCache implements ICacheService {
   async set<T>(key: string, value: T, ttlSeconds?: number): Promise<void> {
     try {
       const serializedValue = JSON.stringify(value);
-      
+
       if (ttlSeconds) {
         await this.redis.getClient().setex(key, ttlSeconds, serializedValue);
       } else {
         await this.redis.getClient().set(key, serializedValue);
       }
-      
-      logger.debug({ 
-        key, 
-        ttl: ttlSeconds,
-        event: EVENT_TYPES.CACHE_HIT 
-      }, 'Caché establecido exitosamente');
+
+      logger.debug(
+        {
+          key,
+          ttl: ttlSeconds,
+          event: EVENT_TYPES.CACHE_HIT,
+        },
+        'Caché establecido exitosamente',
+      );
     } catch (error) {
-      logger.error({ 
-        error, 
-        key,
-        event: EVENT_TYPES.CACHE_ERROR 
-      }, 'Falló operación de establecer caché');
+      logger.error(
+        {
+          error,
+          key,
+          event: EVENT_TYPES.CACHE_ERROR,
+        },
+        'Falló operación de establecer caché',
+      );
       // No lanzar error, las fallas de caché no deben romper la aplicación
     }
   }
@@ -60,29 +70,38 @@ export class RedisCache implements ICacheService {
   async get<T>(key: string): Promise<T | null> {
     try {
       const cached = await this.redis.getClient().get(key);
-      
+
       if (cached) {
         this.stats.hits++;
-        logger.debug({ 
-          key,
-          event: EVENT_TYPES.CACHE_HIT 
-        }, 'Cache hit');
+        logger.debug(
+          {
+            key,
+            event: EVENT_TYPES.CACHE_HIT,
+          },
+          'Cache hit',
+        );
         return JSON.parse(cached) as T;
       } else {
         this.stats.misses++;
-        logger.debug({ 
-          key,
-          event: EVENT_TYPES.CACHE_MISS 
-        }, 'Cache miss');
+        logger.debug(
+          {
+            key,
+            event: EVENT_TYPES.CACHE_MISS,
+          },
+          'Cache miss',
+        );
         return null;
       }
     } catch (error) {
       this.stats.misses++;
-      logger.error({ 
-        error, 
-        key,
-        event: EVENT_TYPES.CACHE_ERROR 
-      }, 'Falló operación de obtener caché');
+      logger.error(
+        {
+          error,
+          key,
+          event: EVENT_TYPES.CACHE_ERROR,
+        },
+        'Falló operación de obtener caché',
+      );
       return null; // Falla silenciosa
     }
   }
@@ -90,16 +109,22 @@ export class RedisCache implements ICacheService {
   async del(key: string): Promise<void> {
     try {
       await this.redis.getClient().del(key);
-      logger.debug({ 
-        key,
-        event: EVENT_TYPES.CACHE_MISS 
-      }, 'Eliminación de caché exitosa');
+      logger.debug(
+        {
+          key,
+          event: EVENT_TYPES.CACHE_MISS,
+        },
+        'Eliminación de caché exitosa',
+      );
     } catch (error) {
-      logger.error({ 
-        error, 
-        key,
-        event: EVENT_TYPES.CACHE_ERROR 
-      }, 'Falló operación de eliminar caché');
+      logger.error(
+        {
+          error,
+          key,
+          event: EVENT_TYPES.CACHE_ERROR,
+        },
+        'Falló operación de eliminar caché',
+      );
     }
   }
 
@@ -108,11 +133,14 @@ export class RedisCache implements ICacheService {
       const result = await this.redis.getClient().exists(key);
       return result === 1;
     } catch (error) {
-      logger.error({ 
-        error, 
-        key,
-        event: EVENT_TYPES.CACHE_ERROR 
-      }, 'Falló verificación de existencia de caché');
+      logger.error(
+        {
+          error,
+          key,
+          event: EVENT_TYPES.CACHE_ERROR,
+        },
+        'Falló verificación de existencia de caché',
+      );
       return false;
     }
   }
@@ -120,9 +148,15 @@ export class RedisCache implements ICacheService {
   async expire(key: string, ttlSeconds: number): Promise<void> {
     try {
       await this.redis.getClient().expire(key, ttlSeconds);
-      logger.debug({ key, ttlSeconds }, 'TTL de caché establecido exitosamente');
+      logger.debug(
+        { key, ttlSeconds },
+        'TTL de caché establecido exitosamente',
+      );
     } catch (error) {
-      logger.error({ error, key, ttlSeconds }, 'Falló operación de expirar caché');
+      logger.error(
+        { error, key, ttlSeconds },
+        'Falló operación de expirar caché',
+      );
     }
   }
 
@@ -151,7 +185,10 @@ export class RedisCache implements ICacheService {
   // OPERACIONES EN LOTE
   // ==============================================
 
-  async mset(keyValues: Record<string, any>, ttlSeconds?: number): Promise<void> {
+  async mset(
+    keyValues: Record<string, any>,
+    ttlSeconds?: number,
+  ): Promise<void> {
     try {
       const client = this.redis.getClient();
       const pipeline = client.pipeline();
@@ -166,22 +203,28 @@ export class RedisCache implements ICacheService {
       });
 
       await pipeline.exec();
-      logger.debug({ 
-        keysCount: Object.keys(keyValues).length, 
-        ttl: ttlSeconds 
-      }, 'Establecimiento masivo de caché exitoso');
+      logger.debug(
+        {
+          keysCount: Object.keys(keyValues).length,
+          ttl: ttlSeconds,
+        },
+        'Establecimiento masivo de caché exitoso',
+      );
     } catch (error) {
-      logger.error({ 
-        error, 
-        keysCount: Object.keys(keyValues).length 
-      }, 'Falló establecimiento masivo de caché');
+      logger.error(
+        {
+          error,
+          keysCount: Object.keys(keyValues).length,
+        },
+        'Falló establecimiento masivo de caché',
+      );
     }
   }
 
   async mget<T>(keys: string[]): Promise<(T | null)[]> {
     try {
       const values = await this.redis.getClient().mget(...keys);
-      return values.map(value => {
+      return values.map((value) => {
         if (value) {
           this.stats.hits++;
           return JSON.parse(value) as T;
@@ -191,7 +234,10 @@ export class RedisCache implements ICacheService {
         }
       });
     } catch (error) {
-      logger.error({ error, keysCount: keys.length }, 'Falló obtención masiva de caché');
+      logger.error(
+        { error, keysCount: keys.length },
+        'Falló obtención masiva de caché',
+      );
       return keys.map(() => null);
     }
   }
@@ -200,10 +246,16 @@ export class RedisCache implements ICacheService {
     try {
       if (keys.length > 0) {
         await this.redis.getClient().del(...keys);
-        logger.debug({ keysCount: keys.length }, 'Eliminación masiva de caché exitosa');
+        logger.debug(
+          { keysCount: keys.length },
+          'Eliminación masiva de caché exitosa',
+        );
       }
     } catch (error) {
-      logger.error({ error, keysCount: keys.length }, 'Falló eliminación masiva de caché');
+      logger.error(
+        { error, keysCount: keys.length },
+        'Falló eliminación masiva de caché',
+      );
     }
   }
 
@@ -216,10 +268,10 @@ export class RedisCache implements ICacheService {
       const client = this.redis.getClient();
       const fullPattern = `${this.keyPrefix}${pattern}`;
       const keys = await client.keys(fullPattern);
-      
+
       // Remover prefijo de las claves
       const prefixLength = this.keyPrefix.length;
-      return keys.map(key => key.substring(prefixLength));
+      return keys.map((key) => key.substring(prefixLength));
     } catch (error) {
       logger.error({ error, pattern }, 'Falló operación de obtener claves');
       return [];
@@ -231,10 +283,13 @@ export class RedisCache implements ICacheService {
       const keys = await this.keys(pattern);
       if (keys.length > 0) {
         await this.mdel(keys);
-        logger.debug({ 
-          pattern, 
-          count: keys.length 
-        }, 'Eliminación por patrón exitosa');
+        logger.debug(
+          {
+            pattern,
+            count: keys.length,
+          },
+          'Eliminación por patrón exitosa',
+        );
       }
     } catch (error) {
       logger.error({ error, pattern }, 'Falló eliminación por patrón');
@@ -245,16 +300,25 @@ export class RedisCache implements ICacheService {
   // OPERACIONES ESPECÍFICAS DE TAREAS
   // ==============================================
 
-  async cacheUserTasks(userId: string, tasks: any[], ttlSeconds?: number): Promise<void> {
+  async cacheUserTasks(
+    userId: string,
+    tasks: any[],
+    ttlSeconds?: number,
+  ): Promise<void> {
     const key = this.getUserTasksKey(userId);
     const cacheData: CacheData<any[]> = {
       data: tasks,
       cachedAt: new Date().toISOString(),
-      expiresAt: ttlSeconds ? new Date(Date.now() + ttlSeconds * 1000).toISOString() : undefined,
+      expiresAt: ttlSeconds
+        ? new Date(Date.now() + ttlSeconds * 1000).toISOString()
+        : undefined,
     };
-    
+
     await this.set(key, cacheData, ttlSeconds || CACHE_TTL.USER_TASKS);
-    logger.debug({ userId, tasksCount: tasks.length }, 'Tareas de usuario cacheadas');
+    logger.debug(
+      { userId, tasksCount: tasks.length },
+      'Tareas de usuario cacheadas',
+    );
   }
 
   async getCachedUserTasks(userId: string): Promise<any[] | null> {
@@ -269,16 +333,25 @@ export class RedisCache implements ICacheService {
     logger.debug({ userId }, 'Caché de tareas de usuario invalidado');
   }
 
-  async cacheUserCategories(userId: string, categories: any[], ttlSeconds?: number): Promise<void> {
+  async cacheUserCategories(
+    userId: string,
+    categories: any[],
+    ttlSeconds?: number,
+  ): Promise<void> {
     const key = this.getUserCategoriesKey(userId);
     const cacheData: CacheData<any[]> = {
       data: categories,
       cachedAt: new Date().toISOString(),
-      expiresAt: ttlSeconds ? new Date(Date.now() + ttlSeconds * 1000).toISOString() : undefined,
+      expiresAt: ttlSeconds
+        ? new Date(Date.now() + ttlSeconds * 1000).toISOString()
+        : undefined,
     };
-    
+
     await this.set(key, cacheData, ttlSeconds || CACHE_TTL.USER_CATEGORIES);
-    logger.debug({ userId, categoriesCount: categories.length }, 'Categorías de usuario cacheadas');
+    logger.debug(
+      { userId, categoriesCount: categories.length },
+      'Categorías de usuario cacheadas',
+    );
   }
 
   async getCachedUserCategories(userId: string): Promise<any[] | null> {
@@ -293,14 +366,20 @@ export class RedisCache implements ICacheService {
     logger.debug({ userId }, 'Caché de categorías de usuario invalidado');
   }
 
-  async cacheUserStats(userId: string, stats: any, ttlSeconds?: number): Promise<void> {
+  async cacheUserStats(
+    userId: string,
+    stats: any,
+    ttlSeconds?: number,
+  ): Promise<void> {
     const key = this.getUserStatsKey(userId);
     const cacheData: CacheData<any> = {
       data: stats,
       cachedAt: new Date().toISOString(),
-      expiresAt: ttlSeconds ? new Date(Date.now() + ttlSeconds * 1000).toISOString() : undefined,
+      expiresAt: ttlSeconds
+        ? new Date(Date.now() + ttlSeconds * 1000).toISOString()
+        : undefined,
     };
-    
+
     await this.set(key, cacheData, ttlSeconds || CACHE_TTL.USER_STATS);
     logger.debug({ userId }, 'Estadísticas de usuario cacheadas');
   }
@@ -317,14 +396,20 @@ export class RedisCache implements ICacheService {
     logger.debug({ userId }, 'Caché de estadísticas de usuario invalidado');
   }
 
-  async cacheTaskDetail(taskId: string, task: any, ttlSeconds?: number): Promise<void> {
+  async cacheTaskDetail(
+    taskId: string,
+    task: any,
+    ttlSeconds?: number,
+  ): Promise<void> {
     const key = this.getTaskKey(taskId);
     const cacheData: CacheData<any> = {
       data: task,
       cachedAt: new Date().toISOString(),
-      expiresAt: ttlSeconds ? new Date(Date.now() + ttlSeconds * 1000).toISOString() : undefined,
+      expiresAt: ttlSeconds
+        ? new Date(Date.now() + ttlSeconds * 1000).toISOString()
+        : undefined,
     };
-    
+
     await this.set(key, cacheData, ttlSeconds || CACHE_TTL.TASK_DETAIL);
     logger.debug({ taskId }, 'Detalle de tarea cacheado');
   }
@@ -341,14 +426,20 @@ export class RedisCache implements ICacheService {
     logger.debug({ taskId }, 'Caché de tarea invalidado');
   }
 
-  async cacheCategoryDetail(categoryId: string, category: any, ttlSeconds?: number): Promise<void> {
+  async cacheCategoryDetail(
+    categoryId: string,
+    category: any,
+    ttlSeconds?: number,
+  ): Promise<void> {
     const key = this.getCategoryKey(categoryId);
     const cacheData: CacheData<any> = {
       data: category,
       cachedAt: new Date().toISOString(),
-      expiresAt: ttlSeconds ? new Date(Date.now() + ttlSeconds * 1000).toISOString() : undefined,
+      expiresAt: ttlSeconds
+        ? new Date(Date.now() + ttlSeconds * 1000).toISOString()
+        : undefined,
     };
-    
+
     await this.set(key, cacheData, ttlSeconds || CACHE_TTL.CATEGORY_DETAIL);
     logger.debug({ categoryId }, 'Detalle de categoría cacheado');
   }
@@ -370,7 +461,7 @@ export class RedisCache implements ICacheService {
     query: string,
     filters: any,
     results: any,
-    ttlSeconds?: number
+    ttlSeconds?: number,
   ): Promise<void> {
     const key = this.getSearchKey(userId, query, JSON.stringify(filters));
     const cacheData: CacheData<any> = {
@@ -381,14 +472,20 @@ export class RedisCache implements ICacheService {
         count: Array.isArray(results) ? results.length : 1,
       },
       cachedAt: new Date().toISOString(),
-      expiresAt: ttlSeconds ? new Date(Date.now() + ttlSeconds * 1000).toISOString() : undefined,
+      expiresAt: ttlSeconds
+        ? new Date(Date.now() + ttlSeconds * 1000).toISOString()
+        : undefined,
     };
-    
+
     await this.set(key, cacheData, ttlSeconds || CACHE_TTL.SEARCH_RESULTS);
     logger.debug({ userId, query }, 'Resultados de búsqueda cacheados');
   }
 
-  async getCachedSearchResults(userId: string, query: string, filters: any): Promise<any | null> {
+  async getCachedSearchResults(
+    userId: string,
+    query: string,
+    filters: any,
+  ): Promise<any | null> {
     const key = this.getSearchKey(userId, query, JSON.stringify(filters));
     const cached = await this.get<CacheData<any>>(key);
     return cached?.data?.results || null;
@@ -428,9 +525,9 @@ export class RedisCache implements ICacheService {
   // ==============================================
 
   async incrementRateLimit(
-    key: string, 
-    windowSeconds: number, 
-    maxRequests: number
+    key: string,
+    windowSeconds: number,
+    maxRequests: number,
   ): Promise<{
     count: number;
     remaining: number;
@@ -440,14 +537,14 @@ export class RedisCache implements ICacheService {
     try {
       const rateLimitKey = this.getRateLimitKey(key);
       const client = this.redis.getClient();
-      
+
       const pipeline = client.pipeline();
       pipeline.incr(rateLimitKey);
       pipeline.expire(rateLimitKey, windowSeconds);
-      
+
       const results = await pipeline.exec();
       const count = (results?.[0]?.[1] as number) || 0;
-      
+
       const remaining = Math.max(0, maxRequests - count);
       const resetTime = new Date(Date.now() + windowSeconds * 1000);
       const allowed = count <= maxRequests;
@@ -473,10 +570,10 @@ export class RedisCache implements ICacheService {
     try {
       const rateLimitKey = this.getRateLimitKey(key);
       const client = this.redis.getClient();
-      
+
       const [count, ttl] = await Promise.all([
-        client.get(rateLimitKey).then(val => parseInt(val || '0')),
-        client.ttl(rateLimitKey)
+        client.get(rateLimitKey).then((val) => parseInt(val || '0')),
+        client.ttl(rateLimitKey),
       ]);
 
       if (ttl <= 0) return null;
@@ -487,7 +584,10 @@ export class RedisCache implements ICacheService {
         resetTime: new Date(Date.now() + ttl * 1000),
       };
     } catch (error) {
-      logger.error({ error, key }, 'Falló obtención de información de límite de tasa');
+      logger.error(
+        { error, key },
+        'Falló obtención de información de límite de tasa',
+      );
       return null;
     }
   }
@@ -510,7 +610,7 @@ export class RedisCache implements ICacheService {
     try {
       const info = await this.redis.getClient().info('memory');
       const keyspaceInfo = await this.redis.getClient().info('keyspace');
-      
+
       // Parsear uso de memoria
       const memoryMatch = info.match(/used_memory:(\d+)/);
       const memoryUsage = memoryMatch ? parseInt(memoryMatch[1]) : undefined;
@@ -576,7 +676,10 @@ export class RedisCache implements ICacheService {
   }
 
   getSearchKey(userId: string, query: string, filters: string): string {
-    return CACHE_KEYS.SEARCH_RESULTS(userId, `${query}:${Buffer.from(filters).toString('base64')}`);
+    return CACHE_KEYS.SEARCH_RESULTS(
+      userId,
+      `${query}:${Buffer.from(filters).toString('base64')}`,
+    );
   }
 
   getRateLimitKey(identifier: string): string {

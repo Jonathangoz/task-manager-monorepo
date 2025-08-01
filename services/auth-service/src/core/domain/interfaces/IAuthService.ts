@@ -63,27 +63,40 @@ export interface LoginAttemptData {
 
 export interface IAuthService {
   // Autenticación
-  login(credentials: LoginCredentials, sessionInfo: SessionInfo): Promise<AuthResult>;
+  login(
+    credentials: LoginCredentials,
+    sessionInfo: SessionInfo,
+  ): Promise<AuthResult>;
   register(data: RegisterData): Promise<User>;
   logout(userId: string, sessionId: string): Promise<void>;
   logoutAll(userId: string): Promise<void>;
-  
+
   // Tokens
-  refreshToken(refreshToken: string, sessionInfo: SessionInfo): Promise<AuthTokens>;
+  refreshToken(
+    refreshToken: string,
+    sessionInfo: SessionInfo,
+  ): Promise<AuthTokens>;
   validateAccessToken(token: string): Promise<TokenPayload>;
   revokeRefreshToken(tokenId: string): Promise<void>;
   revokeAllTokens(userId: string): Promise<void>;
-  
+
   // Sesiones
   createSession(userId: string, sessionInfo: SessionInfo): Promise<string>;
   validateSession(sessionId: string): Promise<boolean>;
   terminateSession(sessionId: string): Promise<void>;
-  terminateAllSessions(userId: string, excludeSessionId?: string): Promise<void>;
-  
+  terminateAllSessions(
+    userId: string,
+    excludeSessionId?: string,
+  ): Promise<void>;
+
   // Utilidades
-  changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void>;
+  changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void>;
   recordLoginAttempt(data: LoginAttemptData): Promise<void>;
-  
+
   // Password reset
   forgotPassword(email: string): Promise<void>;
   resetPassword(token: string, password: string, email: string): Promise<void>;

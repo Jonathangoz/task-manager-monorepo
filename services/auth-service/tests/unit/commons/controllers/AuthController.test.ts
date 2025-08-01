@@ -1,7 +1,12 @@
 import { AuthController } from '@/presentation/controllers/AuthController';
 import { AuthService } from '@/core/application/AuthService';
 import { authFixtures, sessionFixtures } from '../../../helpers/fixtures';
-import { createMockReq, createMockRes, createMockNext, clearAllMocks } from '../../../helpers/mocks';
+import {
+  createMockReq,
+  createMockRes,
+  createMockNext,
+  clearAllMocks,
+} from '../../../helpers/mocks';
 import { HTTP_STATUS } from '@/utils/constants';
 
 jest.mock('@/core/application/AuthService');
@@ -12,7 +17,11 @@ describe('AuthController', () => {
 
   beforeEach(() => {
     clearAllMocks();
-    mockAuthService = new AuthService({} as any, {} as any, {} as any) as jest.Mocked<AuthService>;
+    mockAuthService = new AuthService(
+      {} as any,
+      {} as any,
+      {} as any,
+    ) as jest.Mocked<AuthService>;
     authController = new AuthController(mockAuthService);
   });
 
@@ -22,14 +31,18 @@ describe('AuthController', () => {
       const loginData = authFixtures.validLogin;
       const mockAuthResult = {
         user: { id: 'user-123', email: loginData.email },
-        tokens: { accessToken: 'access-token', refreshToken: 'refresh-token', expiresIn: 900 },
-        sessionId: 'session-123'
+        tokens: {
+          accessToken: 'access-token',
+          refreshToken: 'refresh-token',
+          expiresIn: 900,
+        },
+        sessionId: 'session-123',
       };
 
       const req = createMockReq({
         body: loginData,
         ip: '192.168.1.1',
-        get: jest.fn().mockReturnValue('Mozilla/5.0')
+        get: jest.fn().mockReturnValue('Mozilla/5.0'),
       });
       const res = createMockRes();
       const next = createMockNext();
@@ -46,15 +59,19 @@ describe('AuthController', () => {
         message: 'Login successful',
         data: {
           user: mockAuthResult.user,
-          tokens: mockAuthResult.tokens
-        }
+          tokens: mockAuthResult.tokens,
+        },
       });
-      expect(res.cookie).toHaveBeenCalledWith('refreshToken', mockAuthResult.tokens.refreshToken, {
-        httpOnly: true,
-        secure: false,
-        sameSite: 'strict',
-        maxAge: expect.any(Number)
-      });
+      expect(res.cookie).toHaveBeenCalledWith(
+        'refreshToken',
+        mockAuthResult.tokens.refreshToken,
+        {
+          httpOnly: true,
+          secure: false,
+          sameSite: 'strict',
+          maxAge: expect.any(Number),
+        },
+      );
     });
 
     it('should handle login failure', async () => {
@@ -94,7 +111,7 @@ describe('AuthController', () => {
       expect(res.json).toHaveBeenCalledWith({
         success: true,
         message: 'User registered successfully',
-        data: { user: mockUser }
+        data: { user: mockUser },
       });
     });
   });
@@ -104,7 +121,7 @@ describe('AuthController', () => {
       // Arrange
       const req = createMockReq({
         user: { id: 'user-123' },
-        sessionId: 'session-123'
+        sessionId: 'session-123',
       });
       const res = createMockRes();
       const next = createMockNext();
@@ -119,7 +136,7 @@ describe('AuthController', () => {
       expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
       expect(res.json).toHaveBeenCalledWith({
         success: true,
-        message: 'Logout successful'
+        message: 'Logout successful',
       });
     });
   });

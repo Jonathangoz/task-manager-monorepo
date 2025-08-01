@@ -1,5 +1,5 @@
 // src/utils/swagger-helpers.ts - Utilidades adicionales
-import { ValidationResult } from '@/types/swaggerTypes'
+import { ValidationResult } from '@/types/swaggerTypes';
 
 /**
  * Genera respuestas estandarizadas para la documentación
@@ -13,7 +13,7 @@ export class SwaggerResponseBuilder {
       meta: {
         timestamp: new Date().toISOString(),
         requestId: this.generateRequestId(),
-      }
+      },
     };
   }
 
@@ -23,27 +23,29 @@ export class SwaggerResponseBuilder {
       message,
       error: {
         code,
-        details
+        details,
       },
       meta: {
         timestamp: new Date().toISOString(),
         requestId: this.generateRequestId(),
-      }
+      },
     };
   }
 
-  static validationError(errors: Array<{ field: string; message: string; value?: any }>) {
+  static validationError(
+    errors: Array<{ field: string; message: string; value?: any }>,
+  ) {
     return {
       success: false,
       message: 'Validation failed',
       error: {
         code: 'VALIDATION_ERROR',
-        details: errors
+        details: errors,
       },
       meta: {
         timestamp: new Date().toISOString(),
         requestId: this.generateRequestId(),
-      }
+      },
     };
   }
 
@@ -61,7 +63,11 @@ export function ApiEndpoint(config: {
   tags?: string[];
   responses?: Record<number, any>;
 }) {
-  return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+  return function (
+    target: any,
+    propertyKey: string,
+    descriptor: PropertyDescriptor,
+  ) {
     // Almacenar metadata para el endpoint
     if (!target.constructor.apiEndpoints) {
       target.constructor.apiEndpoints = {};
@@ -77,7 +83,7 @@ export function ApiEndpoint(config: {
 export class SwaggerValidator {
   static validateSchema(schema: any, data: any): ValidationResult {
     const errors: string[] = [];
-    
+
     if (schema.required) {
       for (const field of schema.required) {
         if (!(field in data)) {
@@ -85,48 +91,64 @@ export class SwaggerValidator {
         }
       }
     }
-    
+
     if (schema.properties) {
-      for (const [field, fieldSchema] of Object.entries(schema.properties as any)) {
+      for (const [field, fieldSchema] of Object.entries(
+        schema.properties as any,
+      )) {
         if (field in data) {
-          const fieldErrors = this.validateField(field, fieldSchema, data[field]);
+          const fieldErrors = this.validateField(
+            field,
+            fieldSchema,
+            data[field],
+          );
           errors.push(...fieldErrors);
         }
       }
     }
-    
+
     return {
       isValid: errors.length === 0,
-      errors
+      errors,
     };
   }
-  
-  private static validateField(fieldName: string, schema: any, value: any): string[] {
+
+  private static validateField(
+    fieldName: string,
+    schema: any,
+    value: any,
+  ): string[] {
     const errors: string[] = [];
-    
+
     // Validar tipo
     if (schema.type && typeof value !== schema.type) {
       errors.push(`Field '${fieldName}' must be of type ${schema.type}`);
     }
-    
+
     // Validar longitud de string
     if (schema.type === 'string') {
       if (schema.minLength && value.length < schema.minLength) {
-        errors.push(`Field '${fieldName}' must be at least ${schema.minLength} characters`);
+        errors.push(
+          `Field '${fieldName}' must be at least ${schema.minLength} characters`,
+        );
       }
       if (schema.maxLength && value.length > schema.maxLength) {
-        errors.push(`Field '${fieldName}' must be at most ${schema.maxLength} characters`);
+        errors.push(
+          `Field '${fieldName}' must be at most ${schema.maxLength} characters`,
+        );
       }
       if (schema.pattern && !new RegExp(schema.pattern).test(value)) {
         errors.push(`Field '${fieldName}' does not match required pattern`);
       }
     }
-    
+
     // Validar enums
     if (schema.enum && !schema.enum.includes(value)) {
-      errors.push(`Field '${fieldName}' must be one of: ${schema.enum.join(', ')}`);
+      errors.push(
+        `Field '${fieldName}' must be one of: ${schema.enum.join(', ')}`,
+      );
     }
-    
+
     return errors;
   }
 }

@@ -47,13 +47,15 @@ Para endpoints protegidos, incluye el header:
   },
   servers: [
     {
-      url: environment.app.isDevelopment 
+      url: environment.app.isDevelopment
         ? `http://localhost:${environment.app.port}/api/v1`
         : `https://task-manager-auth-service.onrender.com/api/v1`,
-      description: environment.app.isDevelopment ? '🔧 Desarrollo' : '🚀 Producción',
+      description: environment.app.isDevelopment
+        ? '🔧 Desarrollo'
+        : '🚀 Producción',
     },
   ],
-  
+
   // ==============================================
   // COMPONENTES
   // ==============================================
@@ -66,14 +68,22 @@ Para endpoints protegidos, incluye el header:
         description: 'Access Token JWT (válido 15 minutos)',
       },
     },
-    
+
     schemas: {
       // ==============================================
       // ESQUEMAS PRINCIPALES
       // ==============================================
       User: {
         type: 'object',
-        required: ['id', 'email', 'username', 'isActive', 'isVerified', 'createdAt', 'updatedAt'],
+        required: [
+          'id',
+          'email',
+          'username',
+          'isActive',
+          'isVerified',
+          'createdAt',
+          'updatedAt',
+        ],
         properties: {
           id: {
             type: 'string',
@@ -158,11 +168,13 @@ Para endpoints protegidos, incluye el header:
           firstName: { $ref: '#/components/schemas/User/properties/firstName' },
           lastName: { $ref: '#/components/schemas/User/properties/lastName' },
           avatar: { $ref: '#/components/schemas/User/properties/avatar' },
-          isVerified: { $ref: '#/components/schemas/User/properties/isVerified' },
+          isVerified: {
+            $ref: '#/components/schemas/User/properties/isVerified',
+          },
           createdAt: { $ref: '#/components/schemas/User/properties/createdAt' },
         },
       },
-      
+
       // ==============================================
       // DTOs DE ENTRADA
       // ==============================================
@@ -206,7 +218,7 @@ Para endpoints protegidos, incluye el header:
           },
         },
       },
-      
+
       LoginRequest: {
         type: 'object',
         required: ['email', 'password'],
@@ -277,7 +289,7 @@ Para endpoints protegidos, incluye el header:
           },
         },
       },
-      
+
       RefreshTokenRequest: {
         type: 'object',
         required: ['refreshToken'],
@@ -301,7 +313,7 @@ Para endpoints protegidos, incluye el header:
           },
         },
       },
-      
+
       // ==============================================
       // RESPUESTAS
       // ==============================================
@@ -313,7 +325,13 @@ Para endpoints protegidos, incluye el header:
           message: { type: 'string', example: 'Authentication successful' },
           data: {
             type: 'object',
-            required: ['user', 'accessToken', 'refreshToken', 'expiresIn', 'tokenType'],
+            required: [
+              'user',
+              'accessToken',
+              'refreshToken',
+              'expiresIn',
+              'tokenType',
+            ],
             properties: {
               user: { $ref: '#/components/schemas/User' },
               accessToken: {
@@ -346,7 +364,10 @@ Para endpoints protegidos, incluye el header:
         required: ['success', 'message', 'data'],
         properties: {
           success: { type: 'boolean', example: true },
-          message: { type: 'string', example: 'User data retrieved successfully' },
+          message: {
+            type: 'string',
+            example: 'User data retrieved successfully',
+          },
           data: { $ref: '#/components/schemas/User' },
           meta: { $ref: '#/components/schemas/ResponseMeta' },
         },
@@ -372,13 +393,20 @@ Para endpoints protegidos, incluye el header:
           },
         },
       },
-      
+
       // ==============================================
       // SESSION SCHEMAS
       // ==============================================
       UserSession: {
         type: 'object',
-        required: ['id', 'sessionId', 'isActive', 'lastSeen', 'createdAt', 'expiresAt'],
+        required: [
+          'id',
+          'sessionId',
+          'isActive',
+          'lastSeen',
+          'createdAt',
+          'expiresAt',
+        ],
         properties: {
           id: { type: 'string', example: 'clsession123456' },
           sessionId: {
@@ -436,7 +464,10 @@ Para endpoints protegidos, incluye el header:
         required: ['success', 'message', 'data'],
         properties: {
           success: { type: 'boolean', example: true },
-          message: { type: 'string', example: 'User sessions retrieved successfully' },
+          message: {
+            type: 'string',
+            example: 'User sessions retrieved successfully',
+          },
           data: {
             type: 'array',
             items: { $ref: '#/components/schemas/UserSession' },
@@ -480,7 +511,7 @@ Para endpoints protegidos, incluye el header:
           },
         },
       },
-      
+
       ErrorResponse: {
         type: 'object',
         required: ['success', 'message', 'error'],
@@ -511,7 +542,7 @@ Para endpoints protegidos, incluye el header:
           meta: { $ref: '#/components/schemas/ResponseMeta' },
         },
       },
-      
+
       ValidationErrorResponse: {
         type: 'object',
         required: ['success', 'message', 'error'],
@@ -528,22 +559,22 @@ Para endpoints protegidos, incluye el header:
                   type: 'object',
                   required: ['field', 'message'],
                   properties: {
-                    field: { 
-                      type: 'string', 
+                    field: {
+                      type: 'string',
                       example: 'email',
-                      description: 'Campo que falló la validación'
+                      description: 'Campo que falló la validación',
                     },
-                    message: { 
-                      type: 'string', 
+                    message: {
+                      type: 'string',
                       example: 'Invalid email format',
-                      description: 'Mensaje específico del error'
+                      description: 'Mensaje específico del error',
                     },
                     value: {
                       type: 'string',
                       nullable: true,
                       example: 'invalid-email',
-                      description: 'Valor que causó el error'
-                    }
+                      description: 'Valor que causó el error',
+                    },
                   },
                 },
               },
@@ -552,13 +583,20 @@ Para endpoints protegidos, incluye el header:
           meta: { $ref: '#/components/schemas/ResponseMeta' },
         },
       },
-      
+
       // ==============================================
       // HEALTH CHECK
       // ==============================================
       HealthResponse: {
         type: 'object',
-        required: ['status', 'timestamp', 'uptime', 'version', 'environment', 'services'],
+        required: [
+          'status',
+          'timestamp',
+          'uptime',
+          'version',
+          'environment',
+          'services',
+        ],
         properties: {
           status: {
             type: 'string',
@@ -596,42 +634,42 @@ Para endpoints protegidos, incluye el header:
                 type: 'object',
                 required: ['status', 'responseTime', 'lastChecked'],
                 properties: {
-                  status: { 
-                    type: 'string', 
+                  status: {
+                    type: 'string',
                     enum: ['connected', 'disconnected', 'error'],
-                    example: 'connected' 
+                    example: 'connected',
                   },
-                  responseTime: { 
-                    type: 'number', 
+                  responseTime: {
+                    type: 'number',
                     description: 'Tiempo de respuesta en ms',
-                    example: 15 
+                    example: 15,
                   },
                   lastChecked: {
                     type: 'string',
                     format: 'date-time',
-                    example: '2024-01-20T10:29:45.000Z'
-                  }
+                    example: '2024-01-20T10:29:45.000Z',
+                  },
                 },
               },
               redis: {
                 type: 'object',
                 required: ['status', 'responseTime', 'lastChecked'],
                 properties: {
-                  status: { 
-                    type: 'string', 
+                  status: {
+                    type: 'string',
                     enum: ['connected', 'disconnected', 'error'],
-                    example: 'connected' 
+                    example: 'connected',
                   },
-                  responseTime: { 
+                  responseTime: {
                     type: 'number',
-                    description: 'Tiempo de respuesta en ms', 
-                    example: 5 
+                    description: 'Tiempo de respuesta en ms',
+                    example: 5,
                   },
                   lastChecked: {
                     type: 'string',
                     format: 'date-time',
-                    example: '2024-01-20T10:29:50.000Z'
-                  }
+                    example: '2024-01-20T10:29:50.000Z',
+                  },
                 },
               },
             },
@@ -662,9 +700,9 @@ Para endpoints protegidos, incluye el header:
         description: 'ID único de la sesión',
         schema: {
           type: 'string',
-          example: 'sess_abc123456789'
-        }
-      }
+          example: 'sess_abc123456789',
+        },
+      },
     },
 
     // ==============================================
@@ -682,28 +720,28 @@ Para endpoints protegidos, incluye el header:
                 value: {
                   success: false,
                   message: 'Token has expired',
-                  error: { code: 'TOKEN_EXPIRED' }
-                }
+                  error: { code: 'TOKEN_EXPIRED' },
+                },
               },
               TokenInvalid: {
                 summary: 'Token inválido',
                 value: {
                   success: false,
                   message: 'Invalid token',
-                  error: { code: 'TOKEN_INVALID' }
-                }
+                  error: { code: 'TOKEN_INVALID' },
+                },
               },
               TokenMissing: {
                 summary: 'Token no proporcionado',
                 value: {
                   success: false,
                   message: 'Authentication token is required',
-                  error: { code: 'TOKEN_REQUIRED' }
-                }
-              }
-            }
-          }
-        }
+                  error: { code: 'TOKEN_REQUIRED' },
+                },
+              },
+            },
+          },
+        },
       },
       ForbiddenError: {
         description: '🔒 Acceso denegado - privilegios insuficientes',
@@ -713,10 +751,10 @@ Para endpoints protegidos, incluye el header:
             example: {
               success: false,
               message: 'Access denied',
-              error: { code: 'FORBIDDEN' }
-            }
-          }
-        }
+              error: { code: 'FORBIDDEN' },
+            },
+          },
+        },
       },
       NotFoundError: {
         description: '❌ Recurso no encontrado',
@@ -726,18 +764,18 @@ Para endpoints protegidos, incluye el header:
             example: {
               success: false,
               message: 'Resource not found',
-              error: { code: 'NOT_FOUND' }
-            }
-          }
-        }
+              error: { code: 'NOT_FOUND' },
+            },
+          },
+        },
       },
       ValidationError: {
         description: '⚠️ Error de validación de datos',
         content: {
           'application/json': {
-            schema: { $ref: '#/components/schemas/ValidationErrorResponse' }
-          }
-        }
+            schema: { $ref: '#/components/schemas/ValidationErrorResponse' },
+          },
+        },
       },
       RateLimitError: {
         description: '🚦 Límite de solicitudes excedido',
@@ -747,13 +785,13 @@ Para endpoints protegidos, incluye el header:
             example: {
               success: false,
               message: 'Too many requests, please try again later',
-              error: { 
+              error: {
                 code: 'RATE_LIMIT_EXCEEDED',
-                details: 'Maximum 100 requests per 15 minutes exceeded'
-              }
-            }
-          }
-        }
+                details: 'Maximum 100 requests per 15 minutes exceeded',
+              },
+            },
+          },
+        },
       },
       InternalServerError: {
         description: '💥 Error interno del servidor',
@@ -763,12 +801,12 @@ Para endpoints protegidos, incluye el header:
             example: {
               success: false,
               message: 'Internal server error',
-              error: { code: 'INTERNAL_ERROR' }
-            }
-          }
-        }
-      }
-    }
+              error: { code: 'INTERNAL_ERROR' },
+            },
+          },
+        },
+      },
+    },
   },
   paths: {},
 
@@ -787,7 +825,7 @@ Para endpoints protegidos, incluye el header:
       description: 'Gestión de perfiles y datos de usuario',
     },
     {
-      name: '🎫 Session Management', 
+      name: '🎫 Session Management',
       description: 'Control y monitoreo de sesiones activas',
     },
     {
@@ -805,16 +843,16 @@ Para endpoints protegidos, incluye el header:
   // ==============================================
   externalDocs: {
     description: '📚 Documentación completa en GitHub',
-    url: 'https://github.com/Jonathangoz/task-manager-monorepo'
-  }
+    url: 'https://github.com/Jonathangoz/task-manager-monorepo',
+  },
 };
 
 // ==============================================
 // CONFIGURACIÓN SWAGGER-JSDOC
 // ==============================================
 const swaggerOptions: swaggerJsdoc.Options = {
-    swaggerDefinition,
-    apis: ['./src/routes/*.ts', './src/schemas/*.ts'],
+  swaggerDefinition,
+  apis: ['./src/routes/*.ts', './src/schemas/*.ts'],
 };
 
 export const swaggerSpec = swaggerJsdoc(swaggerOptions) as OpenAPIV3.Document;
@@ -854,17 +892,17 @@ export const swaggerUiOptions: SwaggerUiOptions = {
 // UTILIDADES
 // ==============================================
 export function validateSwaggerSpec(): ValidationResult {
-    const errors: string[] = [];
-    const spec = swaggerSpec;
+  const errors: string[] = [];
+  const spec = swaggerSpec;
 
-    if (!spec?.openapi) errors.push('OpenAPI version missing');
-    if (!spec?.info?.title) errors.push('API title missing');
-    if (!spec?.info?.version) errors.push('API version missing');
-    if (!spec?.servers || spec.servers.length === 0) {
-        errors.push('Servers configuration missing');
-    }
+  if (!spec?.openapi) errors.push('OpenAPI version missing');
+  if (!spec?.info?.title) errors.push('API title missing');
+  if (!spec?.info?.version) errors.push('API version missing');
+  if (!spec?.servers || spec.servers.length === 0) {
+    errors.push('Servers configuration missing');
+  }
 
-    return { isValid: errors.length === 0, errors };
+  return { isValid: errors.length === 0, errors };
 }
 
 export const getSwaggerInfo = () => ({
@@ -877,10 +915,10 @@ export const getSwaggerInfo = () => ({
 });
 
 export const getSwaggerUrl = (): string => {
-  const baseUrl = environment.app.isDevelopment 
+  const baseUrl = environment.app.isDevelopment
     ? `http://localhost:${environment.app.port}`
     : 'https://task-manager-auth-service.onrender.com';
-  
+
   return `${baseUrl}/api/v1/docs`;
 };
 
@@ -891,7 +929,7 @@ if (environment.app.isDevelopment) {
   const validation = validateSwaggerSpec();
   if (!validation.isValid) {
     console.warn('⚠️ Swagger Documentation Issues:');
-    validation.errors.forEach(error => console.warn(`  - ${error}`));
+    validation.errors.forEach((error) => console.warn(`  - ${error}`));
   } else {
     console.log('✅ Swagger documentation is valid');
     console.log(`📚 Swagger URL: ${getSwaggerUrl()}`);
@@ -903,5 +941,5 @@ export default {
   swaggerUiOptions,
   validateSwaggerSpec,
   getSwaggerInfo,
-  getSwaggerUrl
+  getSwaggerUrl,
 };

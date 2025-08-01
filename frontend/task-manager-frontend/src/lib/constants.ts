@@ -25,36 +25,36 @@ export const HTTP_STATUS = {
 export const API_ENDPOINTS = {
   // Auth Service
   AUTH: {
-    LOGIN: "/auth/login",
-    REGISTER: "/auth/register",
-    LOGOUT: "/auth/logout",
-    REFRESH: "/auth/refresh",
-    VERIFY: "/auth/verify-token",
-    FORGOT_PASSWORD: "/auth/forgot-password",
-    RESET_PASSWORD: "/auth/reset-password",
-    CHANGE_PASSWORD: "/auth/change-password",
+    LOGIN: '/auth/login',
+    REGISTER: '/auth/register',
+    LOGOUT: '/auth/logout',
+    REFRESH: '/auth/refresh',
+    VERIFY: '/auth/verify-token',
+    FORGOT_PASSWORD: '/auth/forgot-password',
+    RESET_PASSWORD: '/auth/reset-password',
+    CHANGE_PASSWORD: '/auth/change-password',
   },
   // User Service
   USERS: {
-    PROFILE: "/users/profile",
-    UPDATE_PROFILE: "/users/profile",
-    SESSIONS: "/users/sessions",
-    TERMINATE_SESSION: "/users/sessions",
+    PROFILE: '/users/profile',
+    UPDATE_PROFILE: '/users/profile',
+    SESSIONS: '/users/sessions',
+    TERMINATE_SESSION: '/users/sessions',
   },
   // Task Service
   TASKS: {
-    LIST: "/tasks",
-    CREATE: "/tasks",
+    LIST: '/tasks',
+    CREATE: '/tasks',
     DETAIL: (id: string) => `/tasks/${id}`,
     UPDATE: (id: string) => `/tasks/${id}`,
     DELETE: (id: string) => `/tasks/${id}`,
-    STATS: "/tasks/stats",
-    SEARCH: "/tasks/search",
+    STATS: '/tasks/stats',
+    SEARCH: '/tasks/search',
   },
   // Category Service
   CATEGORIES: {
-    LIST: "/categories",
-    CREATE: "/categories",
+    LIST: '/categories',
+    CREATE: '/categories',
     DETAIL: (id: string) => `/categories/${id}`,
     UPDATE: (id: string) => `/categories/${id}`,
     DELETE: (id: string) => `/categories/${id}`,
@@ -65,102 +65,102 @@ export const API_ENDPOINTS = {
 // Error Codes
 export const ERROR_CODES = {
   // Authentication errors
-  INVALID_CREDENTIALS: "INVALID_CREDENTIALS",
-  TOKEN_EXPIRED: "TOKEN_EXPIRED",
-  TOKEN_INVALID: "TOKEN_INVALID",
-  TOKEN_REQUIRED: "TOKEN_REQUIRED",
-  USER_NOT_FOUND: "USER_NOT_FOUND",
-  USER_ALREADY_EXISTS: "USER_ALREADY_EXISTS",
-  
+  INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
+  TOKEN_EXPIRED: 'TOKEN_EXPIRED',
+  TOKEN_INVALID: 'TOKEN_INVALID',
+  TOKEN_REQUIRED: 'TOKEN_REQUIRED',
+  USER_NOT_FOUND: 'USER_NOT_FOUND',
+  USER_ALREADY_EXISTS: 'USER_ALREADY_EXISTS',
+
   // Task errors
-  TASK_NOT_FOUND: "TASK_NOT_FOUND",
-  TASK_ACCESS_DENIED: "TASK_ACCESS_DENIED",
-  INVALID_TASK_STATUS: "INVALID_TASK_STATUS",
-  INVALID_TASK_PRIORITY: "INVALID_TASK_PRIORITY",
-  
+  TASK_NOT_FOUND: 'TASK_NOT_FOUND',
+  TASK_ACCESS_DENIED: 'TASK_ACCESS_DENIED',
+  INVALID_TASK_STATUS: 'INVALID_TASK_STATUS',
+  INVALID_TASK_PRIORITY: 'INVALID_TASK_PRIORITY',
+
   // Category errors
-  CATEGORY_NOT_FOUND: "CATEGORY_NOT_FOUND",
-  CATEGORY_ALREADY_EXISTS: "CATEGORY_ALREADY_EXISTS",
-  CATEGORY_HAS_TASKS: "CATEGORY_HAS_TASKS",
-  
+  CATEGORY_NOT_FOUND: 'CATEGORY_NOT_FOUND',
+  CATEGORY_ALREADY_EXISTS: 'CATEGORY_ALREADY_EXISTS',
+  CATEGORY_HAS_TASKS: 'CATEGORY_HAS_TASKS',
+
   // Validation errors
-  VALIDATION_ERROR: "VALIDATION_ERROR",
-  INVALID_EMAIL: "INVALID_EMAIL",
-  INVALID_PASSWORD: "INVALID_PASSWORD",
-  
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  INVALID_EMAIL: 'INVALID_EMAIL',
+  INVALID_PASSWORD: 'INVALID_PASSWORD',
+
   // Network errors
-  NETWORK_ERROR: "NETWORK_ERROR",
-  SERVICE_UNAVAILABLE: "SERVICE_UNAVAILABLE",
-  TIMEOUT_ERROR: "TIMEOUT_ERROR",
-  
+  NETWORK_ERROR: 'NETWORK_ERROR',
+  SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
+  TIMEOUT_ERROR: 'TIMEOUT_ERROR',
+
   // System errors
-  INTERNAL_ERROR: "INTERNAL_ERROR",
-  RATE_LIMIT_EXCEEDED: "RATE_LIMIT_EXCEEDED",
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
+  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
 } as const;
 
 // Success Messages
 export const SUCCESS_MESSAGES = {
   // Auth
-  LOGIN_SUCCESS: "Inicio de sesión exitoso",
-  LOGOUT_SUCCESS: "Sesión cerrada correctamente",
-  REGISTER_SUCCESS: "Cuenta creada exitosamente",
-  PASSWORD_CHANGED: "Contraseña cambiada exitosamente",
-  
+  LOGIN_SUCCESS: 'Inicio de sesión exitoso',
+  LOGOUT_SUCCESS: 'Sesión cerrada correctamente',
+  REGISTER_SUCCESS: 'Cuenta creada exitosamente',
+  PASSWORD_CHANGED: 'Contraseña cambiada exitosamente',
+
   // Tasks
-  TASK_CREATED: "Tarea creada exitosamente",
-  TASK_UPDATED: "Tarea actualizada exitosamente",
-  TASK_DELETED: "Tarea eliminada exitosamente",
-  TASK_COMPLETED: "Tarea marcada como completada",
-  
+  TASK_CREATED: 'Tarea creada exitosamente',
+  TASK_UPDATED: 'Tarea actualizada exitosamente',
+  TASK_DELETED: 'Tarea eliminada exitosamente',
+  TASK_COMPLETED: 'Tarea marcada como completada',
+
   // Categories
-  CATEGORY_CREATED: "Categoría creada exitosamente",
-  CATEGORY_UPDATED: "Categoría actualizada exitosamente",
-  CATEGORY_DELETED: "Categoría eliminada exitosamente",
-  
+  CATEGORY_CREATED: 'Categoría creada exitosamente',
+  CATEGORY_UPDATED: 'Categoría actualizada exitosamente',
+  CATEGORY_DELETED: 'Categoría eliminada exitosamente',
+
   // Profile
-  PROFILE_UPDATED: "Perfil actualizado exitosamente",
+  PROFILE_UPDATED: 'Perfil actualizado exitosamente',
 } as const;
 
 // Error Messages
 export const ERROR_MESSAGES = {
   // Auth
-  INVALID_CREDENTIALS: "Email o contraseña incorrectos",
-  TOKEN_EXPIRED: "La sesión ha expirado. Por favor, inicia sesión nuevamente",
-  UNAUTHORIZED: "No tienes permisos para realizar esta acción",
-  USER_NOT_FOUND: "Usuario no encontrado",
-  
+  INVALID_CREDENTIALS: 'Email o contraseña incorrectos',
+  TOKEN_EXPIRED: 'La sesión ha expirado. Por favor, inicia sesión nuevamente',
+  UNAUTHORIZED: 'No tienes permisos para realizar esta acción',
+  USER_NOT_FOUND: 'Usuario no encontrado',
+
   // Tasks
-  TASK_NOT_FOUND: "Tarea no encontrada",
-  TASK_ACCESS_DENIED: "No tienes permisos para acceder a esta tarea",
-  
+  TASK_NOT_FOUND: 'Tarea no encontrada',
+  TASK_ACCESS_DENIED: 'No tienes permisos para acceder a esta tarea',
+
   // Categories
-  CATEGORY_NOT_FOUND: "Categoría no encontrada",
-  CATEGORY_HAS_TASKS: "No se puede eliminar una categoría que contiene tareas",
-  
+  CATEGORY_NOT_FOUND: 'Categoría no encontrada',
+  CATEGORY_HAS_TASKS: 'No se puede eliminar una categoría que contiene tareas',
+
   // Network
-  NETWORK_ERROR: "Error de conexión. Verifica tu conexión a internet",
-  SERVICE_UNAVAILABLE: "Servicio no disponible temporalmente",
-  TIMEOUT_ERROR: "La petición ha excedido el tiempo límite",
-  
+  NETWORK_ERROR: 'Error de conexión. Verifica tu conexión a internet',
+  SERVICE_UNAVAILABLE: 'Servicio no disponible temporalmente',
+  TIMEOUT_ERROR: 'La petición ha excedido el tiempo límite',
+
   // Generic
-  UNKNOWN_ERROR: "Ha ocurrido un error inesperado",
-  VALIDATION_ERROR: "Los datos ingresados no son válidos",
+  UNKNOWN_ERROR: 'Ha ocurrido un error inesperado',
+  VALIDATION_ERROR: 'Los datos ingresados no son válidos',
 } as const;
 
 // Task Configuration
 export const TASK_CONFIG = {
   STATUSES: {
-    PENDING: "PENDING",
-    IN_PROGRESS: "IN_PROGRESS",
-    COMPLETED: "COMPLETED",
-    CANCELLED: "CANCELLED",
-    ON_HOLD: "ON_HOLD",
+    PENDING: 'PENDING',
+    IN_PROGRESS: 'IN_PROGRESS',
+    COMPLETED: 'COMPLETED',
+    CANCELLED: 'CANCELLED',
+    ON_HOLD: 'ON_HOLD',
   },
   PRIORITIES: {
-    LOW: "LOW",
-    MEDIUM: "MEDIUM",
-    HIGH: "HIGH",
-    URGENT: "URGENT",
+    LOW: 'LOW',
+    MEDIUM: 'MEDIUM',
+    HIGH: 'HIGH',
+    URGENT: 'URGENT',
   },
   MAX_TITLE_LENGTH: 200,
   MAX_DESCRIPTION_LENGTH: 2000,
@@ -172,24 +172,24 @@ export const CATEGORY_CONFIG = {
   MAX_NAME_LENGTH: 100,
   MAX_DESCRIPTION_LENGTH: 500,
   DEFAULT_COLORS: [
-    "#6366f1", // Indigo
-    "#8b5cf6", // Violet
-    "#06b6d4", // Cyan
-    "#10b981", // Emerald
-    "#f59e0b", // Amber
-    "#ef4444", // Red
-    "#ec4899", // Pink
-    "#84cc16", // Lime
+    '#6366f1', // Indigo
+    '#8b5cf6', // Violet
+    '#06b6d4', // Cyan
+    '#10b981', // Emerald
+    '#f59e0b', // Amber
+    '#ef4444', // Red
+    '#ec4899', // Pink
+    '#84cc16', // Lime
   ],
   DEFAULT_ICONS: [
-    "folder",
-    "briefcase",
-    "heart",
-    "star",
-    "flag",
-    "tag",
-    "bookmark",
-    "target",
+    'folder',
+    'briefcase',
+    'heart',
+    'star',
+    'flag',
+    'tag',
+    'bookmark',
+    'target',
   ],
 } as const;
 
@@ -201,20 +201,20 @@ export const UI_CONFIG = {
     PAGE_SIZE_OPTIONS: [10, 20, 50, 100],
     MAX_PAGE_SIZE: 100,
   },
-  
+
   // Toasts
   TOAST: {
     DURATION: 4000,
     POSITIONS: {
-      TOP_RIGHT: "top-right",
-      TOP_LEFT: "top-left",
-      BOTTOM_RIGHT: "bottom-right",
-      BOTTOM_LEFT: "bottom-left",
-      TOP_CENTER: "top-center",
-      BOTTOM_CENTER: "bottom-center",
+      TOP_RIGHT: 'top-right',
+      TOP_LEFT: 'top-left',
+      BOTTOM_RIGHT: 'bottom-right',
+      BOTTOM_LEFT: 'bottom-left',
+      TOP_CENTER: 'top-center',
+      BOTTOM_CENTER: 'bottom-center',
     } as const,
   },
-  
+
   // Animations
   ANIMATIONS: {
     DURATIONS: {
@@ -223,41 +223,41 @@ export const UI_CONFIG = {
       SLOW: 500,
     },
     EASINGS: {
-      IN: "ease-in",
-      OUT: "ease-out",
-      IN_OUT: "ease-in-out",
+      IN: 'ease-in',
+      OUT: 'ease-out',
+      IN_OUT: 'ease-in-out',
     },
   },
-  
+
   // Themes
   THEMES: {
-    LIGHT: "light",
-    DARK: "dark",
-    SYSTEM: "system",
+    LIGHT: 'light',
+    DARK: 'dark',
+    SYSTEM: 'system',
   } as const,
 } as const;
 
 // Storage Keys
 export const STORAGE_KEYS = {
   // Auth
-  ACCESS_TOKEN: "task_manager_token",
-  REFRESH_TOKEN: "task_manager_refresh_token",
-  USER_DATA: "task_manager_user",
-  SESSION_ID: "task_manager_session",
-  
+  ACCESS_TOKEN: 'task_manager_token',
+  REFRESH_TOKEN: 'task_manager_refresh_token',
+  USER_DATA: 'task_manager_user',
+  SESSION_ID: 'task_manager_session',
+
   // UI State
-  THEME: "task_manager_theme",
-  SIDEBAR_COLLAPSED: "task_manager_sidebar_collapsed",
-  TASK_VIEW_MODE: "task_manager_task_view",
-  LAST_CATEGORY: "task_manager_last_category",
-  
+  THEME: 'task_manager_theme',
+  SIDEBAR_COLLAPSED: 'task_manager_sidebar_collapsed',
+  TASK_VIEW_MODE: 'task_manager_task_view',
+  LAST_CATEGORY: 'task_manager_last_category',
+
   // Filters & Sorting
-  TASK_FILTERS: "task_manager_task_filters",
-  TASK_SORT: "task_manager_task_sort",
-  
+  TASK_FILTERS: 'task_manager_task_filters',
+  TASK_SORT: 'task_manager_task_sort',
+
   // Settings
-  NOTIFICATION_SETTINGS: "task_manager_notifications",
-  LANGUAGE: "task_manager_language",
+  NOTIFICATION_SETTINGS: 'task_manager_notifications',
+  LANGUAGE: 'task_manager_language',
 } as const;
 
 // API Configuration
@@ -304,23 +304,23 @@ export const VALIDATION_RULES = {
 // Route Paths
 export const ROUTES = {
   // Auth
-  LOGIN: "/login",
-  REGISTER: "/register",
-  FORGOT_PASSWORD: "/forgot-password",
-  RESET_PASSWORD: "/reset-password",
-  
+  LOGIN: '/login',
+  REGISTER: '/register',
+  FORGOT_PASSWORD: '/forgot-password',
+  RESET_PASSWORD: '/reset-password',
+
   // Main App
-  DASHBOARD: "/dashboard",
-  TASKS: "/tasks",
+  DASHBOARD: '/dashboard',
+  TASKS: '/tasks',
   TASK_DETAIL: (id: string) => `/tasks/${id}`,
-  CATEGORIES: "/categories",
-  PROFILE: "/profile",
-  SETTINGS: "/settings",
-  
+  CATEGORIES: '/categories',
+  PROFILE: '/profile',
+  SETTINGS: '/settings',
+
   // Landing
-  HOME: "/",
-  ABOUT: "/about",
-  CONTACT: "/contact",
+  HOME: '/',
+  ABOUT: '/about',
+  CONTACT: '/contact',
 } as const;
 
 // Feature Flags
@@ -337,156 +337,158 @@ export const FEATURES = {
 
 // Environment URLs
 export const ENV_URLS = {
-  AUTH_SERVICE: process.env.NODE_ENV === "development" 
-    ? process.env.NEXT_PUBLIC_AUTH_SERVICE_URL_DEV
-    : process.env.NEXT_PUBLIC_AUTH_SERVICE_URL,
-  TASK_SERVICE: process.env.NODE_ENV === "development"
-    ? process.env.NEXT_PUBLIC_TASK_SERVICE_URL_DEV
-    : process.env.NEXT_PUBLIC_TASK_SERVICE_URL,
+  AUTH_SERVICE:
+    process.env.NODE_ENV === 'development'
+      ? process.env.NEXT_PUBLIC_AUTH_SERVICE_URL_DEV
+      : process.env.NEXT_PUBLIC_AUTH_SERVICE_URL,
+  TASK_SERVICE:
+    process.env.NODE_ENV === 'development'
+      ? process.env.NEXT_PUBLIC_TASK_SERVICE_URL_DEV
+      : process.env.NEXT_PUBLIC_TASK_SERVICE_URL,
 } as const;
 
 // Date Formats
 export const DATE_FORMATS = {
   ISO: "yyyy-MM-dd'T'HH:mm:ss.SSSxxx",
-  DATE_ONLY: "yyyy-MM-dd",
-  HUMAN_READABLE: "PPP",
+  DATE_ONLY: 'yyyy-MM-dd',
+  HUMAN_READABLE: 'PPP',
   WITH_TIME: "PPP 'a las' p",
-  RELATIVE: "relative",
+  RELATIVE: 'relative',
 } as const;
 
 // Query Keys for React Query
 export const QUERY_KEYS = {
   // Auth
-  AUTH_USER: "auth.user",
-  AUTH_SESSIONS: "auth.sessions",
-  
+  AUTH_USER: 'auth.user',
+  AUTH_SESSIONS: 'auth.sessions',
+
   // Tasks
-  TASKS: "tasks",
-  TASK: (id: string) => ["tasks", id],
-  TASK_STATS: "tasks.stats",
-  
+  TASKS: 'tasks',
+  TASK: (id: string) => ['tasks', id],
+  TASK_STATS: 'tasks.stats',
+
   // Categories
-  CATEGORIES: "categories",
-  CATEGORY: (id: string) => ["categories", id],
-  CATEGORY_TASKS: (id: string) => ["categories", id, "tasks"],
+  CATEGORIES: 'categories',
+  CATEGORY: (id: string) => ['categories', id],
+  CATEGORY_TASKS: (id: string) => ['categories', id, 'tasks'],
 } as const;
 
 // Mutation Keys for React Query
 export const MUTATION_KEYS = {
   // Auth
-  LOGIN: "auth.login",
-  REGISTER: "auth.register",
-  LOGOUT: "auth.logout",
-  REFRESH_TOKEN: "auth.refresh",
-  
+  LOGIN: 'auth.login',
+  REGISTER: 'auth.register',
+  LOGOUT: 'auth.logout',
+  REFRESH_TOKEN: 'auth.refresh',
+
   // Tasks
-  CREATE_TASK: "tasks.create",
-  UPDATE_TASK: "tasks.update",
-  DELETE_TASK: "tasks.delete",
-  
+  CREATE_TASK: 'tasks.create',
+  UPDATE_TASK: 'tasks.update',
+  DELETE_TASK: 'tasks.delete',
+
   // Categories
-  CREATE_CATEGORY: "categories.create",
-  UPDATE_CATEGORY: "categories.update",
-  DELETE_CATEGORY: "categories.delete",
-  
+  CREATE_CATEGORY: 'categories.create',
+  UPDATE_CATEGORY: 'categories.update',
+  DELETE_CATEGORY: 'categories.delete',
+
   // Profile
-  UPDATE_PROFILE: "profile.update",
-  CHANGE_PASSWORD: "profile.changePassword",
+  UPDATE_PROFILE: 'profile.update',
+  CHANGE_PASSWORD: 'profile.changePassword',
 } as const;
 
 // Priority & Status Display Maps
 export const DISPLAY_MAPS = {
   TASK_STATUS: {
-    PENDING: { label: "Pendiente", color: "yellow" },
-    IN_PROGRESS: { label: "En Progreso", color: "blue" },
-    COMPLETED: { label: "Completada", color: "green" },
-    CANCELLED: { label: "Cancelada", color: "red" },
-    ON_HOLD: { label: "En Espera", color: "gray" },
+    PENDING: { label: 'Pendiente', color: 'yellow' },
+    IN_PROGRESS: { label: 'En Progreso', color: 'blue' },
+    COMPLETED: { label: 'Completada', color: 'green' },
+    CANCELLED: { label: 'Cancelada', color: 'red' },
+    ON_HOLD: { label: 'En Espera', color: 'gray' },
   },
   TASK_PRIORITY: {
-    LOW: { label: "Baja", color: "gray", weight: 1 },
-    MEDIUM: { label: "Media", color: "blue", weight: 2 },
-    HIGH: { label: "Alta", color: "orange", weight: 3 },
-    URGENT: { label: "Urgente", color: "red", weight: 4 },
+    LOW: { label: 'Baja', color: 'gray', weight: 1 },
+    MEDIUM: { label: 'Media', color: 'blue', weight: 2 },
+    HIGH: { label: 'Alta', color: 'orange', weight: 3 },
+    URGENT: { label: 'Urgente', color: 'red', weight: 4 },
   },
 } as const;
 
 // Sort Options
 export const SORT_OPTIONS = {
   FIELDS: {
-    CREATED_AT: "createdAt",
-    UPDATED_AT: "updatedAt",
-    DUE_DATE: "dueDate",
-    PRIORITY: "priority",
-    STATUS: "status",
-    TITLE: "title",
+    CREATED_AT: 'createdAt',
+    UPDATED_AT: 'updatedAt',
+    DUE_DATE: 'dueDate',
+    PRIORITY: 'priority',
+    STATUS: 'status',
+    TITLE: 'title',
   },
   ORDERS: {
-    ASC: "asc",
-    DESC: "desc",
+    ASC: 'asc',
+    DESC: 'desc',
   },
   DEFAULT: {
-    FIELD: "createdAt",
-    ORDER: "desc",
+    FIELD: 'createdAt',
+    ORDER: 'desc',
   },
 } as const;
 
 // Filter Options
 export const FILTER_OPTIONS = {
   FIELDS: {
-    STATUS: "status",
-    PRIORITY: "priority",
-    CATEGORY_ID: "categoryId",
-    DUE_DATE: "dueDate",
-    CREATED_AT: "createdAt",
-    HAS_DUE_DATE: "hasDueDate",
-    IS_OVERDUE: "isOverdue",
-    TAGS: "tags",
-    SEARCH: "search",
+    STATUS: 'status',
+    PRIORITY: 'priority',
+    CATEGORY_ID: 'categoryId',
+    DUE_DATE: 'dueDate',
+    CREATED_AT: 'createdAt',
+    HAS_DUE_DATE: 'hasDueDate',
+    IS_OVERDUE: 'isOverdue',
+    TAGS: 'tags',
+    SEARCH: 'search',
   },
   DUE_DATE_RANGES: {
-    TODAY: "today",
-    TOMORROW: "tomorrow",
-    THIS_WEEK: "thisWeek",
-    NEXT_WEEK: "nextWeek",
-    OVERDUE: "overdue",
-    NO_DUE_DATE: "noDueDate",
+    TODAY: 'today',
+    TOMORROW: 'tomorrow',
+    THIS_WEEK: 'thisWeek',
+    NEXT_WEEK: 'nextWeek',
+    OVERDUE: 'overdue',
+    NO_DUE_DATE: 'noDueDate',
   },
 } as const;
 
 // Event Types for Analytics
 export const EVENT_TYPES = {
   // User Actions
-  USER_LOGIN: "user.login",
-  USER_LOGOUT: "user.logout",
-  USER_REGISTER: "user.register",
-  
+  USER_LOGIN: 'user.login',
+  USER_LOGOUT: 'user.logout',
+  USER_REGISTER: 'user.register',
+
   // Task Actions
-  TASK_CREATED: "task.created",
-  TASK_UPDATED: "task.updated",
-  TASK_DELETED: "task.deleted",
-  TASK_COMPLETED: "task.completed",
-  TASK_STATUS_CHANGED: "task.status.changed",
-  
+  TASK_CREATED: 'task.created',
+  TASK_UPDATED: 'task.updated',
+  TASK_DELETED: 'task.deleted',
+  TASK_COMPLETED: 'task.completed',
+  TASK_STATUS_CHANGED: 'task.status.changed',
+
   // Category Actions
-  CATEGORY_CREATED: "category.created",
-  CATEGORY_UPDATED: "category.updated",
-  CATEGORY_DELETED: "category.deleted",
-  
+  CATEGORY_CREATED: 'category.created',
+  CATEGORY_UPDATED: 'category.updated',
+  CATEGORY_DELETED: 'category.deleted',
+
   // UI Interactions
-  SIDEBAR_TOGGLED: "ui.sidebar.toggled",
-  THEME_CHANGED: "ui.theme.changed",
-  VIEW_MODE_CHANGED: "ui.viewMode.changed",
-  
+  SIDEBAR_TOGGLED: 'ui.sidebar.toggled',
+  THEME_CHANGED: 'ui.theme.changed',
+  VIEW_MODE_CHANGED: 'ui.viewMode.changed',
+
   // Search & Filter
-  SEARCH_PERFORMED: "search.performed",
-  FILTER_APPLIED: "filter.applied",
-  SORT_CHANGED: "sort.changed",
-  
+  SEARCH_PERFORMED: 'search.performed',
+  FILTER_APPLIED: 'filter.applied',
+  SORT_CHANGED: 'sort.changed',
+
   // Errors
-  API_ERROR: "error.api",
-  NETWORK_ERROR: "error.network",
-  VALIDATION_ERROR: "error.validation",
+  API_ERROR: 'error.api',
+  NETWORK_ERROR: 'error.network',
+  VALIDATION_ERROR: 'error.validation',
 } as const;
 
 // Cache Keys
@@ -494,21 +496,21 @@ export const CACHE_KEYS = {
   // User Data
   USER_PROFILE: (userId: string) => `user:${userId}:profile`,
   USER_SESSIONS: (userId: string) => `user:${userId}:sessions`,
-  
+
   // Tasks
   USER_TASKS: (userId: string) => `user:${userId}:tasks`,
   TASK_DETAIL: (taskId: string) => `task:${taskId}`,
   TASK_STATS: (userId: string) => `user:${userId}:stats`,
-  
+
   // Categories
   USER_CATEGORIES: (userId: string) => `user:${userId}:categories`,
   CATEGORY_DETAIL: (categoryId: string) => `category:${categoryId}`,
   CATEGORY_TASKS: (categoryId: string) => `category:${categoryId}:tasks`,
-  
+
   // Search & Filters
-  SEARCH_RESULTS: (userId: string, query: string) => 
+  SEARCH_RESULTS: (userId: string, query: string) =>
     `search:${userId}:${Buffer.from(query).toString('base64')}`,
-  FILTER_RESULTS: (userId: string, filters: string) => 
+  FILTER_RESULTS: (userId: string, filters: string) =>
     `filter:${userId}:${Buffer.from(filters).toString('base64')}`,
 } as const;
 
@@ -526,47 +528,47 @@ export const CACHE_TTL = {
 // Keyboard Shortcuts
 export const KEYBOARD_SHORTCUTS = {
   // Global
-  TOGGLE_SIDEBAR: "cmd+b",
-  TOGGLE_THEME: "cmd+shift+t",
-  SEARCH: "cmd+k",
-  
+  TOGGLE_SIDEBAR: 'cmd+b',
+  TOGGLE_THEME: 'cmd+shift+t',
+  SEARCH: 'cmd+k',
+
   // Tasks
-  NEW_TASK: "cmd+n",
-  SAVE_TASK: "cmd+s",
-  DELETE_TASK: "cmd+d",
-  MARK_COMPLETE: "cmd+enter",
-  
+  NEW_TASK: 'cmd+n',
+  SAVE_TASK: 'cmd+s',
+  DELETE_TASK: 'cmd+d',
+  MARK_COMPLETE: 'cmd+enter',
+
   // Navigation
-  GO_TO_DASHBOARD: "g d",
-  GO_TO_TASKS: "g t",
-  GO_TO_CATEGORIES: "g c",
-  GO_TO_PROFILE: "g p",
-  
+  GO_TO_DASHBOARD: 'g d',
+  GO_TO_TASKS: 'g t',
+  GO_TO_CATEGORIES: 'g c',
+  GO_TO_PROFILE: 'g p',
+
   // Quick Actions
-  QUICK_FILTER: "f",
-  QUICK_SORT: "s",
-  REFRESH: "r",
+  QUICK_FILTER: 'f',
+  QUICK_SORT: 's',
+  REFRESH: 'r',
 } as const;
 
 // Notification Types
 export const NOTIFICATION_TYPES = {
-  SUCCESS: "success",
-  ERROR: "error",
-  WARNING: "warning",
-  INFO: "info",
+  SUCCESS: 'success',
+  ERROR: 'error',
+  WARNING: 'warning',
+  INFO: 'info',
 } as const;
 
 // File Upload Configuration
 export const FILE_UPLOAD = {
   MAX_SIZE: 5 * 1024 * 1024, // 5MB
   ALLOWED_TYPES: [
-    "image/jpeg",
-    "image/png",
-    "image/gif",
-    "application/pdf",
-    "text/plain",
-    "application/msword",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'application/pdf',
+    'text/plain',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   ],
   MAX_FILES: 5,
 } as const;
@@ -577,7 +579,7 @@ export const BREAKPOINTS = {
   MD: 768,
   LG: 1024,
   XL: 1280,
-  "2XL": 1536,
+  '2XL': 1536,
 } as const;
 
 // Animation Variants for Framer Motion
@@ -616,56 +618,60 @@ export const ANIMATION_VARIANTS = {
 
 // Form Validation Messages
 export const VALIDATION_MESSAGES = {
-  REQUIRED: "Este campo es obligatorio",
-  INVALID_EMAIL: "Ingresa un email válido",
-  PASSWORD_TOO_SHORT: "La contraseña debe tener al menos 8 caracteres",
-  PASSWORD_TOO_WEAK: "La contraseña debe contener mayúsculas, minúsculas, números y símbolos",
-  PASSWORDS_DONT_MATCH: "Las contraseñas no coinciden",
-  INVALID_DATE: "Ingresa una fecha válida",
-  DATE_IN_PAST: "La fecha no puede ser en el pasado",
+  REQUIRED: 'Este campo es obligatorio',
+  INVALID_EMAIL: 'Ingresa un email válido',
+  PASSWORD_TOO_SHORT: 'La contraseña debe tener al menos 8 caracteres',
+  PASSWORD_TOO_WEAK:
+    'La contraseña debe contener mayúsculas, minúsculas, números y símbolos',
+  PASSWORDS_DONT_MATCH: 'Las contraseñas no coinciden',
+  INVALID_DATE: 'Ingresa una fecha válida',
+  DATE_IN_PAST: 'La fecha no puede ser en el pasado',
   MAX_LENGTH: (max: number) => `Máximo ${max} caracteres`,
   MIN_LENGTH: (min: number) => `Mínimo ${min} caracteres`,
 } as const;
 
 // Social Media Links
 export const SOCIAL_LINKS = {
-  GITHUB: process.env.NEXT_PUBLIC_GITHUB_URL || "#",
-  TWITTER: process.env.NEXT_PUBLIC_TWITTER_URL || "#",
-  LINKEDIN: process.env.NEXT_PUBLIC_LINKEDIN_URL || "#",
-  DOCS: process.env.NEXT_PUBLIC_DOCS_URL || "#",
+  GITHUB: process.env.NEXT_PUBLIC_GITHUB_URL || '#',
+  TWITTER: process.env.NEXT_PUBLIC_TWITTER_URL || '#',
+  LINKEDIN: process.env.NEXT_PUBLIC_LINKEDIN_URL || '#',
+  DOCS: process.env.NEXT_PUBLIC_DOCS_URL || '#',
 } as const;
 
 // Contact Information
 export const CONTACT_INFO = {
-  EMAIL: process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "support@taskmanager.com",
-  PHONE: process.env.NEXT_PUBLIC_SUPPORT_PHONE || "+1 (555) 123-4567",
+  EMAIL: process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'support@taskmanager.com',
+  PHONE: process.env.NEXT_PUBLIC_SUPPORT_PHONE || '+1 (555) 123-4567',
 } as const;
 
 // SEO Configuration
 export const SEO_CONFIG = {
-  DEFAULT_TITLE: "Task Manager Pro",
-  TITLE_TEMPLATE: "%s | Task Manager Pro",
-  DEFAULT_DESCRIPTION: "Gestiona tus tareas de manera eficiente con Task Manager Pro",
+  DEFAULT_TITLE: 'Task Manager Pro',
+  TITLE_TEMPLATE: '%s | Task Manager Pro',
+  DEFAULT_DESCRIPTION:
+    'Gestiona tus tareas de manera eficiente con Task Manager Pro',
   KEYWORDS: [
-    "task manager",
-    "productivity",
-    "todo list",
-    "project management",
-    "gestión de tareas",
-    "productividad",
+    'task manager',
+    'productivity',
+    'todo list',
+    'project management',
+    'gestión de tareas',
+    'productividad',
   ],
-  AUTHOR: "Task Manager Team",
-  SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || "https://taskmanager.com",
-  TWITTER_HANDLE: "@taskmanagerpro",
+  AUTHOR: 'Task Manager Team',
+  SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || 'https://taskmanager.com',
+  TWITTER_HANDLE: '@taskmanagerpro',
 } as const;
 
 // PWA Configuration
 export const PWA_CONFIG = {
-  NAME: process.env.NEXT_PUBLIC_PWA_NAME || "Task Manager Pro",
-  SHORT_NAME: process.env.NEXT_PUBLIC_PWA_SHORT_NAME || "TaskManager",
-  DESCRIPTION: process.env.NEXT_PUBLIC_PWA_DESCRIPTION || "Gestiona tus tareas de manera eficiente",
-  THEME_COLOR: "#6366f1",
-  BACKGROUND_COLOR: "#ffffff",
+  NAME: process.env.NEXT_PUBLIC_PWA_NAME || 'Task Manager Pro',
+  SHORT_NAME: process.env.NEXT_PUBLIC_PWA_SHORT_NAME || 'TaskManager',
+  DESCRIPTION:
+    process.env.NEXT_PUBLIC_PWA_DESCRIPTION ||
+    'Gestiona tus tareas de manera eficiente',
+  THEME_COLOR: '#6366f1',
+  BACKGROUND_COLOR: '#ffffff',
 } as const;
 
 // Export types for better TypeScript support

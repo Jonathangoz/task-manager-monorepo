@@ -1,15 +1,15 @@
 // src/core/domain/entities/User.ts
-import { 
-  VALIDATION_PATTERNS, 
-  SECURITY_CONFIG, 
-  ERROR_CODES 
+import {
+  VALIDATION_PATTERNS,
+  SECURITY_CONFIG,
+  ERROR_CODES,
 } from '@/utils/constants';
 
 export class UserValidationError extends Error {
   constructor(
     message: string,
     public readonly code: string,
-    public readonly field?: string
+    public readonly field?: string,
   ) {
     super(message);
     this.name = 'UserValidationError';
@@ -29,7 +29,7 @@ export class User {
     public readonly isVerified: boolean = false,
     public readonly lastLoginAt: Date | null = null,
     public readonly createdAt: Date = new Date(),
-    public readonly updatedAt: Date = new Date()
+    public readonly updatedAt: Date = new Date(),
   ) {
     this.validateUser();
   }
@@ -48,7 +48,7 @@ export class User {
       throw new UserValidationError(
         'Email es requerido',
         ERROR_CODES.INVALID_EMAIL,
-        'email'
+        'email',
       );
     }
 
@@ -56,7 +56,7 @@ export class User {
       throw new UserValidationError(
         'Formato de email inválido',
         ERROR_CODES.INVALID_EMAIL,
-        'email'
+        'email',
       );
     }
 
@@ -64,7 +64,7 @@ export class User {
       throw new UserValidationError(
         `Email no puede exceder ${SECURITY_CONFIG.EMAIL_MAX_LENGTH} caracteres`,
         ERROR_CODES.INVALID_EMAIL,
-        'email'
+        'email',
       );
     }
   }
@@ -75,7 +75,7 @@ export class User {
       throw new UserValidationError(
         'Username es requerido',
         ERROR_CODES.INVALID_USERNAME,
-        'username'
+        'username',
       );
     }
 
@@ -83,7 +83,7 @@ export class User {
       throw new UserValidationError(
         `Username debe tener al menos ${SECURITY_CONFIG.USERNAME_MIN_LENGTH} caracteres`,
         ERROR_CODES.INVALID_USERNAME,
-        'username'
+        'username',
       );
     }
 
@@ -91,7 +91,7 @@ export class User {
       throw new UserValidationError(
         `Username no puede exceder ${SECURITY_CONFIG.USERNAME_MAX_LENGTH} caracteres`,
         ERROR_CODES.INVALID_USERNAME,
-        'username'
+        'username',
       );
     }
 
@@ -99,7 +99,7 @@ export class User {
       throw new UserValidationError(
         'Username solo puede contener letras, números y guiones bajos',
         ERROR_CODES.INVALID_USERNAME,
-        'username'
+        'username',
       );
     }
   }
@@ -110,18 +110,20 @@ export class User {
       throw new UserValidationError(
         'Password es requerido',
         ERROR_CODES.INVALID_PASSWORD,
-        'password'
+        'password',
       );
     }
 
     // Para passwords hasheados, esta validación puede ser diferente
     // Si es un hash, típicamente será más largo que el mínimo
-    if (this._password.length < SECURITY_CONFIG.PASSWORD_MIN_LENGTH && 
-        !this.isPasswordHashed()) {
+    if (
+      this._password.length < SECURITY_CONFIG.PASSWORD_MIN_LENGTH &&
+      !this.isPasswordHashed()
+    ) {
       throw new UserValidationError(
         `Password debe tener al menos ${SECURITY_CONFIG.PASSWORD_MIN_LENGTH} caracteres`,
         ERROR_CODES.PASSWORD_TOO_WEAK,
-        'password'
+        'password',
       );
     }
   }
@@ -132,7 +134,7 @@ export class User {
       throw new UserValidationError(
         'First name no puede estar vacío',
         ERROR_CODES.VALIDATION_ERROR,
-        'firstName'
+        'firstName',
       );
     }
 
@@ -140,7 +142,7 @@ export class User {
       throw new UserValidationError(
         'Last name no puede estar vacío',
         ERROR_CODES.VALIDATION_ERROR,
-        'lastName'
+        'lastName',
       );
     }
   }
@@ -149,10 +151,12 @@ export class User {
   private isPasswordHashed(): boolean {
     // Argon2 hashes típicamente empiezan con $argon2
     // bcrypt hashes empiezan con $2a$, $2b$, etc.
-    return this._password.startsWith('$argon2') || 
-           this._password.startsWith('$2a$') || 
-           this._password.startsWith('$2b$') ||
-           this._password.length > 50; // Los hashes son típicamente largos
+    return (
+      this._password.startsWith('$argon2') ||
+      this._password.startsWith('$2a$') ||
+      this._password.startsWith('$2b$') ||
+      this._password.length > 50
+    ); // Los hashes son típicamente largos
   }
 
   // Método para obtener el nombre completo
@@ -189,7 +193,7 @@ export class User {
       fullName: this.fullName,
       avatar: this.avatar,
       isActive: this.isActive,
-      isVerified: this.isVerified
+      isVerified: this.isVerified,
     };
   }
 
@@ -235,7 +239,7 @@ export class User {
       this.isVerified,
       new Date(), // lastLoginAt
       this.createdAt,
-      new Date()  // updatedAt
+      new Date(), // updatedAt
     );
   }
 
@@ -259,7 +263,7 @@ export class User {
       data.isVerified !== undefined ? data.isVerified : this.isVerified,
       this.lastLoginAt,
       this.createdAt,
-      new Date()
+      new Date(),
     );
   }
 
@@ -321,7 +325,7 @@ export class User {
       userData.isVerified,
       userData.lastLoginAt,
       userData.createdAt,
-      userData.updatedAt
+      userData.updatedAt,
     );
   }
 
@@ -352,7 +356,7 @@ export class User {
       isVerified: this.isVerified,
       lastLoginAt: this.lastLoginAt,
       createdAt: this.createdAt,
-      updatedAt: this.updatedAt
+      updatedAt: this.updatedAt,
     };
   }
 }

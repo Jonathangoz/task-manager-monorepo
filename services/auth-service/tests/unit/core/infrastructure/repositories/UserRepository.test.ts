@@ -15,7 +15,7 @@ describe('UserRepository', () => {
       // Arrange
       const userData = userFixtures.validUser;
       const expectedUser = { id: 'user-123', ...userData };
-      
+
       mockPrisma.user.create.mockResolvedValue(expectedUser);
 
       // Act
@@ -29,8 +29,8 @@ describe('UserRepository', () => {
           id: true,
           email: true,
           username: true,
-          password: false // Nunca retornar password
-        })
+          password: false, // Nunca retornar password
+        }),
       });
     });
 
@@ -40,8 +40,9 @@ describe('UserRepository', () => {
       mockPrisma.user.create.mockRejectedValue(new Error('Database error'));
 
       // Act & Assert
-      await expect(userRepository.create(userData))
-        .rejects.toThrow('Failed to create user');
+      await expect(userRepository.create(userData)).rejects.toThrow(
+        'Failed to create user',
+      );
     });
   });
 
@@ -50,7 +51,7 @@ describe('UserRepository', () => {
       // Arrange
       const email = 'test@example.com';
       const expectedUser = { id: 'user-123', email, username: 'testuser' };
-      
+
       mockPrisma.user.findUnique.mockResolvedValue(expectedUser);
 
       // Act
@@ -60,7 +61,7 @@ describe('UserRepository', () => {
       expect(result).toEqual(expectedUser);
       expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
         where: { email },
-        select: expect.any(Object)
+        select: expect.any(Object),
       });
     });
 
@@ -90,11 +91,8 @@ describe('UserRepository', () => {
       expect(result).toBe(true);
       expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
         where: {
-          OR: [
-            { email },
-            { username: undefined }
-          ]
-        }
+          OR: [{ email }, { username: undefined }],
+        },
       });
     });
 

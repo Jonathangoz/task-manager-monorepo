@@ -35,7 +35,7 @@ export interface AuthenticatedRequest extends Request {
     email: string;
     username: string;
     firstName: string; // Corregido: requerido y no opcional
-    lastName: string;  // Corregido: requerido y no opcional
+    lastName: string; // Corregido: requerido y no opcional
     sessionId?: string;
   };
 }
@@ -45,20 +45,42 @@ export interface AuthenticatedRequest extends Request {
  * TODO: Reemplazar con implementación real de cache
  */
 interface CacheMiddleware {
-  categories: (ttl: number) => (req: Request, res: Response, next: NextFunction) => void;
-  categoryDetail: (ttl: number) => (req: Request, res: Response, next: NextFunction) => void;
-  categoryTasks: (ttl: number) => (req: Request, res: Response, next: NextFunction) => void;
-  categoryStats: (ttl: number) => (req: Request, res: Response, next: NextFunction) => void;
-  activeCategories: (ttl: number) => (req: Request, res: Response, next: NextFunction) => void;
+  categories: (
+    ttl: number,
+  ) => (req: Request, res: Response, next: NextFunction) => void;
+  categoryDetail: (
+    ttl: number,
+  ) => (req: Request, res: Response, next: NextFunction) => void;
+  categoryTasks: (
+    ttl: number,
+  ) => (req: Request, res: Response, next: NextFunction) => void;
+  categoryStats: (
+    ttl: number,
+  ) => (req: Request, res: Response, next: NextFunction) => void;
+  activeCategories: (
+    ttl: number,
+  ) => (req: Request, res: Response, next: NextFunction) => void;
 }
 
 /**
  * Configuración de rate limiting
  */
 interface RateLimitMiddleware {
-  categoryCreation: () => (req: Request, res: Response, next: NextFunction) => void;
-  bulkOperations: () => (req: Request, res: Response, next: NextFunction) => void;
-  exportOperations: () => (req: Request, res: Response, next: NextFunction) => void;
+  categoryCreation: () => (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => void;
+  bulkOperations: () => (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => void;
+  exportOperations: () => (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => void;
 }
 
 // ==============================================
@@ -70,69 +92,91 @@ interface RateLimitMiddleware {
  * Implementación mock que se puede reemplazar fácilmente
  */
 const createCacheMiddleware = (): CacheMiddleware => ({
-  categories: (ttl: number) => (req: Request, res: Response, next: NextFunction) => {
-    const requestLogger = createRequestLogger(
-      req.headers['x-request-id'] as string,
-      (req as AuthenticatedRequest).user?.id
-    );
-    requestLogger.debug({ ttl, endpoint: 'categories' }, 'Cache middleware - categories (mock)');
-    next();
-  },
-  categoryDetail: (ttl: number) => (req: Request, res: Response, next: NextFunction) => {
-    const requestLogger = createRequestLogger(
-      req.headers['x-request-id'] as string,
-      (req as AuthenticatedRequest).user?.id
-    );
-    requestLogger.debug({ ttl, endpoint: 'categoryDetail' }, 'Cache middleware - categoryDetail (mock)');
-    next();
-  },
-  categoryTasks: (ttl: number) => (req: Request, res: Response, next: NextFunction) => {
-    const requestLogger = createRequestLogger(
-      req.headers['x-request-id'] as string,
-      (req as AuthenticatedRequest).user?.id
-    );
-    requestLogger.debug({ ttl, endpoint: 'categoryTasks' }, 'Cache middleware - categoryTasks (mock)');
-    next();
-  },
-  categoryStats: (ttl: number) => (req: Request, res: Response, next: NextFunction) => {
-    const requestLogger = createRequestLogger(
-      req.headers['x-request-id'] as string,
-      (req as AuthenticatedRequest).user?.id
-    );
-    requestLogger.debug({ ttl, endpoint: 'categoryStats' }, 'Cache middleware - categoryStats (mock)');
-    next();
-  },
-  activeCategories: (ttl: number) => (req: Request, res: Response, next: NextFunction) => {
-    const requestLogger = createRequestLogger(
-      req.headers['x-request-id'] as string,
-      (req as AuthenticatedRequest).user?.id
-    );
-    requestLogger.debug({ ttl, endpoint: 'activeCategories' }, 'Cache middleware - activeCategories (mock)');
-    next();
-  },
+  categories:
+    (ttl: number) => (req: Request, res: Response, next: NextFunction) => {
+      const requestLogger = createRequestLogger(
+        req.headers['x-request-id'] as string,
+        (req as AuthenticatedRequest).user?.id,
+      );
+      requestLogger.debug(
+        { ttl, endpoint: 'categories' },
+        'Cache middleware - categories (mock)',
+      );
+      next();
+    },
+  categoryDetail:
+    (ttl: number) => (req: Request, res: Response, next: NextFunction) => {
+      const requestLogger = createRequestLogger(
+        req.headers['x-request-id'] as string,
+        (req as AuthenticatedRequest).user?.id,
+      );
+      requestLogger.debug(
+        { ttl, endpoint: 'categoryDetail' },
+        'Cache middleware - categoryDetail (mock)',
+      );
+      next();
+    },
+  categoryTasks:
+    (ttl: number) => (req: Request, res: Response, next: NextFunction) => {
+      const requestLogger = createRequestLogger(
+        req.headers['x-request-id'] as string,
+        (req as AuthenticatedRequest).user?.id,
+      );
+      requestLogger.debug(
+        { ttl, endpoint: 'categoryTasks' },
+        'Cache middleware - categoryTasks (mock)',
+      );
+      next();
+    },
+  categoryStats:
+    (ttl: number) => (req: Request, res: Response, next: NextFunction) => {
+      const requestLogger = createRequestLogger(
+        req.headers['x-request-id'] as string,
+        (req as AuthenticatedRequest).user?.id,
+      );
+      requestLogger.debug(
+        { ttl, endpoint: 'categoryStats' },
+        'Cache middleware - categoryStats (mock)',
+      );
+      next();
+    },
+  activeCategories:
+    (ttl: number) => (req: Request, res: Response, next: NextFunction) => {
+      const requestLogger = createRequestLogger(
+        req.headers['x-request-id'] as string,
+        (req as AuthenticatedRequest).user?.id,
+      );
+      requestLogger.debug(
+        { ttl, endpoint: 'activeCategories' },
+        'Cache middleware - activeCategories (mock)',
+      );
+      next();
+    },
 });
 
 /**
  * Factory para crear middleware de rate limiting
  */
 const createRateLimitMiddleware = (): RateLimitMiddleware => ({
-  categoryCreation: () => createRateLimiter({
-    windowMs: 60 * 1000, // 1 minuto
-    max: 10, // 10 categorías por minuto
-    keyGenerator: (req: Request) => {
-      const user = (req as AuthenticatedRequest).user;
-      return `create_category:${user?.id || req.ip}`;
-    },
-  }),
+  categoryCreation: () =>
+    createRateLimiter({
+      windowMs: 60 * 1000, // 1 minuto
+      max: 10, // 10 categorías por minuto
+      keyGenerator: (req: Request) => {
+        const user = (req as AuthenticatedRequest).user;
+        return `create_category:${user?.id || req.ip}`;
+      },
+    }),
   bulkOperations: () => bulkOperationsRateLimit,
-  exportOperations: () => createRateLimiter({
-    windowMs: 5 * 60 * 1000, // 5 minutos
-    max: 5,
-    keyGenerator: (req: Request) => {
-      const user = (req as AuthenticatedRequest).user;
-      return `export_category:${user?.id || req.ip}`;
-    },
-  }),
+  exportOperations: () =>
+    createRateLimiter({
+      windowMs: 5 * 60 * 1000, // 5 minutos
+      max: 5,
+      keyGenerator: (req: Request) => {
+        const user = (req as AuthenticatedRequest).user;
+        return `export_category:${user?.id || req.ip}`;
+      },
+    }),
 });
 
 // ==============================================
@@ -143,10 +187,10 @@ const createRateLimitMiddleware = (): RateLimitMiddleware => ({
  * Configuración de timeouts para cache
  */
 const CACHE_TTL = {
-  CATEGORIES: 300,        // 5 minutos
-  CATEGORY_DETAIL: 300,   // 5 minutos
-  CATEGORY_TASKS: 180,    // 3 minutos
-  CATEGORY_STATS: 600,    // 10 minutos
+  CATEGORIES: 300, // 5 minutos
+  CATEGORY_DETAIL: 300, // 5 minutos
+  CATEGORY_TASKS: 180, // 3 minutos
+  CATEGORY_STATS: 600, // 10 minutos
   ACTIVE_CATEGORIES: 900, // 15 minutos
 } as const;
 
@@ -176,7 +220,7 @@ const RESPONSE_MESSAGES = {
 /**
  * CategoryRoutes
  * Configuración de rutas para el módulo de categorías siguiendo principios SOLID.
- * 
+ *
  * Principios aplicados:
  * - SRP: Una sola responsabilidad - configurar rutas de categorías
  * - OCP: Abierto para extensión, cerrado para modificación
@@ -189,9 +233,9 @@ export class CategoryRoutes {
   private readonly categoryController: CategoryController;
   private readonly cacheMiddleware: CacheMiddleware;
   private readonly rateLimitMiddleware: RateLimitMiddleware;
-  private readonly routeLogger = logger.child({ 
+  private readonly routeLogger = logger.child({
     component: 'CategoryRoutes',
-    domain: 'routes' 
+    domain: 'routes',
   });
 
   constructor(categoryService: ICategoryService) {
@@ -199,7 +243,7 @@ export class CategoryRoutes {
     this.categoryController = new CategoryController(categoryService);
     this.cacheMiddleware = createCacheMiddleware();
     this.rateLimitMiddleware = createRateLimitMiddleware();
-    
+
     this.routeLogger.info('Inicializando CategoryRoutes');
     this.setupGlobalMiddleware();
     this.setupRoutes();
@@ -211,16 +255,16 @@ export class CategoryRoutes {
    */
   private setupGlobalMiddleware(): void {
     this.routeLogger.debug('Configurando middleware global');
-    
+
     // Middleware de autenticación para todas las rutas
     this.router.use(authenticateToken);
-    
+
     // Rate limiter general para usuarios autenticados
     this.router.use(createRateLimiter());
-    
+
     // Middleware de logging para todas las requests
     this.router.use(this.createLoggingMiddleware());
-    
+
     this.routeLogger.debug('Middleware global configurado');
   }
 
@@ -232,31 +276,37 @@ export class CategoryRoutes {
       const startTime = Date.now();
       const requestId = req.headers['x-request-id'] as string;
       const user = (req as AuthenticatedRequest).user;
-      
+
       const requestLogger = createRequestLogger(requestId, user?.id);
-      
-      requestLogger.info({
-        method: req.method,
-        path: req.path,
-        query: req.query,
-        userId: user?.id,
-        userAgent: req.headers['user-agent'],
-        ip: req.ip,
-      }, `🌐 Iniciando request: ${req.method} ${req.path}`);
+
+      requestLogger.info(
+        {
+          method: req.method,
+          path: req.path,
+          query: req.query,
+          userId: user?.id,
+          userAgent: req.headers['user-agent'],
+          ip: req.ip,
+        },
+        `🌐 Iniciando request: ${req.method} ${req.path}`,
+      );
 
       // Override del método end para capturar la respuesta
       const originalEnd = res.end;
-      res.end = function(this: Response, ...args: any[]) {
+      res.end = function (this: Response, ...args: any[]) {
         const duration = Date.now() - startTime;
-        
-        requestLogger.info({
-          method: req.method,
-          path: req.path,
-          statusCode: res.statusCode,
-          duration,
-          userId: user?.id,
-        }, `✅ Request completada: ${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
-        
+
+        requestLogger.info(
+          {
+            method: req.method,
+            path: req.path,
+            statusCode: res.statusCode,
+            duration,
+            userId: user?.id,
+          },
+          `✅ Request completada: ${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`,
+        );
+
         return originalEnd.apply(this);
       };
 
@@ -270,7 +320,7 @@ export class CategoryRoutes {
    */
   private setupRoutes(): void {
     this.routeLogger.debug('Configurando rutas de categorías');
-    
+
     // Configurar grupos de rutas
     this.setupCrudRoutes();
     this.setupSpecializedRoutes();
@@ -279,7 +329,7 @@ export class CategoryRoutes {
     this.setupSearchRoutes();
     this.setupUtilityRoutes();
     this.setupExportRoutes();
-    
+
     this.routeLogger.debug('Todas las rutas configuradas correctamente');
   }
 
@@ -312,7 +362,7 @@ export class CategoryRoutes {
       '/',
       this.cacheMiddleware.categories(CACHE_TTL.CATEGORIES),
       validateCategorySchema(getCategoriesSchema),
-      this.wrapControllerMethod('getCategories')
+      this.wrapControllerMethod('getCategories'),
     );
 
     /**
@@ -338,7 +388,7 @@ export class CategoryRoutes {
       '/',
       this.rateLimitMiddleware.categoryCreation(),
       validateCategorySchema(createCategorySchema),
-      this.wrapControllerMethod('createCategory')
+      this.wrapControllerMethod('createCategory'),
     );
 
     /**
@@ -360,7 +410,7 @@ export class CategoryRoutes {
       '/:id',
       this.cacheMiddleware.categoryDetail(CACHE_TTL.CATEGORY_DETAIL),
       validateCategorySchema(getCategoryByIdSchema),
-      this.wrapControllerMethod('getCategoryById')
+      this.wrapControllerMethod('getCategoryById'),
     );
 
     /**
@@ -387,7 +437,7 @@ export class CategoryRoutes {
     this.router.put(
       '/:id',
       validateCategorySchema(updateCategorySchema),
-      this.wrapControllerMethod('updateCategory')
+      this.wrapControllerMethod('updateCategory'),
     );
 
     /**
@@ -408,7 +458,7 @@ export class CategoryRoutes {
     this.router.delete(
       '/:id',
       validateCategorySchema(deleteCategorySchema),
-      this.wrapControllerMethod('deleteCategory')
+      this.wrapControllerMethod('deleteCategory'),
     );
   }
 
@@ -437,7 +487,7 @@ export class CategoryRoutes {
       '/:id/tasks',
       this.cacheMiddleware.categoryTasks(CACHE_TTL.CATEGORY_TASKS),
       validateCategorySchema(getCategoryByIdSchema),
-      this.wrapControllerMethod('getCategoryTasks')
+      this.wrapControllerMethod('getCategoryTasks'),
     );
   }
 
@@ -474,7 +524,7 @@ export class CategoryRoutes {
       '/bulk',
       this.rateLimitMiddleware.bulkOperations(),
       validateCategorySchema(bulkDeleteCategoriesSchema),
-      this.wrapControllerMethod('bulkDeleteCategories')
+      this.wrapControllerMethod('bulkDeleteCategories'),
     );
   }
 
@@ -501,7 +551,7 @@ export class CategoryRoutes {
       '/stats',
       this.cacheMiddleware.categoryStats(CACHE_TTL.CATEGORY_STATS),
       validateCategorySchema(getCategoryStatsSchema),
-      this.wrapControllerMethod('getCategoryStats')
+      this.wrapControllerMethod('getCategoryStats'),
     );
 
     /**
@@ -520,7 +570,7 @@ export class CategoryRoutes {
     this.router.get(
       '/active',
       this.cacheMiddleware.activeCategories(CACHE_TTL.ACTIVE_CATEGORIES),
-      this.wrapControllerMethod('getActiveCategories')
+      this.wrapControllerMethod('getActiveCategories'),
     );
   }
 
@@ -551,7 +601,7 @@ export class CategoryRoutes {
     this.router.get(
       '/search',
       validateCategorySchema(searchCategoriesSchema),
-      this.wrapControllerMethod('searchCategories')
+      this.wrapControllerMethod('searchCategories'),
     );
   }
 
@@ -579,7 +629,7 @@ export class CategoryRoutes {
     this.router.get(
       '/:id/validate',
       validateCategorySchema(getCategoryByIdSchema),
-      this.wrapControllerMethod('validateCategoryOwnership')
+      this.wrapControllerMethod('validateCategoryOwnership'),
     );
 
     /**
@@ -597,7 +647,7 @@ export class CategoryRoutes {
      */
     this.router.get(
       '/check-limit',
-      this.wrapControllerMethod('checkCategoryLimit')
+      this.wrapControllerMethod('checkCategoryLimit'),
     );
   }
 
@@ -628,14 +678,14 @@ export class CategoryRoutes {
       '/export',
       this.rateLimitMiddleware.exportOperations(),
       validateCategorySchema(exportCategoriesSchema),
-      this.wrapControllerMethod('getCategories') // Reutiliza getCategories hasta implementar exportCategories
+      this.wrapControllerMethod('getCategories'), // Reutiliza getCategories hasta implementar exportCategories
     );
   }
 
   /**
    * Wrapper que unifica el manejo de métodos del controlador
    * Aplica logging consistente y manejo de errores
-   * 
+   *
    * @param methodName - Nombre del método del controlador
    * @returns Middleware function
    */
@@ -644,40 +694,55 @@ export class CategoryRoutes {
       const authReq = req as AuthenticatedRequest;
       const requestLogger = createRequestLogger(
         req.headers['x-request-id'] as string,
-        authReq.user?.id
+        authReq.user?.id,
       );
 
       requestLogger.debug(
-        { 
+        {
           method: methodName,
           path: req.path,
           userId: authReq.user?.id,
           params: req.params,
-          query: req.query 
+          query: req.query,
         },
-        `🎯 Ejecutando método del controlador: ${methodName}`
+        `🎯 Ejecutando método del controlador: ${methodName}`,
       );
 
       try {
         // Verificar que el método existe en el controlador
         const controllerMethod = this.categoryController[methodName];
-        
+
         if (typeof controllerMethod !== 'function') {
-          const error = new Error(`Controller method '${methodName}' not found`);
-          requestLogger.error({ methodName, availableMethods: Object.getOwnPropertyNames(this.categoryController) }, 'Método del controlador no encontrado');
+          const error = new Error(
+            `Controller method '${methodName}' not found`,
+          );
+          requestLogger.error(
+            {
+              methodName,
+              availableMethods: Object.getOwnPropertyNames(
+                this.categoryController,
+              ),
+            },
+            'Método del controlador no encontrado',
+          );
           return next(error);
         }
 
         // Ejecutar el método del controlador con bind correcto
-        return (controllerMethod as Function).call(this.categoryController, authReq, res, next);
+        return (controllerMethod as Function).call(
+          this.categoryController,
+          authReq,
+          res,
+          next,
+        );
       } catch (error) {
         requestLogger.error(
-          { 
+          {
             error: error instanceof Error ? error.message : String(error),
             methodName,
-            userId: authReq.user?.id 
+            userId: authReq.user?.id,
           },
-          `❌ Error ejecutando método del controlador: ${methodName}`
+          `❌ Error ejecutando método del controlador: ${methodName}`,
         );
         next(error);
       }
@@ -692,22 +757,24 @@ export class CategoryRoutes {
 /**
  * Factory function para crear la instancia del router
  * Facilita la inyección de dependencias y testing
- * 
+ *
  * @param categoryService - Servicio de categorías
  * @returns Router configurado
  */
-export const createCategoryRoutes = (categoryService: ICategoryService): Router => {
+export const createCategoryRoutes = (
+  categoryService: ICategoryService,
+): Router => {
   logger.info('🏭 Creando CategoryRoutes con factory function');
-  
+
   try {
     const categoryRoutes = new CategoryRoutes(categoryService);
-    
+
     logger.info('✅ CategoryRoutes creado exitosamente');
     return categoryRoutes.router;
   } catch (error) {
     logger.error(
       { error: error instanceof Error ? error.message : String(error) },
-      '❌ Error creando CategoryRoutes'
+      '❌ Error creando CategoryRoutes',
     );
     throw error;
   }

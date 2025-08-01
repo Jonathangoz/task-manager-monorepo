@@ -1,23 +1,23 @@
 // src/hooks/useTasks.ts
 import { useState, useCallback, useEffect } from 'react';
 import { taskApi } from '@/lib/api/taskApi';
-import { 
-  Task, 
-  CreateTaskData, 
+import {
+  Task,
+  CreateTaskData,
   UpdateTaskData,
   TaskFilters,
   TaskStats,
   Category,
   CreateCategoryData,
-  PaginationMeta
+  PaginationMeta,
 } from '@/types/task.types';
-import { 
+import {
   TASK_STATUSES,
   TASK_PRIORITIES,
   SUCCESS_MESSAGES,
   PAGINATION_CONFIG,
   SORT_FIELDS,
-  SORT_ORDERS
+  SORT_ORDERS,
 } from '@/lib/constants';
 import { toast } from 'sonner';
 
@@ -33,22 +33,32 @@ interface TasksState {
 
 interface UseTasksReturn extends TasksState {
   // Task operations
-  fetchTasks: (filters?: TaskFilters, page?: number, limit?: number) => Promise<void>;
+  fetchTasks: (
+    filters?: TaskFilters,
+    page?: number,
+    limit?: number,
+  ) => Promise<void>;
   createTask: (data: CreateTaskData) => Promise<boolean>;
   updateTask: (id: string, data: UpdateTaskData) => Promise<boolean>;
   deleteTask: (id: string) => Promise<boolean>;
   getTask: (id: string) => Promise<Task | null>;
-  updateTaskStatus: (id: string, status: keyof typeof TASK_STATUSES) => Promise<boolean>;
-  
+  updateTaskStatus: (
+    id: string,
+    status: keyof typeof TASK_STATUSES,
+  ) => Promise<boolean>;
+
   // Category operations
   fetchCategories: () => Promise<void>;
   createCategory: (data: CreateCategoryData) => Promise<boolean>;
-  updateCategory: (id: string, data: Partial<CreateCategoryData>) => Promise<boolean>;
+  updateCategory: (
+    id: string,
+    data: Partial<CreateCategoryData>,
+  ) => Promise<boolean>;
   deleteCategory: (id: string) => Promise<boolean>;
-  
+
   // Stats operations
   fetchStats: () => Promise<void>;
-  
+
   // Utility functions
   clearError: () => void;
   resetCurrentTask: () => void;
@@ -70,188 +80,227 @@ export const useTasks = (): UseTasksReturn => {
 
   // Helper para actualizar estado
   const updateState = useCallback((updates: Partial<TasksState>) => {
-    setState(prev => ({ ...prev, ...updates }));
+    setState((prev) => ({ ...prev, ...updates }));
   }, []);
 
   // Fetch Tasks
-  const fetchTasks = useCallback(async (
-    filters?: TaskFilters, 
-    page = PAGINATION_CONFIG.DEFAULT_PAGE,
-    limit = PAGINATION_CONFIG.DEFAULT_LIMIT
-  ): Promise<void> => {
-    try {
-      updateState({ isLoading: true, error: null });
+  const fetchTasks = useCallback(
+    async (
+      filters?: TaskFilters,
+      page = PAGINATION_CONFIG.DEFAULT_PAGE,
+      limit = PAGINATION_CONFIG.DEFAULT_LIMIT,
+    ): Promise<void> => {
+      try {
+        updateState({ isLoading: true, error: null });
 
-      const queryParams = {
-        page,
-        limit,
-        sortBy: SORT_FIELDS.CREATED_AT,
-        sortOrder: SORT_ORDERS.DESC,
-        ...filters,
-      };
+        const queryParams = {
+          page,
+          limit,
+          sortBy: SORT_FIELDS.CREATED_AT,
+          sortOrder: SORT_ORDERS.DESC,
+          ...filters,
+        };
 
-      const response = await taskApi.getTasks(queryParams);
+        const response = await taskApi.getTasks(queryParams);
 
-      if (response.success && response.data) {
-        updateState({
-          tasks: response.data,
-          pagination: response.meta?.pagination || null,
-        });
-      } else {
-        throw new Error(response.message || 'Failed to fetch tasks');
+        if (response.success && response.data) {
+          updateState({
+            tasks: response.data,
+            pagination: response.meta?.pagination || null,
+          });
+        } else {
+          throw new Error(response.message || 'Failed to fetch tasks');
+        }
+      } catch (error: any) {
+        const errorMessage =
+          error.response?.data?.message ||
+          error.message ||
+          'Failed to fetch tasks';
+        updateState({ error: errorMessage });
+        toast.error(errorMessage);
+      } finally {
+        updateState({ isLoading: false });
       }
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch tasks';
-      updateState({ error: errorMessage });
-      toast.error(errorMessage);
-    } finally {
-      updateState({ isLoading: false });
-    }
-  }, [updateState]);
+    },
+    [updateState],
+  );
 
   // Create Task
-  const createTask = useCallback(async (data: CreateTaskData): Promise<boolean> => {
-    try {
-      updateState({ isLoading: true, error: null });
+  const createTask = useCallback(
+    async (data: CreateTaskData): Promise<boolean> => {
+      try {
+        updateState({ isLoading: true, error: null });
 
-      const response = await taskApi.createTask(data);
+        const response = await taskApi.createTask(data);
 
-      if (response.success && response.data) {
-        updateState({
-          tasks: [response.data, ...state.tasks],
-        });
-        toast.success(SUCCESS_MESSAGES.TASK_CREATED);
-        return true;
+        if (response.success && response.data) {
+          updateState({
+            tasks: [response.data, ...state.tasks],
+          });
+          toast.success(SUCCESS_MESSAGES.TASK_CREATED);
+          return true;
+        }
+
+        throw new Error(response.message || 'Failed to create task');
+      } catch (error: any) {
+        const errorMessage =
+          error.response?.data?.message ||
+          error.message ||
+          'Failed to create task';
+        updateState({ error: errorMessage });
+        toast.error(errorMessage);
+        return false;
+      } finally {
+        updateState({ isLoading: false });
       }
-
-      throw new Error(response.message || 'Failed to create task');
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to create task';
-      updateState({ error: errorMessage });
-      toast.error(errorMessage);
-      return false;
-    } finally {
-      updateState({ isLoading: false });
-    }
-  }, [updateState, state.tasks]);
+    },
+    [updateState, state.tasks],
+  );
 
   // Update Task
-  const updateTask = useCallback(async (id: string, data: UpdateTaskData): Promise<boolean> => {
-    try {
-      updateState({ isLoading: true, error: null });
+  const updateTask = useCallback(
+    async (id: string, data: UpdateTaskData): Promise<boolean> => {
+      try {
+        updateState({ isLoading: true, error: null });
 
-      const response = await taskApi.updateTask(id, data);
+        const response = await taskApi.updateTask(id, data);
 
-      if (response.success && response.data) {
-        updateState({
-          tasks: state.tasks.map(task => 
-            task.id === id ? response.data! : task
-          ),
-          currentTask: state.currentTask?.id === id ? response.data : state.currentTask,
-        });
-        toast.success(SUCCESS_MESSAGES.TASK_UPDATED);
-        return true;
+        if (response.success && response.data) {
+          updateState({
+            tasks: state.tasks.map((task) =>
+              task.id === id ? response.data! : task,
+            ),
+            currentTask:
+              state.currentTask?.id === id ? response.data : state.currentTask,
+          });
+          toast.success(SUCCESS_MESSAGES.TASK_UPDATED);
+          return true;
+        }
+
+        throw new Error(response.message || 'Failed to update task');
+      } catch (error: any) {
+        const errorMessage =
+          error.response?.data?.message ||
+          error.message ||
+          'Failed to update task';
+        updateState({ error: errorMessage });
+        toast.error(errorMessage);
+        return false;
+      } finally {
+        updateState({ isLoading: false });
       }
-
-      throw new Error(response.message || 'Failed to update task');
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to update task';
-      updateState({ error: errorMessage });
-      toast.error(errorMessage);
-      return false;
-    } finally {
-      updateState({ isLoading: false });
-    }
-  }, [updateState, state.tasks, state.currentTask]);
+    },
+    [updateState, state.tasks, state.currentTask],
+  );
 
   // Delete Task
-  const deleteTask = useCallback(async (id: string): Promise<boolean> => {
-    try {
-      updateState({ isLoading: true, error: null });
+  const deleteTask = useCallback(
+    async (id: string): Promise<boolean> => {
+      try {
+        updateState({ isLoading: true, error: null });
 
-      const response = await taskApi.deleteTask(id);
+        const response = await taskApi.deleteTask(id);
 
-      if (response.success) {
-        updateState({
-          tasks: state.tasks.filter(task => task.id !== id),
-          currentTask: state.currentTask?.id === id ? null : state.currentTask,
-        });
-        toast.success(SUCCESS_MESSAGES.TASK_DELETED);
-        return true;
+        if (response.success) {
+          updateState({
+            tasks: state.tasks.filter((task) => task.id !== id),
+            currentTask:
+              state.currentTask?.id === id ? null : state.currentTask,
+          });
+          toast.success(SUCCESS_MESSAGES.TASK_DELETED);
+          return true;
+        }
+
+        throw new Error(response.message || 'Failed to delete task');
+      } catch (error: any) {
+        const errorMessage =
+          error.response?.data?.message ||
+          error.message ||
+          'Failed to delete task';
+        updateState({ error: errorMessage });
+        toast.error(errorMessage);
+        return false;
+      } finally {
+        updateState({ isLoading: false });
       }
-
-      throw new Error(response.message || 'Failed to delete task');
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to delete task';
-      updateState({ error: errorMessage });
-      toast.error(errorMessage);
-      return false;
-    } finally {
-      updateState({ isLoading: false });
-    }
-  }, [updateState, state.tasks, state.currentTask]);
+    },
+    [updateState, state.tasks, state.currentTask],
+  );
 
   // Get Single Task
-  const getTask = useCallback(async (id: string): Promise<Task | null> => {
-    try {
-      updateState({ isLoading: true, error: null });
+  const getTask = useCallback(
+    async (id: string): Promise<Task | null> => {
+      try {
+        updateState({ isLoading: true, error: null });
 
-      const response = await taskApi.getTask(id);
+        const response = await taskApi.getTask(id);
 
-      if (response.success && response.data) {
-        updateState({ currentTask: response.data });
-        return response.data;
+        if (response.success && response.data) {
+          updateState({ currentTask: response.data });
+          return response.data;
+        }
+
+        throw new Error(response.message || 'Failed to fetch task');
+      } catch (error: any) {
+        const errorMessage =
+          error.response?.data?.message ||
+          error.message ||
+          'Failed to fetch task';
+        updateState({ error: errorMessage });
+        toast.error(errorMessage);
+        return null;
+      } finally {
+        updateState({ isLoading: false });
       }
-
-      throw new Error(response.message || 'Failed to fetch task');
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch task';
-      updateState({ error: errorMessage });
-      toast.error(errorMessage);
-      return null;
-    } finally {
-      updateState({ isLoading: false });
-    }
-  }, [updateState]);
+    },
+    [updateState],
+  );
 
   // Update Task Status
-  const updateTaskStatus = useCallback(async (
-    id: string, 
-    status: keyof typeof TASK_STATUSES
-  ): Promise<boolean> => {
-    try {
-      updateState({ isLoading: true, error: null });
+  const updateTaskStatus = useCallback(
+    async (
+      id: string,
+      status: keyof typeof TASK_STATUSES,
+    ): Promise<boolean> => {
+      try {
+        updateState({ isLoading: true, error: null });
 
-      const response = await taskApi.updateTaskStatus(id, status);
+        const response = await taskApi.updateTaskStatus(id, status);
 
-      if (response.success && response.data) {
-        updateState({
-          tasks: state.tasks.map(task => 
-            task.id === id ? { ...task, status } : task
-          ),
-          currentTask: state.currentTask?.id === id 
-            ? { ...state.currentTask, status } 
-            : state.currentTask,
-        });
-        
-        if (status === TASK_STATUSES.COMPLETED) {
-          toast.success(SUCCESS_MESSAGES.TASK_COMPLETED);
-        } else {
-          toast.success(SUCCESS_MESSAGES.TASK_STATUS_UPDATED);
+        if (response.success && response.data) {
+          updateState({
+            tasks: state.tasks.map((task) =>
+              task.id === id ? { ...task, status } : task,
+            ),
+            currentTask:
+              state.currentTask?.id === id
+                ? { ...state.currentTask, status }
+                : state.currentTask,
+          });
+
+          if (status === TASK_STATUSES.COMPLETED) {
+            toast.success(SUCCESS_MESSAGES.TASK_COMPLETED);
+          } else {
+            toast.success(SUCCESS_MESSAGES.TASK_STATUS_UPDATED);
+          }
+          return true;
         }
-        return true;
-      }
 
-      throw new Error(response.message || 'Failed to update task status');
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to update task status';
-      updateState({ error: errorMessage });
-      toast.error(errorMessage);
-      return false;
-    } finally {
-      updateState({ isLoading: false });
-    }
-  }, [updateState, state.tasks, state.currentTask]);
+        throw new Error(response.message || 'Failed to update task status');
+      } catch (error: any) {
+        const errorMessage =
+          error.response?.data?.message ||
+          error.message ||
+          'Failed to update task status';
+        updateState({ error: errorMessage });
+        toast.error(errorMessage);
+        return false;
+      } finally {
+        updateState({ isLoading: false });
+      }
+    },
+    [updateState, state.tasks, state.currentTask],
+  );
 
   // Fetch Categories
   const fetchCategories = useCallback(async (): Promise<void> => {
@@ -266,7 +315,10 @@ export const useTasks = (): UseTasksReturn => {
         throw new Error(response.message || 'Failed to fetch categories');
       }
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch categories';
+      const errorMessage =
+        error.response?.data?.message ||
+        error.message ||
+        'Failed to fetch categories';
       updateState({ error: errorMessage });
       toast.error(errorMessage);
     } finally {
@@ -275,87 +327,104 @@ export const useTasks = (): UseTasksReturn => {
   }, [updateState]);
 
   // Create Category
-  const createCategory = useCallback(async (data: CreateCategoryData): Promise<boolean> => {
-    try {
-      updateState({ isLoading: true, error: null });
+  const createCategory = useCallback(
+    async (data: CreateCategoryData): Promise<boolean> => {
+      try {
+        updateState({ isLoading: true, error: null });
 
-      const response = await taskApi.createCategory(data);
+        const response = await taskApi.createCategory(data);
 
-      if (response.success && response.data) {
-        updateState({
-          categories: [...state.categories, response.data],
-        });
-        toast.success(SUCCESS_MESSAGES.CATEGORY_CREATED);
-        return true;
+        if (response.success && response.data) {
+          updateState({
+            categories: [...state.categories, response.data],
+          });
+          toast.success(SUCCESS_MESSAGES.CATEGORY_CREATED);
+          return true;
+        }
+
+        throw new Error(response.message || 'Failed to create category');
+      } catch (error: any) {
+        const errorMessage =
+          error.response?.data?.message ||
+          error.message ||
+          'Failed to create category';
+        updateState({ error: errorMessage });
+        toast.error(errorMessage);
+        return false;
+      } finally {
+        updateState({ isLoading: false });
       }
-
-      throw new Error(response.message || 'Failed to create category');
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to create category';
-      updateState({ error: errorMessage });
-      toast.error(errorMessage);
-      return false;
-    } finally {
-      updateState({ isLoading: false });
-    }
-  }, [updateState, state.categories]);
+    },
+    [updateState, state.categories],
+  );
 
   // Update Category
-  const updateCategory = useCallback(async (
-    id: string, 
-    data: Partial<CreateCategoryData>
-  ): Promise<boolean> => {
-    try {
-      updateState({ isLoading: true, error: null });
+  const updateCategory = useCallback(
+    async (id: string, data: Partial<CreateCategoryData>): Promise<boolean> => {
+      try {
+        updateState({ isLoading: true, error: null });
 
-      const response = await taskApi.updateCategory(id, data);
+        const response = await taskApi.updateCategory(id, data);
 
-      if (response.success && response.data) {
-        updateState({
-          categories: state.categories.map(category => 
-            category.id === id ? response.data! : category
-          ),
-        });
-        toast.success(SUCCESS_MESSAGES.CATEGORY_UPDATED);
-        return true;
+        if (response.success && response.data) {
+          updateState({
+            categories: state.categories.map((category) =>
+              category.id === id ? response.data! : category,
+            ),
+          });
+          toast.success(SUCCESS_MESSAGES.CATEGORY_UPDATED);
+          return true;
+        }
+
+        throw new Error(response.message || 'Failed to update category');
+      } catch (error: any) {
+        const errorMessage =
+          error.response?.data?.message ||
+          error.message ||
+          'Failed to update category';
+        updateState({ error: errorMessage });
+        toast.error(errorMessage);
+        return false;
+      } finally {
+        updateState({ isLoading: false });
       }
-
-      throw new Error(response.message || 'Failed to update category');
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to update category';
-      updateState({ error: errorMessage });
-      toast.error(errorMessage);
-      return false;
-    } finally {
-      updateState({ isLoading: false });
-    }
-  }, [updateState, state.categories]);
+    },
+    [updateState, state.categories],
+  );
 
   // Delete Category
-  const deleteCategory = useCallback(async (id: string): Promise<boolean> => {
-    try {
-      updateState({ isLoading: true, error: null });
+  const deleteCategory = useCallback(
+    async (id: string): Promise<boolean> => {
+      try {
+        updateState({ isLoading: true, error: null });
 
-      const response = await taskApi.deleteCategory(id);
+        const response = await taskApi.deleteCategory(id);
 
-      if (response.success) {
-        updateState({
-          categories: state.categories.filter(category => category.id !== id),
-        });
-        toast.success(SUCCESS_MESSAGES.CATEGORY_DELETED);
-        return true;
+        if (response.success) {
+          updateState({
+            categories: state.categories.filter(
+              (category) => category.id !== id,
+            ),
+          });
+          toast.success(SUCCESS_MESSAGES.CATEGORY_DELETED);
+          return true;
+        }
+
+        throw new Error(response.message || 'Failed to delete category');
+      } catch (error: any) {
+        const errorMessage =
+          error.response?.data?.message ||
+          error.message ||
+          'Failed to delete category';
+        updateState({ error: errorMessage });
+        toast.error(errorMessage);
+        return false;
+      } finally {
+        updateState({ isLoading: false });
       }
-
-      throw new Error(response.message || 'Failed to delete category');
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to delete category';
-      updateState({ error: errorMessage });
-      toast.error(errorMessage);
-      return false;
-    } finally {
-      updateState({ isLoading: false });
-    }
-  }, [updateState, state.categories]);
+    },
+    [updateState, state.categories],
+  );
 
   // Fetch Stats
   const fetchStats = useCallback(async (): Promise<void> => {
@@ -370,7 +439,10 @@ export const useTasks = (): UseTasksReturn => {
         throw new Error(response.message || 'Failed to fetch stats');
       }
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch stats';
+      const errorMessage =
+        error.response?.data?.message ||
+        error.message ||
+        'Failed to fetch stats';
       updateState({ error: errorMessage });
       // No mostrar toast para stats error (menos crítico)
     } finally {
@@ -390,11 +462,7 @@ export const useTasks = (): UseTasksReturn => {
 
   // Refresh All Data
   const refreshData = useCallback(async (): Promise<void> => {
-    await Promise.all([
-      fetchTasks(),
-      fetchCategories(),
-      fetchStats(),
-    ]);
+    await Promise.all([fetchTasks(), fetchCategories(), fetchStats()]);
   }, [fetchTasks, fetchCategories, fetchStats]);
 
   // Load initial data

@@ -23,16 +23,9 @@
       "@/core/repositories/*": ["./src/core/infrastructure/repositories/*"],
       "@/utils/*": ["./src/utils/*"]
     },
-    "typeRoots": [
-      "./node_modules/@types",
-      "./types"
-    ]
+    "typeRoots": ["./node_modules/@types", "./types"]
   },
-  "include": [
-    "src/**/*",
-    "prisma/**/*",
-    "types/**/*"
-  ],
+  "include": ["src/**/*", "prisma/**/*", "types/**/*"],
   "exclude": [
     "node_modules",
     "dist",

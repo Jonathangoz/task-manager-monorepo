@@ -4,7 +4,8 @@ export class TestRedis {
   private redis = redisConnection.getClient();
 
   async set(key: string, value: any, ttl?: number): Promise<void> {
-    const stringValue = typeof value === 'object' ? JSON.stringify(value) : value;
+    const stringValue =
+      typeof value === 'object' ? JSON.stringify(value) : value;
     if (ttl) {
       await this.redis.setex(key, ttl, stringValue);
     } else {
@@ -15,7 +16,7 @@ export class TestRedis {
   async get(key: string): Promise<any> {
     const value = await this.redis.get(key);
     if (!value) return null;
-    
+
     try {
       return JSON.parse(value);
     } catch {

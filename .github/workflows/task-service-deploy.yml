@@ -111,7 +111,6 @@ jobs:
           # REFRESH_TOKEN_SECRET: base64:dGVzdC1yZWZyZXNoLXNlY3JldC1zdXBlci1zZWN1cmUtZm9yLXRlc3Rpbmctb25seS02NC1jaGFycw==
           # JWE_SECRET: base64:dGVzdC1qd2Utc2VjcmV0LTMyLWNoYXJzLWV4YWN0bHk=
 
-
       - name: 📊 Upload Coverage Reports
         uses: codecov/codecov-action@v4
         with:

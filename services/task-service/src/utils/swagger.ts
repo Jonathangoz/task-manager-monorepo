@@ -49,13 +49,15 @@ Microservicio para la gestión completa de tareas y categorías.
   },
   servers: [
     {
-      url: config.app.env === 'production' 
-        ? 'https://task-manager-task-service.onrender.com/api/v1' 
-        : `http://localhost:${config.app.port}/api/v1`,
-      description: config.app.env === 'production' ? '🚀 Producción' : '🔧 Desarrollo',
+      url:
+        config.app.env === 'production'
+          ? 'https://task-manager-task-service.onrender.com/api/v1'
+          : `http://localhost:${config.app.port}/api/v1`,
+      description:
+        config.app.env === 'production' ? '🚀 Producción' : '🔧 Desarrollo',
     },
   ],
-  
+
   paths: {}, // Propiedad 'paths' requerida añadida
 
   // ==============================================
@@ -70,104 +72,118 @@ Microservicio para la gestión completa de tareas y categorías.
         description: 'Token JWT del servicio de autenticación',
       },
     },
-    
+
     schemas: {
       // ==============================================
       // ESQUEMAS PRINCIPALES
       // ==============================================
       Task: {
         type: 'object',
-        required: ['id', 'title', 'status', 'priority', 'userId', 'createdAt', 'updatedAt'],
+        required: [
+          'id',
+          'title',
+          'status',
+          'priority',
+          'userId',
+          'createdAt',
+          'updatedAt',
+        ],
         properties: {
-          id: { 
-            type: 'string', 
+          id: {
+            type: 'string',
             description: 'ID único de la tarea',
-            example: 'clp123abc456def789' 
+            example: 'clp123abc456def789',
           },
-          title: { 
-            type: 'string', 
-            maxLength: 200, 
+          title: {
+            type: 'string',
+            maxLength: 200,
             description: 'Título de la tarea',
-            example: 'Completar documentación API' 
+            example: 'Completar documentación API',
           },
-          description: { 
-            type: 'string', 
-            maxLength: 2000, 
+          description: {
+            type: 'string',
+            maxLength: 2000,
             nullable: true,
             description: 'Descripción detallada',
-            example: 'Finalizar documentación con ejemplos' 
+            example: 'Finalizar documentación con ejemplos',
           },
-          status: { 
-            type: 'string', 
-            enum: ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'ON_HOLD'],
+          status: {
+            type: 'string',
+            enum: [
+              'PENDING',
+              'IN_PROGRESS',
+              'COMPLETED',
+              'CANCELLED',
+              'ON_HOLD',
+            ],
             description: 'Estado actual',
-            example: 'PENDING'
+            example: 'PENDING',
           },
-          priority: { 
-            type: 'string', 
+          priority: {
+            type: 'string',
             enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
             description: 'Nivel de prioridad',
-            example: 'MEDIUM'
+            example: 'MEDIUM',
           },
-          dueDate: { 
-            type: 'string', 
-            format: 'date-time', 
+          dueDate: {
+            type: 'string',
+            format: 'date-time',
             nullable: true,
             description: 'Fecha límite',
-            example: '2024-12-31T23:59:59Z' 
+            example: '2024-12-31T23:59:59Z',
           },
-          completedAt: { 
-            type: 'string', 
-            format: 'date-time', 
+          completedAt: {
+            type: 'string',
+            format: 'date-time',
             nullable: true,
-            description: 'Fecha de finalización'
+            description: 'Fecha de finalización',
           },
-          userId: { 
-            type: 'string', 
+          userId: {
+            type: 'string',
             description: 'ID del usuario propietario',
-            example: 'user123' 
+            example: 'user123',
           },
-          categoryId: { 
-            type: 'string', 
-            nullable: true, 
+          categoryId: {
+            type: 'string',
+            nullable: true,
             description: 'ID de categoría',
-            example: 'cat456' 
+            example: 'cat456',
           },
-          tags: { 
-            type: 'array', 
-            items: { type: 'string' }, 
+          tags: {
+            type: 'array',
+            items: { type: 'string' },
             description: 'Etiquetas',
-            example: ['documentación', 'api'] 
+            example: ['documentación', 'api'],
           },
-          estimatedHours: { 
-            type: 'integer', 
-            minimum: 1, 
-            maximum: 999, 
+          estimatedHours: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 999,
             nullable: true,
             description: 'Horas estimadas',
-            example: 8 
+            example: 8,
           },
-          actualHours: { 
-            type: 'integer', 
-            minimum: 1, 
-            maximum: 999, 
+          actualHours: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 999,
             nullable: true,
             description: 'Horas reales',
-            example: 6 
+            example: 6,
           },
-          createdAt: { 
-            type: 'string', 
+          createdAt: {
+            type: 'string',
             format: 'date-time',
-            description: 'Fecha de creación'
+            description: 'Fecha de creación',
           },
-          updatedAt: { 
-            type: 'string', 
+          updatedAt: {
+            type: 'string',
             format: 'date-time',
-            description: 'Última actualización'
+            description: 'Última actualización',
           },
-          category: { 
+          category: {
             $ref: '#/components/schemas/Category',
-            description: 'Categoría asociada'
+            description: 'Categoría asociada',
           },
         },
       },
@@ -176,54 +192,54 @@ Microservicio para la gestión completa de tareas y categorías.
         type: 'object',
         required: ['id', 'name', 'userId', 'createdAt', 'updatedAt'],
         properties: {
-          id: { 
-            type: 'string', 
+          id: {
+            type: 'string',
             description: 'ID único de categoría',
-            example: 'cat123abc456def789' 
+            example: 'cat123abc456def789',
           },
-          name: { 
-            type: 'string', 
-            maxLength: 100, 
+          name: {
+            type: 'string',
+            maxLength: 100,
             description: 'Nombre de la categoría',
-            example: 'Desarrollo' 
+            example: 'Desarrollo',
           },
-          description: { 
-            type: 'string', 
-            maxLength: 500, 
+          description: {
+            type: 'string',
+            maxLength: 500,
             nullable: true,
             description: 'Descripción',
-            example: 'Tareas de desarrollo' 
+            example: 'Tareas de desarrollo',
           },
-          color: { 
-            type: 'string', 
-            pattern: '^#[0-9a-fA-F]{6}$', 
+          color: {
+            type: 'string',
+            pattern: '^#[0-9a-fA-F]{6}$',
             description: 'Color hexadecimal',
-            example: '#6366f1' 
+            example: '#6366f1',
           },
-          icon: { 
-            type: 'string', 
+          icon: {
+            type: 'string',
             description: 'Icono',
-            example: 'code' 
+            example: 'code',
           },
-          isActive: { 
-            type: 'boolean', 
+          isActive: {
+            type: 'boolean',
             description: 'Estado activo',
-            example: true 
+            example: true,
           },
-          userId: { 
-            type: 'string', 
+          userId: {
+            type: 'string',
             description: 'ID del propietario',
-            example: 'user123' 
+            example: 'user123',
           },
-          createdAt: { 
-            type: 'string', 
+          createdAt: {
+            type: 'string',
             format: 'date-time',
-            description: 'Fecha creación'
+            description: 'Fecha creación',
           },
-          updatedAt: { 
-            type: 'string', 
+          updatedAt: {
+            type: 'string',
             format: 'date-time',
-            description: 'Última actualización'
+            description: 'Última actualización',
           },
         },
       },
@@ -241,10 +257,10 @@ Microservicio para la gestión completa de tareas y categorías.
           highTasks: { type: 'integer', example: 4 },
           mediumTasks: { type: 'integer', example: 15 },
           lowTasks: { type: 'integer', example: 5 },
-          lastUpdated: { 
-            type: 'string', 
+          lastUpdated: {
+            type: 'string',
             format: 'date-time',
-            description: 'Última actualización'
+            description: 'Última actualización',
           },
         },
       },
@@ -256,48 +272,48 @@ Microservicio para la gestión completa de tareas y categorías.
         type: 'object',
         required: ['title'],
         properties: {
-          title: { 
-            type: 'string', 
+          title: {
+            type: 'string',
             maxLength: 200,
             description: 'Título de la tarea',
-            example: 'Nueva tarea importante'
+            example: 'Nueva tarea importante',
           },
-          description: { 
-            type: 'string', 
+          description: {
+            type: 'string',
             maxLength: 2000,
             description: 'Descripción detallada',
-            example: 'Descripción completa de la tarea'
+            example: 'Descripción completa de la tarea',
           },
-          priority: { 
-            type: 'string', 
+          priority: {
+            type: 'string',
             enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
             default: 'MEDIUM',
-            example: 'HIGH'
+            example: 'HIGH',
           },
-          dueDate: { 
-            type: 'string', 
+          dueDate: {
+            type: 'string',
             format: 'date-time',
             description: 'Fecha límite',
-            example: '2024-02-15T18:00:00Z'
+            example: '2024-02-15T18:00:00Z',
           },
-          categoryId: { 
+          categoryId: {
             type: 'string',
             description: 'ID de categoría',
-            example: 'cat456'
+            example: 'cat456',
           },
-          tags: { 
-            type: 'array', 
+          tags: {
+            type: 'array',
             items: { type: 'string' },
             maxItems: 10,
-            example: ['desarrollo', 'api']
+            example: ['desarrollo', 'api'],
           },
-          estimatedHours: { 
-            type: 'integer', 
-            minimum: 1, 
+          estimatedHours: {
+            type: 'integer',
+            minimum: 1,
             maximum: 999,
-            example: 8
-          }
-        }
+            example: 8,
+          },
+        },
       },
 
       UpdateTaskRequest: {
@@ -305,49 +321,65 @@ Microservicio para la gestión completa de tareas y categorías.
         properties: {
           title: { type: 'string', maxLength: 200 },
           description: { type: 'string', maxLength: 2000 },
-          status: { 
-            type: 'string', 
-            enum: ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'ON_HOLD']
+          status: {
+            type: 'string',
+            enum: [
+              'PENDING',
+              'IN_PROGRESS',
+              'COMPLETED',
+              'CANCELLED',
+              'ON_HOLD',
+            ],
           },
-          priority: { 
-            type: 'string', 
-            enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT']
+          priority: {
+            type: 'string',
+            enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
           },
           dueDate: { type: 'string', format: 'date-time', nullable: true },
           categoryId: { type: 'string', nullable: true },
           tags: { type: 'array', items: { type: 'string' } },
-          estimatedHours: { type: 'integer', minimum: 1, maximum: 999, nullable: true },
-          actualHours: { type: 'integer', minimum: 1, maximum: 999, nullable: true }
-        }
+          estimatedHours: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 999,
+            nullable: true,
+          },
+          actualHours: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 999,
+            nullable: true,
+          },
+        },
       },
 
       CreateCategoryRequest: {
         type: 'object',
         required: ['name'],
         properties: {
-          name: { 
-            type: 'string', 
+          name: {
+            type: 'string',
             maxLength: 100,
             description: 'Nombre de categoría',
-            example: 'Nueva Categoría'
+            example: 'Nueva Categoría',
           },
-          description: { 
-            type: 'string', 
+          description: {
+            type: 'string',
             maxLength: 500,
-            example: 'Descripción de la categoría'
+            example: 'Descripción de la categoría',
           },
-          color: { 
-            type: 'string', 
+          color: {
+            type: 'string',
             pattern: '^#[0-9a-fA-F]{6}$',
             default: '#6366f1',
-            example: '#10b981'
+            example: '#10b981',
           },
-          icon: { 
+          icon: {
             type: 'string',
             default: 'folder',
-            example: 'home'
-          }
-        }
+            example: 'home',
+          },
+        },
       },
 
       // ==============================================
@@ -416,7 +448,7 @@ Microservicio para la gestión completa de tareas y categorías.
         required: true,
         schema: { type: 'string' },
         description: 'ID único de la tarea',
-        example: 'clp123abc456def789'
+        example: 'clp123abc456def789',
       },
       CategoryIdParam: {
         name: 'id',
@@ -424,38 +456,38 @@ Microservicio para la gestión completa de tareas y categorías.
         required: true,
         schema: { type: 'string' },
         description: 'ID único de la categoría',
-        example: 'cat123abc456def789'
+        example: 'cat123abc456def789',
       },
       PageParam: {
         name: 'page',
         in: 'query',
         required: false,
         schema: { type: 'integer', minimum: 1, default: 1 },
-        description: 'Número de página'
+        description: 'Número de página',
       },
       LimitParam: {
         name: 'limit',
         in: 'query',
         required: false,
         schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
-        description: 'Elementos por página'
+        description: 'Elementos por página',
       },
       StatusFilterParam: {
         name: 'status',
         in: 'query',
         required: false,
-        schema: { 
-          type: 'string', 
-          enum: ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'ON_HOLD']
+        schema: {
+          type: 'string',
+          enum: ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'ON_HOLD'],
         },
-        description: 'Filtrar por estado'
+        description: 'Filtrar por estado',
       },
       PriorityFilterParam: {
         name: 'priority',
         in: 'query',
         required: false,
         schema: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] },
-        description: 'Filtrar por prioridad'
+        description: 'Filtrar por prioridad',
       },
       SearchParam: {
         name: 'search',
@@ -463,7 +495,7 @@ Microservicio para la gestión completa de tareas y categorías.
         required: false,
         schema: { type: 'string', minLength: 2 },
         description: 'Buscar en título y descripción',
-        example: 'documentación'
+        example: 'documentación',
       },
     },
 
@@ -475,41 +507,41 @@ Microservicio para la gestión completa de tareas y categorías.
         description: 'Solicitud inválida',
         content: {
           'application/json': {
-            schema: { $ref: '#/components/schemas/ErrorResponse' }
-          }
-        }
+            schema: { $ref: '#/components/schemas/ErrorResponse' },
+          },
+        },
       },
       Unauthorized: {
         description: 'No autorizado - Token requerido',
         content: {
           'application/json': {
-            schema: { $ref: '#/components/schemas/ErrorResponse' }
-          }
-        }
+            schema: { $ref: '#/components/schemas/ErrorResponse' },
+          },
+        },
       },
       Forbidden: {
         description: 'Acceso denegado',
         content: {
           'application/json': {
-            schema: { $ref: '#/components/schemas/ErrorResponse' }
-          }
-        }
+            schema: { $ref: '#/components/schemas/ErrorResponse' },
+          },
+        },
       },
       NotFound: {
         description: 'Recurso no encontrado',
         content: {
           'application/json': {
-            schema: { $ref: '#/components/schemas/ErrorResponse' }
-          }
-        }
+            schema: { $ref: '#/components/schemas/ErrorResponse' },
+          },
+        },
       },
       InternalError: {
         description: 'Error interno del servidor',
         content: {
           'application/json': {
-            schema: { $ref: '#/components/schemas/ErrorResponse' }
-          }
-        }
+            schema: { $ref: '#/components/schemas/ErrorResponse' },
+          },
+        },
       },
     },
   },
@@ -540,16 +572,16 @@ Microservicio para la gestión completa de tareas y categorías.
   // ==============================================
   externalDocs: {
     description: '📚 Documentación completa en GitHub',
-    url: 'https://github.com/Jonathangoz/task-manager-monorepo'
-  }
+    url: 'https://github.com/Jonathangoz/task-manager-monorepo',
+  },
 };
 
 // ==============================================
 // CONFIGURACIÓN SWAGGER-JSDOC
 // ==============================================
 const swaggerOptions: swaggerJsdoc.Options = {
-    swaggerDefinition,
-    apis: ['./src/routes/*.ts', './src/schemas/*.ts'],
+  swaggerDefinition,
+  apis: ['./src/routes/*.ts', './src/schemas/*.ts'],
 };
 
 export const swaggerSpec = swaggerJsdoc(swaggerOptions) as OpenAPIV3.Document;
@@ -595,7 +627,7 @@ export function getSwaggerInfo(): SwaggerInfo {
     description,
     servers: servers || [],
     paths: paths || {},
-    schemas: components?.schemas || {}, 
+    schemas: components?.schemas || {},
     tags: tags || [],
   };
 }
@@ -612,18 +644,18 @@ export function getSwaggerUrl(): string {
 }
 
 export function validateSwaggerSpec(): ValidationResult {
-    const errors: string[] = [];
-    const spec = swaggerSpec;
-  
+  const errors: string[] = [];
+  const spec = swaggerSpec;
+
   if (!spec?.openapi) errors.push('OpenAPI version missing');
   if (!spec?.info?.title) errors.push('API title missing');
   if (!spec?.info?.version) errors.push('API version missing');
-  
+
   return {
     isValid: errors.length === 0,
-    errors
+    errors,
   };
-};
+}
 
 // ==============================================
 // VALIDACIÓN AL CARGAR
@@ -632,7 +664,7 @@ if (config.app.isDevelopment) {
   const validation = validateSwaggerSpec();
   if (!validation.isValid) {
     console.warn('⚠️ Swagger Documentation Issues:');
-    validation.errors.forEach(error => console.warn(`  - ${error}`));
+    validation.errors.forEach((error) => console.warn(`  - ${error}`));
   } else {
     console.log('✅ Swagger documentation is valid');
     console.log(`📚 Swagger URL: ${getSwaggerUrl()}`);
@@ -644,5 +676,5 @@ export default {
   swaggerUiOptions,
   validateSwaggerSpec,
   getSwaggerInfo,
-  getSwaggerUrl
+  getSwaggerUrl,
 };
