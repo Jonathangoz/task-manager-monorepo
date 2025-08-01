@@ -118,7 +118,15 @@ const createDevelopmentLogger = (): pino.Logger => {
 // CONFIGURACIÓN PARA PRODUCCIÓN
 // ==============================================
 const createProductionLogger = (): pino.Logger => {
-  const productionConfig = { ...baseLoggerConfig };
+  const productionConfig: pino.LoggerOptions = {
+    level: getLogLevel(),
+    base: {
+      service: 'task-service',
+      version: process.env.npm_package_version || '1.0.0',
+      env: process.env.NODE_ENV || 'development',
+      timezone: BOGOTA_TIMEZONE,
+    },
+  };
 
   // En producción, escribimos a múltiples destinos
   const destinations = [
@@ -761,7 +769,11 @@ export const reconfigureLogger = (envConfig: any) => {
       env: envConfig.app?.env || envConfig.NODE_ENV || 'development',
       timezone: BOGOTA_TIMEZONE,
     },
-    formatters: {
+  };
+
+  // Solo agregar formatters si NO estás en producción con transport.targets
+  if (isDev) {
+    reconfiguredConfig.formatters = {
       level: (label) => ({ level: label }),
       log: (object) => {
         if (object.err) {
@@ -779,8 +791,8 @@ export const reconfigureLogger = (envConfig: any) => {
         }
         return object;
       },
-    },
-  };
+    };
+  }
 
   if (isDev && logPretty) {
     reconfiguredConfig.transport = {
@@ -794,7 +806,7 @@ export const reconfigureLogger = (envConfig: any) => {
       },
     };
   } else if (isProd) {
-    // Configuración de producción con múltiples destinos
+    // Configuración de producción con múltiples destinos - SIN formatters
     const destinations = [
       {
         level: logLevel,
