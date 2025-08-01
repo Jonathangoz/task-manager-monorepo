@@ -1,9 +1,9 @@
 // src/utils/swagger.ts - Auth Service
-import swaggerJsdoc, { Options } from 'swagger-jsdoc';
+import swaggerJsdoc from 'swagger-jsdoc';
 import { SwaggerUiOptions } from 'swagger-ui-express';
 import { OpenAPIV3 } from 'openapi-types';
 import { environment } from '@/config/environment';
-import { ValidationResult, SwaggerInfo } from '@/types/swaggerTypes';
+import { ValidationResult } from '@/types/swaggerTypes';
 
 // ==============================================
 // CONFIGURACIÓN PRINCIPAL DE SWAGGER
@@ -860,6 +860,12 @@ export const swaggerSpec = swaggerJsdoc(swaggerOptions) as OpenAPIV3.Document;
 // ==============================================
 // OPCIONES DE SWAGGER UI
 // ==============================================
+
+interface SwaggerRequest {
+  url: string;
+  [key: string]: unknown;
+}
+
 export const swaggerUiOptions: SwaggerUiOptions = {
   explorer: true,
   customCss: `
@@ -873,13 +879,14 @@ export const swaggerUiOptions: SwaggerUiOptions = {
     .swagger-ui .opblock.opblock-delete { border-color: #dc2626; }
   `,
   customSiteTitle: 'Auth Service API - Docs',
+
   swaggerOptions: {
     docExpansion: 'none',
     filter: true,
     showExtensions: true,
     tryItOutEnabled: true,
     persistAuthorization: true,
-    requestInterceptor: (req: any) => {
+    requestInterceptor: (req: SwaggerRequest) => {
       if (environment.app.isDevelopment) {
         console.log('🔍 Swagger Request:', req.url);
       }

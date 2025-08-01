@@ -13,7 +13,7 @@ module.exports = {
     '!src/server.ts',
     '!src/**/*.interface.ts',
   ],
-  moduleNameMapping: {
+  moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   setupFilesAfterEnv: ['<rootDir>/__tests__/setup.ts'],

@@ -10,7 +10,6 @@ import { logger } from './logger';
 import {
   SECURITY_CONFIG,
   PASSWORD_VALIDATION,
-  ERROR_CODES,
   VALIDATION_MESSAGES,
 } from './constants';
 
@@ -428,7 +427,7 @@ export class CryptoUtils {
     // Validar símbolos
     if (
       PASSWORD_VALIDATION.REQUIRE_SYMBOLS &&
-      !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password)
+      !/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?~`]/.test(password)
     ) {
       errors.push('La contraseña debe contener al menos un carácter especial');
     } else if (PASSWORD_VALIDATION.REQUIRE_SYMBOLS) {

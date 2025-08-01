@@ -3,6 +3,26 @@ import { PrismaClient } from '@prisma/client';
 import { logger } from '@/utils/logger';
 import { environment } from './environment';
 
+// Definir tipos específicos para los eventos de Prisma
+
+interface PrismaInfoEvent {
+  timestamp: Date;
+  message: string;
+  target: string;
+}
+
+interface PrismaWarnEvent {
+  timestamp: Date;
+  message: string;
+  target: string;
+}
+
+interface PrismaErrorEvent {
+  timestamp: Date;
+  message: string;
+  target: string;
+}
+
 declare global {
   var __db__: PrismaClient | undefined;
 }
@@ -26,16 +46,16 @@ if (environment.app.isProduction) {
   db = global.__db__;
 }
 
-// Event handlers para logging
-db.$on('info' as never, (e: any) => {
+// Event handlers para logging con tipos específicos
+db.$on('info' as never, (e: PrismaInfoEvent) => {
   logger.info({ prisma: e }, 'Prisma info');
 });
 
-db.$on('warn' as never, (e: any) => {
+db.$on('warn' as never, (e: PrismaWarnEvent) => {
   logger.warn({ prisma: e }, 'Prisma warning');
 });
 
-db.$on('error' as never, (e: any) => {
+db.$on('error' as never, (e: PrismaErrorEvent) => {
   logger.error({ prisma: e }, 'Prisma error');
 });
 

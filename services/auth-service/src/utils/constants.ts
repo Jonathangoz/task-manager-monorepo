@@ -1,5 +1,4 @@
 // src/utils/constants.ts - Auth-Service
-import 
 
 // HTTP Status Codes
 export const HTTP_STATUS = {
@@ -196,14 +195,14 @@ export const ENV_CONFIG = {
 } as const;
 
 // API Response Types
-export type ApiResponse<T = any> = {
+export type ApiResponse<T = unknown> = {
   success: boolean;
   message: string;
   data?: T;
   error?: {
     code: string;
     message: string;
-    details?: any;
+    details?: unknown;
   };
   meta?: {
     timestamp: string;
@@ -382,20 +381,14 @@ export interface PaginatedResult<T> {
   totalPages: number;
 }
 
-// Tipos para el middleware de autenticación
-declare global {
-  namespace Express {
-    interface Request {
-      user?: {
-        id: string;
-        email: string;
-        username: string;
-        sessionId: string;
-        iat: number;
-        exp: number;
-      };
-    }
-  }
+// Interfaz para contexto de logging
+export interface LogContext {
+  userId?: string;
+  requestId?: string;
+  sessionId?: string;
+  ip?: string;
+  userAgent?: string;
+  [key: string]: unknown;
 }
 
 // Headers de request adicionales
@@ -638,3 +631,7 @@ export const EXTENDED_CONSTANTS = {
   LOG_LEVELS,
   ENVIRONMENT_CONFIG,
 } as const;
+
+export type UnknownRecord = Record<string, unknown>;
+export type StringRecord = Record<string, string>;
+export type ConfigValue = string | number | boolean | null | undefined;

@@ -1,11 +1,79 @@
-// src/utils/swagger-helpers.ts - Utilidades adicionales
+// src/utils/swaggerHelpers.ts - Corregido sin tipos 'any'
 import { ValidationResult } from '@/types/swaggerTypes';
+
+// Tipos específicos para las respuestas
+interface ApiSuccessResponse<T = unknown> {
+  success: true;
+  message: string;
+  data: T;
+  meta: {
+    timestamp: string;
+    requestId: string;
+  };
+}
+
+interface ApiErrorResponse {
+  success: false;
+  message: string;
+  error: {
+    code: string;
+    details?: unknown;
+  };
+  meta: {
+    timestamp: string;
+    requestId: string;
+  };
+}
+
+interface ValidationError {
+  field: string;
+  message: string;
+  value?: unknown;
+}
+
+interface ApiValidationErrorResponse {
+  success: false;
+  message: string;
+  error: {
+    code: 'VALIDATION_ERROR';
+    details: ValidationError[];
+  };
+  meta: {
+    timestamp: string;
+    requestId: string;
+  };
+}
+
+// Interfaz para configuración de endpoint
+interface ApiEndpointConfig {
+  summary: string;
+  description?: string;
+  tags?: string[];
+  responses?: Record<number, unknown>;
+}
+
+// Interfaz para schema de validación
+interface ValidationSchema {
+  required?: string[];
+  properties?: Record<string, FieldSchema>;
+}
+
+interface FieldSchema {
+  type?: string;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  enum?: unknown[];
+}
 
 /**
  * Genera respuestas estandarizadas para la documentación
  */
 export class SwaggerResponseBuilder {
-  static success(data: any, message = 'Operation successful') {
+  static success<T = unknown>(
+    data: T,
+    message = 'Operation successful',
+  ): ApiSuccessResponse<T> {
     return {
       success: true,
       message,
@@ -17,7 +85,11 @@ export class SwaggerResponseBuilder {
     };
   }
 
-  static error(code: string, message: string, details?: any) {
+  static error(
+    code: string,
+    message: string,
+    details?: unknown,
+  ): ApiErrorResponse {
     return {
       success: false,
       message,
@@ -33,8 +105,8 @@ export class SwaggerResponseBuilder {
   }
 
   static validationError(
-    errors: Array<{ field: string; message: string; value?: any }>,
-  ) {
+    errors: ValidationError[],
+  ): ApiValidationErrorResponse {
     return {
       success: false,
       message: 'Validation failed',
@@ -57,22 +129,21 @@ export class SwaggerResponseBuilder {
 /**
  * Decorador para documentar endpoints automáticamente
  */
-export function ApiEndpoint(config: {
-  summary: string;
-  description?: string;
-  tags?: string[];
-  responses?: Record<number, any>;
-}) {
+export function ApiEndpoint(config: ApiEndpointConfig) {
   return function (
-    target: any,
+    target: object,
     propertyKey: string,
     descriptor: PropertyDescriptor,
   ) {
     // Almacenar metadata para el endpoint
-    if (!target.constructor.apiEndpoints) {
-      target.constructor.apiEndpoints = {};
+    const constructor = target.constructor as {
+      apiEndpoints?: Record<string, ApiEndpointConfig>;
+    };
+
+    if (!constructor.apiEndpoints) {
+      constructor.apiEndpoints = {};
     }
-    target.constructor.apiEndpoints[propertyKey] = config;
+    constructor.apiEndpoints[propertyKey] = config;
     return descriptor;
   };
 }
@@ -81,7 +152,10 @@ export function ApiEndpoint(config: {
  * Validador de schemas Swagger
  */
 export class SwaggerValidator {
-  static validateSchema(schema: any, data: any): ValidationResult {
+  static validateSchema(
+    schema: ValidationSchema,
+    data: Record<string, unknown>,
+  ): ValidationResult {
     const errors: string[] = [];
 
     if (schema.required) {
@@ -93,9 +167,7 @@ export class SwaggerValidator {
     }
 
     if (schema.properties) {
-      for (const [field, fieldSchema] of Object.entries(
-        schema.properties as any,
-      )) {
+      for (const [field, fieldSchema] of Object.entries(schema.properties)) {
         if (field in data) {
           const fieldErrors = this.validateField(
             field,
@@ -115,8 +187,8 @@ export class SwaggerValidator {
 
   private static validateField(
     fieldName: string,
-    schema: any,
-    value: any,
+    schema: FieldSchema,
+    value: unknown,
   ): string[] {
     const errors: string[] = [];
 
@@ -126,7 +198,7 @@ export class SwaggerValidator {
     }
 
     // Validar longitud de string
-    if (schema.type === 'string') {
+    if (schema.type === 'string' && typeof value === 'string') {
       if (schema.minLength && value.length < schema.minLength) {
         errors.push(
           `Field '${fieldName}' must be at least ${schema.minLength} characters`,
