@@ -6,36 +6,12 @@
 import pino from 'pino';
 import path from 'path';
 import { mkdirSync, existsSync } from 'fs';
+import { unknown } from 'zod';
 
 // ==============================================
 // CONFIGURACIÓN DE TIMEZONE BOGOTÁ
 // ==============================================
 const BOGOTA_TIMEZONE = 'America/Bogota';
-
-// Función para formatear timestamp con timezone Bogotá
-const formatTimestamp = () => {
-  const now = new Date();
-  const bogotaTime = new Intl.DateTimeFormat('es-CO', {
-    timeZone: BOGOTA_TIMEZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  }).formatToParts(now);
-
-  const parts = bogotaTime.reduce(
-    (acc, part) => {
-      acc[part.type] = part.value;
-      return acc;
-    },
-    {} as Record<string, string>,
-  );
-
-  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
-};
 
 // ==============================================
 // CONFIGURACIÓN TEMPORAL HASTA QUE SE CARGUE ENVIRONMENT
@@ -69,6 +45,16 @@ if (!existsSync(LOG_DIR)) {
 // ==============================================
 // CONFIGURACIÓN BASE DEL LOGGER
 // ==============================================
+
+interface LogObject {
+  [key: string]: unknown;
+}
+
+interface ErrorObject extends Error {
+  code?: string;
+  statusCode?: number;
+}
+
 const baseLoggerConfig: pino.LoggerOptions = {
   level: getLogLevel(),
   base: {
@@ -77,20 +63,19 @@ const baseLoggerConfig: pino.LoggerOptions = {
     env: process.env.NODE_ENV || 'development',
     timezone: BOGOTA_TIMEZONE,
   },
-  // Removemos el timestamp personalizado para evitar conflictos con pino-pretty
   formatters: {
-    level: (label) => ({ level: label }),
-    log: (object) => {
+    level: (label: string) => ({ level: label }),
+    log: (object: LogObject) => {
       if (object.err) {
-        const err = object.err as any;
+        const err = object.err as unknown;
         return {
           ...object,
           error: {
-            type: err.constructor.name,
-            message: err.message,
-            stack: isDevelopment ? err.stack : undefined,
-            code: err.code,
-            statusCode: err.statusCode,
+            type: unknown.constructor.name,
+            message: unknown,
+            stack: isDevelopment ? unknown : undefined,
+            code: unknown,
+            statusCode: unknown,
           },
         };
       }
@@ -111,10 +96,9 @@ const createDevelopmentLogger = (): pino.Logger => {
       options: {
         colorize: true,
         ignore: 'pid,hostname,timezone',
-        translateTime: 'SYS:yyyy-mm-dd HH:MM:ss', // Dejamos que pino-pretty maneje el timestamp
+        translateTime: 'SYS:yyyy-mm-dd HH:MM:ss',
         messageFormat: '[{service}] {msg}',
         singleLine: false,
-        // Sin customPrettifiers para evitar DataCloneError
       },
     };
   }
@@ -214,7 +198,7 @@ export const securityLogger = logger.child({
 // LOGGER CON CONTEXTO DE REQUEST
 // ==============================================
 export const createRequestLogger = (requestId?: string, userId?: string) => {
-  const context: Record<string, any> = { context: 'request' };
+  const context: Record<string, unknown> = { context: 'request' };
 
   if (requestId) context.requestId = requestId;
   if (userId) context.userId = userId;
@@ -223,7 +207,7 @@ export const createRequestLogger = (requestId?: string, userId?: string) => {
 };
 
 // Función helper para crear child loggers con contexto
-export const createContextLogger = (context: Record<string, any>) => {
+export const createContextLogger = (context: Record<string, unknown>) => {
   return logger.child(context);
 };
 
@@ -834,7 +818,22 @@ export const startup = {
 // ==============================================
 let reconfiguredLogger: pino.Logger | null = null;
 
-export const reconfigureLogger = (envConfig: any) => {
+interface ReconfigureLoggerConfig {
+  logging?: {
+    level?: string;
+    pretty?: boolean;
+  };
+  LOG_LEVEL?: string;
+  LOG_PRETTY?: boolean;
+  app?: {
+    isDevelopment?: boolean;
+    isProduction?: boolean;
+    env?: string;
+  };
+  NODE_ENV?: string;
+}
+
+export const reconfigureLogger = (envConfig: ReconfigureLoggerConfig) => {
   if (reconfiguredLogger) return reconfiguredLogger;
 
   const logLevel = envConfig.logging?.level || envConfig.LOG_LEVEL || 'info';
@@ -860,7 +859,7 @@ export const reconfigureLogger = (envConfig: any) => {
       level: (label) => ({ level: label }),
       log: (object) => {
         if (object.err) {
-          const err = object.err as any;
+          const err = object.err as ErrorObject;
           return {
             ...object,
             error: {

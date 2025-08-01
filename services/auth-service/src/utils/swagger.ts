@@ -860,6 +860,12 @@ export const swaggerSpec = swaggerJsdoc(swaggerOptions) as OpenAPIV3.Document;
 // ==============================================
 // OPCIONES DE SWAGGER UI
 // ==============================================
+
+interface SwaggerRequest {
+  url: string;
+  [key: string]: unknown;
+}
+
 export const swaggerUiOptions: SwaggerUiOptions = {
   explorer: true,
   customCss: `
@@ -873,13 +879,14 @@ export const swaggerUiOptions: SwaggerUiOptions = {
     .swagger-ui .opblock.opblock-delete { border-color: #dc2626; }
   `,
   customSiteTitle: 'Auth Service API - Docs',
+
   swaggerOptions: {
     docExpansion: 'none',
     filter: true,
     showExtensions: true,
     tryItOutEnabled: true,
     persistAuthorization: true,
-    requestInterceptor: (req: any) => {
+    requestInterceptor: (req: SwaggerRequest) => {
       if (environment.app.isDevelopment) {
         console.log('🔍 Swagger Request:', req.url);
       }
