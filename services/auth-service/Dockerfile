@@ -27,7 +27,7 @@ RUN pnpm install --frozen-lockfile --prod
 FROM base AS build
 
 # Copiar node_modules de dependencies
-COPY --from=dependencies /app/node_modules ./node_modules
+COPY --from=dependencies /node_modules ./node_modules
 
 # Copiar código fuente
 COPY . .
@@ -42,10 +42,10 @@ RUN pnpm build
 FROM base AS production
 
 # Copiar dependencias y archivos compilados
-COPY --from=dependencies /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/package.json ./package.json
-COPY --from=build /app/prisma ./prisma
+COPY --from=dependencies /node_modules ./node_modules
+COPY --from=build /dist ./dist
+COPY --from=build ./package.json ./package.json
+COPY --from=build /prisma ./prisma
 
 # Cambiar ownership al usuario nodejs
 RUN chown -R nodejs:nodejs /app

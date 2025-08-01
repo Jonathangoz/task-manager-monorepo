@@ -11,7 +11,7 @@ import { Server } from 'http';
 // Routes
 import { createCategoryRoutes } from '@/commons/routes/category.routes';
 import taskRoutes from '@/commons/routes/task.routes';
-import healthRoutes from '@/commons/routes/health.routes';
+import { HealthRoutes } from '@/commons/routes/health.routes';
 
 // Middlewares
 import { errorHandler, notFoundHandler } from '@/commons/middlewares/error.middleware';
@@ -447,8 +447,14 @@ export class TaskServiceApp {
     // Root endpoint con información del servicio
     this.setupRootEndpoint();
 
-    // Health check routes (siempre disponible)
-    this.app.use(`${this.API_PREFIX}/health`, healthRoutes);
+    // ✅ CAMBIO CRÍTICO: Health check routes PRIMERO y SIEMPRE disponible
+    // Las rutas de health check DEBEN ir antes que cualquier middleware que pueda fallar
+    this.app.use(`${this.API_PREFIX}/health`, HealthRoutes.routes);
+    this.appLogger.info({
+      component: 'routes_setup',
+      healthEndpoint: `${this.API_PREFIX}/health`,
+      productionMode: config.app.isProduction
+    }, '🏥 Health check routes configuradas (siempre disponibles)');
 
     // API Routes principales
     this.app.use(`${this.API_PREFIX}/tasks`, taskRoutes);
@@ -491,6 +497,9 @@ export class TaskServiceApp {
           status: 'operational',
           endpoints: {
             health: `${this.API_PREFIX}/health`,
+            healthReady: `${this.API_PREFIX}/health/ready`,
+            healthLive: `${this.API_PREFIX}/health/live`,
+            healthDetailed: !config.app.isProduction ? `${this.API_PREFIX}/health/detailed` : 'disabled',
             docs: config.swagger.enabled ? `${this.API_PREFIX}/docs` : 'disabled',
             tasks: `${this.API_PREFIX}/tasks`,
             categories: `${this.API_PREFIX}/categories`,
@@ -565,6 +574,16 @@ export class TaskServiceApp {
       `GET ${this.API_PREFIX}/categories`,
       `POST ${this.API_PREFIX}/categories`
     ];
+
+    // Rutas detalladas solo en desarrollo
+    if (!config.app.isProduction) {
+      routes.push(
+        `GET ${this.API_PREFIX}/health/detailed`,
+        `GET ${this.API_PREFIX}/health/database`,
+        `GET ${this.API_PREFIX}/health/redis`,
+        `GET ${this.API_PREFIX}/health/auth-service`
+      );
+    }
 
     if (config.swagger.enabled) {
       routes.push(`GET ${this.API_PREFIX}/docs`);

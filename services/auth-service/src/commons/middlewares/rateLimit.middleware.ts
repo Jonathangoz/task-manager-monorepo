@@ -1,5 +1,6 @@
 // src/presentation/middlewares/rateLimit.middleware.ts
 import { Request, Response, NextFunction } from 'express';
+import { AuthenticatedRequest } from '@/typeExpress/express';
 import { RedisCache } from '@/core/cache/RedisCache';
 import { securityLogger, logger } from '@/utils/logger';
 import { environment } from '@/config/environment';
@@ -260,10 +261,9 @@ export class RateLimitMiddleware {
     const windowStart = now - windowMs;
 
     try {
-      // Intentar usar Redis primero
       const isHealthy = await RateLimitMiddleware.cache.healthCheck();
       if (isHealthy) {
-        return await RateLimitMiddleware.checkRateLimit(key, windowMs, maxRequests);
+        return await RateLimitMiddleware.checkRateLimitRedis(key, windowMs, maxRequests, now);
       }
     } catch (error) {
       securityLogger.warn('Redis unavailable for rate limiting, falling back to memory store', {
@@ -274,6 +274,32 @@ export class RateLimitMiddleware {
 
     // Fallback a store en memoria
     return RateLimitMiddleware.checkRateLimitMemory(key, windowMs, maxRequests, now, windowStart);
+  }
+
+  /**
+   * Rate limiting usando Redis
+   */
+  private static async checkRateLimitRedis(
+    key: string,
+    windowMs: number,
+    maxRequests: number,
+    now: number
+  ): Promise<RateLimitInfo> {
+    const redisKey = CACHE_KEYS.RATE_LIMIT(key);
+    const result = await RateLimitMiddleware.cache.client
+      .multi()
+      .incr(redisKey)
+      .expire(redisKey, Math.ceil(windowMs / 1000), 'NX') // Set expiration only if key is new
+      .exec();
+
+    const count = result && result[0] && result[0][1] ? Number(result[0][1]) : 1;
+
+    return {
+      count,
+      resetTime: now + windowMs,
+      firstRequest: now, // Redis maneja el TTL
+      remaining: Math.max(0, maxRequests - count),
+    };
   }
 
   /**

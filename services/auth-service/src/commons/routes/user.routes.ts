@@ -1,6 +1,5 @@
 // src/commons/routes/user.routes.ts - Versión actualizada sin método deprecated
-
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { UserController } from '@/commons/controllers/UserController';
 import { 
   verifyToken, 

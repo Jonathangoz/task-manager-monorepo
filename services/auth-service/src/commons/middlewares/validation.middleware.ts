@@ -1,5 +1,6 @@
 // src/presentation/middlewares/validation.middleware.ts
 import { Request, Response, NextFunction } from 'express';
+import { AuthenticatedRequest } from '@/typeExpress/express';
 import { z } from 'zod';
 import { logger } from '@/utils/logger';
 import { 
@@ -15,9 +16,7 @@ interface ValidationRequest extends Request {
   correlationId?: string;
 }
 
-// ============================================================================
 // Base Schemas para validaciones comunes
-// ============================================================================
 
 const PaginationQuerySchema = z.object({
   page: z.coerce.number().int().min(1, 'La página debe ser un número entero mayor a 0').default(1),
@@ -31,9 +30,7 @@ const UUIDSchema = z.string().uuid('Debe ser un UUID válido');
 const EmailSchema = z.string().email('Formato de email inválido').regex(VALIDATION_PATTERNS.EMAIL, 'Formato de email inválido');
 const UsernameSchema = z.string().regex(VALIDATION_PATTERNS.USERNAME, 'El username solo puede contener letras, números y guiones bajos');
 
-// ============================================================================
 // Core Validation Middleware Class
-// ============================================================================
 
 export class ValidationMiddleware {
   /**
@@ -335,9 +332,7 @@ export class ValidationMiddleware {
   }
 }
 
-// ============================================================================
 // Advanced Validation Utilities
-// ============================================================================
 
 export class AdvancedValidationUtils {
   /**
@@ -426,9 +421,7 @@ export class AdvancedValidationUtils {
   }
 }
 
-// ============================================================================
 // Validation Presets - Validadores predefinidos comunes
-// ============================================================================
 
 export const ValidationPresets = {
   // Validaciones básicas
@@ -462,9 +455,7 @@ export const ValidationPresets = {
   )
 } as const;
 
-// ============================================================================
 // Schema Factory - Para crear schemas dinámicamente
-// ============================================================================
 
 export class SchemaFactory {
   /**
@@ -505,9 +496,7 @@ export class SchemaFactory {
   }
 }
 
-// ============================================================================
 // Exports - Compatibilidad con la API anterior
-// ============================================================================
 
 // Métodos principales
 export const createValidator = ValidationMiddleware.createValidator;

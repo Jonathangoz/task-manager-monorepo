@@ -1,8 +1,6 @@
 // src/commons/routes/health.routes.ts
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { HealthController } from '@/commons/controllers/HealthController';
-import { RateLimitMiddleware } from '@/commons/middlewares/rateLimit.middleware';
-import { extractSessionInfo } from '@/commons/middlewares/auth.middleware';
 import { asyncHandler } from '@/commons/middlewares/error.middleware';
 import { environment } from '@/config/environment';
 
@@ -11,57 +9,44 @@ export class HealthRoutes {
     const router = Router();
     const healthController = new HealthController();
 
-    // Rate limiting más permisivo para health checks
-    const healthRateLimit = RateLimitMiddleware.general({
-      windowMs: 1 * 60 * 1000, // 1 minuto
-      maxRequests: 100, // máximo 100 requests por IP por minuto
-      message: 'Demasiadas peticiones de health check'
-    });
-
-    // Middleware básico
-    router.use(extractSessionInfo);
-
     // === HEALTH CHECKS BÁSICOS ===
-
     /**
      * GET /health
-     * Health check básico - respuesta rápida
+     * Health check básico - ULTRA RÁPIDO para Docker health checks
+     * Solo verifica que el servidor responda, no dependencias
      */
     router.get(
-      '/',
-      healthRateLimit,
+      '/health',
       asyncHandler(healthController.basicHealthCheck.bind(healthController))
     );
 
     /**
-     * GET /health/ready
-     * Readiness probe - verifica si el servicio está listo para recibir tráfico
-     * Usado por Kubernetes/Docker Compose
+     * GET /health/ready  
+     * Readiness probe - verifica dependencias con timeouts agresivos
+     * Mejor para depends_on: service_healthy en Docker Compose
      */
     router.get(
-      '/ready',
+      '/health/ready',
       asyncHandler(healthController.readinessCheck.bind(healthController))
     );
 
     /**
      * GET /health/live
-     * Liveness probe - verifica si el servicio está vivo
-     * Usado por Kubernetes/Docker Compose
+     * Liveness probe - solo verifica que el proceso esté vivo
      */
     router.get(
-      '/live',
+      '/health/live', 
       asyncHandler(healthController.livenessCheck.bind(healthController))
     );
 
     // === HEALTH CHECKS DETALLADOS (solo en desarrollo/staging) ===
-    if (environment.NODE_ENV !== 'production') {
+    if (!environment.app.isProduction) {
       /**
        * GET /health/detailed
-       * Health check detallado con información del sistema
+       * Health check detallado con métricas del sistema
        */
       router.get(
         '/detailed',
-        healthRateLimit,
         asyncHandler(healthController.detailedHealthCheck.bind(healthController))
       );
 
@@ -71,7 +56,6 @@ export class HealthRoutes {
        */
       router.get(
         '/database',
-        healthRateLimit,
         asyncHandler(healthController.databaseHealthCheck.bind(healthController))
       );
 
@@ -81,7 +65,6 @@ export class HealthRoutes {
        */
       router.get(
         '/redis',
-        healthRateLimit,
         asyncHandler(healthController.redisHealthCheck.bind(healthController))
       );
 
@@ -91,7 +74,6 @@ export class HealthRoutes {
        */
       router.get(
         '/dependencies',
-        healthRateLimit,
         asyncHandler(healthController.dependenciesHealthCheck.bind(healthController))
       );
 
@@ -101,7 +83,6 @@ export class HealthRoutes {
        */
       router.get(
         '/metrics',
-        healthRateLimit,
         asyncHandler(healthController.getMetrics.bind(healthController))
       );
     }

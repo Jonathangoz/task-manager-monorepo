@@ -6,7 +6,7 @@ import { logger, startup, logError, healthCheck } from '@/utils/logger';
 import { config } from '@/config/environment';
 import { connectDatabase, disconnectDatabase, cleanupOldCompletedTasks } from '@/config/database';
 import { taskRedisConnection } from '@/config/redis';
-import { TaskServiceApp } from '@/app'; 
+import { TaskServiceApp } from '@/app';
 
 // TIPOS E INTERFACES
 interface HealthCheckResult {
@@ -34,7 +34,7 @@ class TaskServiceBootstrap {
   private statsInterval?: NodeJS.Timeout;
   private isShuttingDown = false;
   private readonly gracefulShutdownTimeout = 30000; // 30 segundos
-  private taskApp?: TaskServiceApp; // ✅ NUEVO: Instancia de la aplicación
+  private taskApp?: TaskServiceApp;
 
   constructor() {
     this.validateEnvironment();
@@ -67,7 +67,7 @@ class TaskServiceBootstrap {
     logger.info({
       environment: config.app.env,
       nodeVersion: process.version,
-      port: config.app.port, // ✅ VERIFICAR: Debe ser 3002
+      port: config.app.port,
       apiVersion: config.app.apiVersion,
       event: 'environment_validation_passed'
     }, '✅ Environment validation passed');
@@ -77,10 +77,9 @@ class TaskServiceBootstrap {
    * Log de información inicial del servicio
    */
   private logStartupInfo(): void {
-    // ✅ CAMBIO: Log específico para task-service
     console.log('🔧 Task Service Configuration Loaded:');
     console.log(`   Environment: ${config.app.env}`);
-    console.log(`   Port: ${config.app.port}`); // ✅ DEBE MOSTRAR 3002
+    console.log(`   Port: ${config.app.port}`);
     console.log(`   Auth Service: ${config.authService.url}`);
     console.log(`   Redis Prefix: ${config.redis.prefix}`);
     console.log(`   Log Level: ${config.logging.level}`);
@@ -88,7 +87,7 @@ class TaskServiceBootstrap {
     console.log(`   Swagger: ${config.swagger.enabled ? 'enabled' : 'disabled'}`);
 
     startup.configLoaded({
-      service: 'task-service', // ✅ CAMBIO: Especificar task-service
+      service: 'task-service',
       environment: config.app.env,
       port: config.app.port,
       redis: {
@@ -162,6 +161,36 @@ class TaskServiceBootstrap {
       }, '⚠️ Failed to connect to Redis - continuing without cache');
       
       // No lanzar error para Redis ya que el servicio puede funcionar sin caché
+    }
+  }
+
+  /**
+   * Crea la aplicación TaskServiceApp con las dependencias inicializadas
+   */
+  private createTaskServiceApp(): TaskServiceApp {
+    try {
+      logger.info({
+        event: 'task_app_creation_started',
+        component: 'app'
+      }, '🏗️ Creating TaskServiceApp instance...');
+
+      // Crear la aplicación TaskServiceApp
+      this.taskApp = new TaskServiceApp();
+      
+      logger.info({
+        event: 'task_app_created',
+        component: 'app'
+      }, '✅ TaskServiceApp instance created successfully');
+
+      return this.taskApp;
+      
+    } catch (error) {
+      logError.critical(error as Error, {
+        context: 'task_app_creation',
+        component: 'app'
+      });
+      
+      throw error;
     }
   }
 
@@ -262,32 +291,28 @@ class TaskServiceBootstrap {
     const healthChecks: Promise<HealthCheckResult>[] = [];
 
     // Database health check
-    healthChecks.push(
-      connectDatabase()
-        .then(() => ({ 
-          service: 'database', 
-          status: 'healthy' as const
-        }))
-        .catch((error) => ({ 
-          service: 'database', 
-          status: 'unhealthy' as const, 
-          error: error.message 
-        }))
-    );
+  healthChecks.push(
+    Promise.race([
+      connectDatabase(),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Database timeout')), 5000) // Añadir timeout de 5s
+      )
+    ])
+      .then(() => ({ service: 'database', status: 'healthy' as const }))
+      .catch((error) => ({ service: 'database', status: 'unhealthy' as const, error: error.message }))
+  );
 
     // Redis health check
-    healthChecks.push(
-      taskRedisConnection.connect()
-        .then(() => ({ 
-          service: 'redis', 
-          status: 'healthy' as const
-        }))
-        .catch((error) => ({ 
-          service: 'redis', 
-          status: 'unhealthy' as const, 
-          error: error.message 
-        }))
-    );
+  healthChecks.push(
+    Promise.race([
+      taskRedisConnection.connect(),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Redis timeout')), 3000) // Añadir timeout de 3s
+      )
+    ])
+      .then(() => ({ service: 'redis', status: 'healthy' as const }))
+      .catch((error) => ({ service: 'redis', status: 'unhealthy' as const, error: error.message }))
+  );
 
     try {
       const results = await Promise.allSettled(healthChecks);
@@ -456,12 +481,12 @@ class TaskServiceBootstrap {
       setTimeout(() => {
         if (this.isShuttingDown) {
           logger.fatal({
-            timeout: this.gracefulShutdownTimeout,
+            timeout: 30000,
             event: 'forced_shutdown'
           }, '💀 Forced shutdown after timeout');
           process.exit(1);
         }
-      }, this.gracefulShutdownTimeout);
+      }, 30000);
     };
 
     // Escuchar señales de cierre
@@ -506,36 +531,35 @@ class TaskServiceBootstrap {
   }
 
   /**
-   * Inicia el servidor HTTP usando la aplicación TaskServiceApp correcta
+   * Inicia el servidor HTTP usando Express de TaskServiceApp
    */
   private async startHttpServer(): Promise<ServerInfo> {
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
       
       try {
-        // ✅ CAMBIO CRÍTICO: Crear la aplicación TaskServiceApp correcta
-        console.log('Creating TaskServiceApp with correct configuration...');
-        this.taskApp = new TaskServiceApp();
-        const app = this.taskApp.getApp();
+        logger.info({
+          event: 'http_server_setup_started',
+          component: 'server',
+          port: config.app.port
+        }, '🌐 Setting up HTTP server...');
+
+        // Crear la aplicación Express desde TaskServiceApp
+        const app = this.createTaskServiceApp();
+        const expressApp = app.getApp();
         
-        console.log('TaskServiceApp created successfully:', !!app); 
-        
-        // Verificar que app sea una aplicación Express válida
-        if (!app || typeof app !== 'function') {
-          throw new Error('Invalid TaskServiceApp Express application');
+        // Verificar que la aplicación Express sea válida
+        if (!expressApp || typeof expressApp !== 'function') {
+          throw new Error('Invalid Express application from TaskServiceApp');
         }
 
-        // ✅ CAMBIO CRÍTICO: Usar el puerto correcto desde la configuración
-        const targetPort = config.app.port; // DEBE SER 3002
-        console.log(`Starting server on port: ${targetPort}`);
-
-        // Crear servidor HTTP con la aplicación Express correcta
-        this.server = http.createServer(app);
+        // Crear servidor HTTP
+        this.server = http.createServer(expressApp);
         
         // Configurar event listeners
         this.server.on('listening', () => {
           const address = this.server!.address();
-          const port = typeof address === 'string' ? parseInt(address) : address?.port || targetPort;
+          const port = typeof address === 'string' ? parseInt(address) : address?.port || config.app.port;
           
           const serverInfo: ServerInfo = {
             port,
@@ -554,45 +578,53 @@ class TaskServiceBootstrap {
             ...serverInfo,
             event: 'http_server_started',
             component: 'server',
-            service: 'task-service' // ✅ ESPECIFICAR task-service
-          }, `🚀 TASK SERVICE HTTP server listening on port ${port}`); // ✅ ACLARAR QUE ES TASK SERVICE
+            service: 'task-service'
+          }, `🚀 TASK SERVICE HTTP server listening on port ${port}`);
           
           resolve(serverInfo);
         });
 
         this.server.on('error', (error: NodeJS.ErrnoException) => {
           if (error.code === 'EADDRINUSE') {
-            logError.critical(new Error(`Port ${targetPort} is already in use`), {
+            logError.critical(new Error(`Port ${config.app.port} is already in use`), {
               context: 'http_server_port_in_use',
-              port: targetPort,
+              port: config.app.port,
               code: error.code,
-              service: 'task-service' // ✅ ESPECIFICAR task-service
+              service: 'task-service'
             });
           } else {
             logError.critical(error, {
               context: 'http_server_start_error',
-              port: targetPort,
+              port: config.app.port,
               code: error.code,
-              service: 'task-service' // ✅ ESPECIFICAR task-service
+              service: 'task-service'
             });
           }
           reject(error);
         });
 
         // Configurar timeouts del servidor
-        this.server.timeout = 30000; // 30 segundos
-        this.server.keepAliveTimeout = 5000; // 5 segundos
-        this.server.headersTimeout = 6000; // 6 segundos
+        this.server!.timeout = 60000;          // 60 segundos
+        this.server!.keepAliveTimeout = 90000;  // 90 segundos  
+        this.server!.headersTimeout = 91000;    // 91 segundos
+        this.server!.requestTimeout = 50000;    // 50 segundos
+        this.server!.maxConnections = 1000;     // Límite de conexiones
 
-        // ✅ CAMBIO CRÍTICO: Iniciar el servidor en el puerto correcto
-        this.server.listen(targetPort, '0.0.0.0');
-        console.log(`Server.listen called with port: ${targetPort}`);
+        // Iniciar el servidor
+        this.server.listen(config.app.port, '0.0.0.0');
+        
+        logger.info({
+          event: 'http_server_listen_called',
+          component: 'server',
+          port: config.app.port,
+          host: '0.0.0.0'
+        }, `📡 Server.listen called on port ${config.app.port}`);
 
       } catch (error) {
         logError.critical(error as Error, {
           context: 'http_server_setup_error',
           port: config.app.port,
-          service: 'task-service' // ✅ ESPECIFICAR task-service
+          service: 'task-service'
         });
         reject(error);
       }
@@ -606,13 +638,13 @@ class TaskServiceBootstrap {
     try {
       logger.info({
         event: 'service_bootstrap_started',
-        service: 'task-service' // ✅ ESPECIFICAR task-service
+        service: 'task-service'
       }, '🚀 Starting Task Service bootstrap process...');
 
       // 1. Configurar manejo de cierre graceful
       this.setupGracefulShutdown();
 
-      // 2. Inicializar conexiones
+      // 2. Inicializar conexiones ANTES de crear la aplicación
       await this.initializeDatabase();
       await this.initializeRedis();
 
@@ -622,14 +654,14 @@ class TaskServiceBootstrap {
       // 4. Configurar trabajos en segundo plano
       this.setupBackgroundJobs();
 
-      // 5. Iniciar servidor HTTP
+      // 5. Iniciar servidor HTTP (esto crea la aplicación internamente)
       const serverInfo = await this.startHttpServer();
 
       // Log final de inicialización exitosa
       logger.info({
         ...serverInfo,
         event: 'service_started_successfully',
-        service: 'task-service', // ✅ ESPECIFICAR task-service
+        service: 'task-service',
         features: {
           swagger: config.swagger.enabled,
           rateLimit: config.rateLimit.enabled,
@@ -641,19 +673,19 @@ class TaskServiceBootstrap {
             stats: !!this.statsInterval
           }
         }
-      }, '🎉 TASK SERVICE started successfully and ready to accept connections'); // ✅ ACLARAR QUE ES TASK SERVICE
+      }, '🎉 TASK SERVICE started successfully and ready to accept connections');
 
     } catch (error) {
       logError.critical(error as Error, {
         context: 'service_bootstrap_failed',
-        service: 'task-service' // ✅ ESPECIFICAR task-service
+        service: 'task-service'
       });
       
       logger.fatal({
         error: error instanceof Error ? error.message : String(error),
         event: 'service_bootstrap_failed',
-        service: 'task-service' // ✅ ESPECIFICAR task-service
-      }, '💀 Failed to start TASK SERVICE'); // ✅ ACLARAR QUE ES TASK SERVICE
+        service: 'task-service'
+      }, '💀 Failed to start TASK SERVICE');
       
       process.exit(1);
     }
@@ -664,7 +696,7 @@ class TaskServiceBootstrap {
    */
   public getServiceInfo() {
     return {
-      service: 'task-service', // ✅ ESPECIFICAR task-service
+      service: 'task-service',
       version: config.app.apiVersion,
       environment: config.app.env,
       port: config.app.port,
@@ -704,14 +736,14 @@ class TaskServiceBootstrap {
     if (this.isShuttingDown) {
       logger.warn({
         event: 'stop_already_in_progress',
-        service: 'task-service' // ✅ ESPECIFICAR task-service
+        service: 'task-service'
       }, '⚠️ Service stop already in progress');
       return;
     }
 
     logger.info({
       event: 'service_stop_requested',
-      service: 'task-service' // ✅ ESPECIFICAR task-service
+      service: 'task-service'
     }, '🛑 Service stop requested');
 
     // Usar el método de shutdown existente
@@ -732,8 +764,8 @@ if (process.env.NODE_ENV !== 'test') {
     logger.fatal({
       error: error instanceof Error ? error.message : String(error),
       event: 'bootstrap_startup_failed',
-      service: 'task-service' // ✅ ESPECIFICAR task-service
-    }, '💀 TASK SERVICE Bootstrap failed during startup'); // ✅ ACLARAR QUE ES TASK SERVICE
+      service: 'task-service'
+    }, '💀 TASK SERVICE Bootstrap failed during startup');
     
     process.exit(1);
   });

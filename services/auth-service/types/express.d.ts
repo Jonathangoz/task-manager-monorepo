@@ -1,9 +1,19 @@
-// src/types/express.d.ts
+// services/auth-service/types/express.d.ts
 // Extensiones de tipos para Express.js
 
-import { TokenPayload } from '@/core/interfaces/IAuthService';
-import { User } from '@/core/entities/User';
+import { Request, Response, NextFunction } from 'express';
 
+// Definir TokenPayload localmente
+interface TokenPayload {
+  id: string;
+  email: string;
+  username: string;
+  sessionId: string;
+  iat: number;
+  exp: number;
+}
+
+// Extender la interfaz global de Express
 declare global {
   namespace Express {
     interface Request {
@@ -23,10 +33,23 @@ declare global {
       };
       correlationId?: string;
       requestId?: string;
+      startTime?: number;
+      clientIp?: string;
+      deviceInfo?: {
+        userAgent: string;
+        platform?: string;
+        browser?: string;
+      };
+      auth?: TokenPayload;
+      validatedData?: {
+        body?: any;
+        query?: any;
+        params?: any;
+        headers?: any;
+      };
     }
   }
 }
-export {};
 
 // Tipos para request bodies de autenticación
 export interface AuthenticatedRequest extends Request {
@@ -164,9 +187,21 @@ export interface LogContext {
   [key: string]: any;
 }
 
-export interface Request {
-  auth: TokenPayload; 
+// Extensión específica para la aplicación
+export interface AppRequest extends Request {
+  correlationId?: string;
+  requestId?: string;
+  startTime?: number;
+  clientIp?: string;
+  deviceInfo?: {
+    userAgent: string;
+    platform?: string;
+    browser?: string;
+  };
 }
+
+// Export explícito del TokenPayload para uso en otros archivos
+export { TokenPayload };
 
 // Export para asegurar que el módulo sea tratado como un módulo
 export {};

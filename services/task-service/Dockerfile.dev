@@ -1,46 +1,84 @@
-FROM node:22-alpine
+# Multi-stage Dockerfile para Task Service (Development) - OPTIMIZADO PARA HARDWARE LIMITADO
+FROM node:22-alpine AS base
 
-# task-service - Dockerfile.dev
+# Instalar herramientas del sistema
+RUN apk add --no-cache \
+    curl \
+    postgresql-client \
+    redis \
+    netcat-openbsd \
+    dumb-init
 
-# Instalar pnpm globalmente
+# Instalar pnpm y herramientas de desarrollo
 RUN npm install -g pnpm@latest
-
-# Instala nodemon y ts-node globalmente para el desarrollo
-# Estos son necesarios para ejecutar el script 'dev'
-RUN npm install -g nodemon ts-node
-
-# Instalar herramientas necesarias (incluyendo redis-cli si es necesaria para el contenedor, curl)
-RUN apk add --no-cache curl postgresql-client redis # Esto instalará el paquete 'redis' que incluye redis-cli 
 
 # Crear directorio de trabajo
 WORKDIR /app
-# Copiar el resto del código fuente después de que las dependencias estén instaladas
-COPY services/task-service/. .      
-# a la raíz del sistema de archivos del contenedor (la carpeta "/")
-COPY tsconfig.base.json /
 
-# Copiar archivos de dependencias para instalar
-# Las RUTAS son ahora RELATIVAS a la RAÍZ de tu monorepo.
+# Crear usuario no-root para seguridad
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001 -G nodejs
+
+# ==============================================
+FROM base AS dependencies
+
+# Copiar archivos de configuración de dependencias
 COPY services/task-service/package.json ./package.json
 COPY pnpm-lock.yaml ./pnpm-lock.yaml
 
-# Instalar dependencias (incluyendo dev)
+# Instalar dependencias (incluyendo dev para desarrollo)
 RUN pnpm install --no-frozen-lockfile
 
-# Generar cliente de Prisma
+# ==============================================
+FROM base AS development
+
+# Copiar node_modules desde la etapa de dependencias
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY --from=dependencies /app/package.json ./package.json
+COPY --from=dependencies /app/pnpm-lock.yaml ./pnpm-lock.yaml
+
+# Copiar código fuente del servicio
+COPY services/task-service/. .
+
+# Copiar configuración TypeScript base
+COPY tsconfig.base.json /tsconfig.base.json
+
+# Copiar y configurar prisma
 COPY services/task-service/prisma ./prisma
+
+# Crear directorios necesarios ANTES de cambiar usuario
+RUN mkdir -p /app/dist && \
+    mkdir -p /app/.tsbuildinfo && \
+    mkdir -p /app/logs && \
+    chmod 755 /app/dist && \
+    chmod 755 /app/.tsbuildinfo && \
+    chmod 755 /app/logs
+
+# Generar cliente Prisma
 RUN pnpm prisma:generate
 
-# Exponer puerto
+# Copiar script de inicio
+COPY services/task-service/docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Cambiar ownership al usuario nodejs
+RUN chown -R nodejs:nodejs /app && \
+    chown nodejs:nodejs /usr/local/bin/docker-entrypoint.sh
+
+# Cambiar a usuario no-root
+USER nodejs
+
+# Exponer puerto del task service
 EXPOSE 3002
 
 # Variables de entorno para desarrollo
 ENV NODE_ENV=development
+ENV SERVICE_NAME=task-service
 
-# Script de inicio que incluye migraciones
-COPY services/task-service/docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+# ✅ HEALTH CHECK COHERENTE PARA HARDWARE LIMITADO
+HEALTHCHECK --interval=60s --timeout=30s --start-period=480s --retries=8 \
+    CMD curl -f --max-time 30 --connect-timeout 10 http://localhost:3002/api/v1/health || exit 1
 
-# Comando de desarrollo
-ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["pnpm", "dev"]
+# Usar dumb-init para manejo correcto de señales
+ENTRYPOINT ["dumb-init", "--", "docker-entrypoint.sh"]
+CMD ["pnpm", "run", "dev:watch"]

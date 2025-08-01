@@ -1,6 +1,7 @@
 // ==============================================
-// src/utils/logger.ts - Auth Service Logger
+// src/utils/logger.ts - Task Service Logger
 // Sistema de logging con Pino, timezone Bogotá y rotación de archivos
+// Específico para operaciones de tareas y categorías
 // ==============================================
 
 import pino from 'pino';
@@ -65,12 +66,11 @@ if (!existsSync(LOG_DIR)) {
 const baseLoggerConfig: pino.LoggerOptions = {
   level: getLogLevel(),
   base: {
-    service: 'auth-service',
+    service: 'task-service',
     version: process.env.npm_package_version || '1.0.0',
     env: process.env.NODE_ENV || 'development',
     timezone: BOGOTA_TIMEZONE,
   },
-  // Removemos el timestamp personalizado para evitar conflictos con pino-pretty
   formatters: {
     level: (label) => ({ level: label }),
     log: (object) => {
@@ -104,10 +104,9 @@ const createDevelopmentLogger = (): pino.Logger => {
       options: {
         colorize: true,
         ignore: 'pid,hostname,timezone',
-        translateTime: 'SYS:yyyy-mm-dd HH:MM:ss', // Dejamos que pino-pretty maneje el timestamp
+        translateTime: 'SYS:yyyy-mm-dd HH:MM:ss',
         messageFormat: '[{service}] {msg}',
         singleLine: false,
-        // Sin customPrettifiers para evitar DataCloneError
       },
     };
   }
@@ -126,17 +125,17 @@ const createProductionLogger = (): pino.Logger => {
     // Archivo general (todos los logs)
     {
       level: getLogLevel(),
-      dest: path.join(LOG_DIR, 'auth.log'),
+      dest: path.join(LOG_DIR, 'task-service.log'),
     },
     // Archivo de errores (solo errores y fatales)
     {
       level: 'error',
-      dest: path.join(LOG_DIR, 'auth-error.log'),
+      dest: path.join(LOG_DIR, 'task-service-error.log'),
     },
-    // Archivo de seguridad (eventos de autenticación)
+    // Archivo de seguridad (eventos de autenticación y autorización)
     {
       level: 'info',
-      dest: path.join(LOG_DIR, 'auth-security.log'),
+      dest: path.join(LOG_DIR, 'task-service-security.log'),
     },
     // Stdout para contenedores/PM2
     {
@@ -183,6 +182,16 @@ export const redisLogger = logger.child({
   domain: 'cache',
 });
 
+export const taskLogger = logger.child({ 
+  component: 'task',
+  domain: 'business',
+});
+
+export const categoryLogger = logger.child({ 
+  component: 'category',
+  domain: 'business',
+});
+
 export const authLogger = logger.child({ 
   component: 'auth',
   domain: 'security',
@@ -211,126 +220,196 @@ export const createContextLogger = (context: Record<string, any>) => {
 };
 
 // ==============================================
-// LOGGERS ESTRUCTURADOS POR DOMINIO DE AUTH
+// LOGGERS ESTRUCTURADOS POR DOMINIO DE TASK SERVICE
 // ==============================================
 export const loggers = {
   // ==============================================
-  // EVENTOS DE AUTENTICACIÓN
+  // EVENTOS DE TAREAS
   // ==============================================
-  userRegistered: (userId: string, email: string, ip?: string) =>
-    authLogger.info({
+  taskCreated: (taskId: string, title: string, userId: string, categoryId?: string) =>
+    taskLogger.info({
+      taskId,
+      title,
       userId,
-      email: email.toLowerCase(),
-      ip,
-      event: 'user.registered',
-      domain: 'auth',
-    }, `👤 Usuario registrado: ${email}`),
+      categoryId,
+      event: 'task.created',
+      domain: 'business',
+    }, `📝 Tarea creada: "${title}" por usuario ${userId}`),
 
-  userLogin: (userId: string, email: string, ip?: string, userAgent?: string) =>
+  taskUpdated: (taskId: string, title: string, userId: string, updatedFields: string[]) =>
+    taskLogger.info({
+      taskId,
+      title,
+      userId,
+      updatedFields,
+      event: 'task.updated',
+      domain: 'business',
+    }, `✏️ Tarea actualizada: "${title}" - campos: ${updatedFields.join(', ')}`),
+
+  taskDeleted: (taskId: string, title: string, userId: string) =>
+    taskLogger.info({
+      taskId,
+      title,
+      userId,
+      event: 'task.deleted',
+      domain: 'business',
+    }, `🗑️ Tarea eliminada: "${title}" por usuario ${userId}`),
+
+  taskStatusChanged: (taskId: string, title: string, oldStatus: string, newStatus: string, userId: string) =>
+    taskLogger.info({
+      taskId,
+      title,
+      oldStatus,
+      newStatus,
+      userId,
+      event: 'task.status.changed',
+      domain: 'business',
+    }, `🔄 Estado de tarea cambiado: "${title}" de ${oldStatus} a ${newStatus}`),
+
+  taskCompleted: (taskId: string, title: string, userId: string, completionTime?: Date) =>
+    taskLogger.info({
+      taskId,
+      title,
+      userId,
+      completionTime,
+      event: 'task.completed',
+      domain: 'business',
+    }, `✅ Tarea completada: "${title}" por usuario ${userId}`),
+
+  taskOverdue: (taskId: string, title: string, userId: string, dueDate: Date) =>
+    taskLogger.warn({
+      taskId,
+      title,
+      userId,
+      dueDate,
+      event: 'task.overdue',
+      domain: 'business',
+    }, `⏰ Tarea vencida: "${title}" (vencimiento: ${dueDate.toISOString()})`),
+
+  taskPriorityChanged: (taskId: string, title: string, oldPriority: string, newPriority: string, userId: string) =>
+    taskLogger.info({
+      taskId,
+      title,
+      oldPriority,
+      newPriority,
+      userId,
+      event: 'task.priority.changed',
+      domain: 'business',
+    }, `🎯 Prioridad de tarea cambiada: "${title}" de ${oldPriority} a ${newPriority}`),
+
+  taskBulkOperation: (operation: string, taskIds: string[], userId: string, affectedCount: number) =>
+    taskLogger.info({
+      operation,
+      taskIds,
+      userId,
+      affectedCount,
+      event: 'task.bulk.operation',
+      domain: 'business',
+    }, `📦 Operación en lote: ${operation} aplicada a ${affectedCount} tareas`),
+
+  // ==============================================
+  // EVENTOS DE CATEGORÍAS
+  // ==============================================
+  categoryCreated: (categoryId: string, name: string, userId: string, color?: string, icon?: string) =>
+    categoryLogger.info({
+      categoryId,
+      name,
+      userId,
+      color,
+      icon,
+      event: 'category.created',
+      domain: 'business',
+    }, `📁 Categoría creada: "${name}" por usuario ${userId}`),
+
+  categoryUpdated: (categoryId: string, name: string, userId: string, updatedFields: string[]) =>
+    categoryLogger.info({
+      categoryId,
+      name,
+      userId,
+      updatedFields,
+      event: 'category.updated',
+      domain: 'business',
+    }, `✏️ Categoría actualizada: "${name}" - campos: ${updatedFields.join(', ')}`),
+
+  categoryDeleted: (categoryId: string, name: string, userId: string, taskCount?: number) =>
+    categoryLogger.info({
+      categoryId,
+      name,
+      userId,
+      taskCount,
+      event: 'category.deleted',
+      domain: 'business',
+    }, `🗑️ Categoría eliminada: "${name}" (${taskCount || 0} tareas afectadas)`),
+
+  categoryBulkDeleted: (categoryIds: string[], userId: string, affectedCount: number, totalTasks: number) =>
+    categoryLogger.info({
+      categoryIds,
+      userId,
+      affectedCount,
+      totalTasks,
+      event: 'category.bulk.deleted',
+      domain: 'business',
+    }, `🗂️ Eliminación en lote: ${affectedCount} categorías (${totalTasks} tareas afectadas)`),
+
+  categoryTasksReassigned: (fromCategoryId: string, toCategoryId: string, taskCount: number, userId: string) =>
+    categoryLogger.info({
+      fromCategoryId,
+      toCategoryId,
+      taskCount,
+      userId,
+      event: 'category.tasks.reassigned',
+      domain: 'business',
+    }, `🔄 ${taskCount} tareas reasignadas de categoría ${fromCategoryId} a ${toCategoryId}`),
+
+  categoryLimitReached: (userId: string, currentCount: number, maxCount: number) =>
+    categoryLogger.warn({
+      userId,
+      currentCount,
+      maxCount,
+      event: 'category.limit.reached',
+      domain: 'business',
+    }, `⚠️ Usuario ${userId} alcanzó límite de categorías: ${currentCount}/${maxCount}`),
+
+  // ==============================================
+  // EVENTOS DE AUTENTICACIÓN Y AUTORIZACIÓN
+  // ==============================================
+  tokenValidated: (userId: string, ip?: string, userAgent?: string) =>
     authLogger.info({
       userId,
-      email: email.toLowerCase(),
       ip,
       userAgent,
-      event: 'user.login',
-      domain: 'auth',
-    }, `🔑 Login exitoso: ${email}`),
-
-  userLoginFailed: (email: string, reason: string, ip?: string, userAgent?: string) =>
-    securityLogger.warn({
-      email: email.toLowerCase(),
-      reason,
-      ip,
-      userAgent,
-      event: 'user.login.failed',
+      event: 'auth.token.validated',
       domain: 'security',
-    }, `❌ Login fallido: ${email} - ${reason}`),
+    }, `🔑 Token validado para usuario ${userId}`),
 
-  userLogout: (userId: string, email?: string, ip?: string) =>
-    authLogger.info({
-      userId,
-      email: email?.toLowerCase(),
-      ip,
-      event: 'user.logout',
-      domain: 'auth',
-    }, `👋 Logout: ${email || userId}`),
-
-  passwordChanged: (userId: string, email: string, ip?: string) =>
-    securityLogger.info({
-      userId,
-      email: email.toLowerCase(),
-      ip,
-      event: 'password.changed',
-      domain: 'security',
-    }, `🔐 Contraseña cambiada: ${email}`),
-
-  accountLocked: (userId: string, email: string, attempts: number, ip?: string) =>
-    securityLogger.warn({
-      userId,
-      email: email.toLowerCase(),
-      attempts,
-      ip,
-      event: 'account.locked',
-      domain: 'security',
-    }, `🔒 Cuenta bloqueada: ${email} (${attempts} intentos)`),
-
-  accountUnlocked: (userId: string, email: string, method: string) =>
-    securityLogger.info({
-      userId,
-      email: email.toLowerCase(),
-      method,
-      event: 'account.unlocked',
-      domain: 'security',
-    }, `🔓 Cuenta desbloqueada: ${email} (${method})`),
-
-  // ==============================================
-  // GESTIÓN DE TOKENS
-  // ==============================================
-  tokenGenerated: (userId: string, tokenType: 'access' | 'refresh' | 'reset', expiresIn?: string) =>
-    authLogger.info({
-      userId,
-      tokenType,
-      expiresIn,
-      event: 'token.generated',
-      domain: 'auth',
-    }, `🎫 Token ${tokenType} generado para usuario ${userId}`),
-
-  tokenValidated: (userId: string, tokenType: 'access' | 'refresh', ip?: string) =>
-    authLogger.debug({
-      userId,
-      tokenType,
-      ip,
-      event: 'token.validated',
-      domain: 'auth',
-    }, `✅ Token ${tokenType} validado para usuario ${userId}`),
-
-  tokenValidationFailed: (reason: string, tokenType: 'access' | 'refresh', ip?: string, tokenPreview?: string) =>
+  tokenValidationFailed: (reason: string, ip?: string, tokenPreview?: string) =>
     securityLogger.warn({
       reason,
-      tokenType,
       ip,
       tokenPreview,
-      event: 'token.validation.failed',
+      event: 'auth.token.validation.failed',
       domain: 'security',
-    }, `❌ Validación de token ${tokenType} falló: ${reason}`),
+    }, `❌ Validación de token falló: ${reason}`),
 
-  tokenRevoked: (userId: string, tokenType: 'access' | 'refresh' | 'all', reason?: string) =>
-    securityLogger.info({
-      userId,
-      tokenType,
+  unauthorizedAccess: (ip: string, endpoint: string, reason: string, userAgent?: string) =>
+    securityLogger.warn({
+      ip,
+      endpoint,
       reason,
-      event: 'token.revoked',
+      userAgent,
+      event: 'security.unauthorized',
       domain: 'security',
-    }, `🚫 Token ${tokenType} revocado para usuario ${userId}`),
+    }, `🚫 Acceso no autorizado: ${ip} en ${endpoint} - ${reason}`),
 
-  refreshTokenRotated: (userId: string, oldTokenId?: string, newTokenId?: string) =>
-    authLogger.info({
+  forbiddenAccess: (userId: string, resource: string, action: string, ip?: string) =>
+    securityLogger.warn({
       userId,
-      oldTokenId,
-      newTokenId,
-      event: 'refresh_token.rotated',
-      domain: 'auth',
-    }, `🔄 Refresh token rotado para usuario ${userId}`),
+      resource,
+      action,
+      ip,
+      event: 'security.forbidden',
+      domain: 'security',
+    }, `🔒 Acceso prohibido: usuario ${userId} intentó ${action} en ${resource}`),
 
   // ==============================================
   // EVENTOS DE SEGURIDAD
@@ -345,48 +424,29 @@ export const loggers = {
       domain: 'security',
     }, `⚠️ Actividad sospechosa: ${activity} desde ${ip}`),
 
-  rateLimitExceeded: (ip: string, endpoint: string, limit: number, windowMs: number) =>
+  rateLimitExceeded: (ip: string, endpoint: string, limit: number, windowMs: number, userId?: string) =>
     securityLogger.warn({
       ip,
       endpoint,
       limit,
       windowMs,
+      userId,
       event: 'security.rate_limit',
       domain: 'security',
     }, `🚫 Rate limit excedido: ${ip} en ${endpoint} (${limit}/${windowMs}ms)`),
 
-  bruteForceAttempt: (ip: string, email: string, attempts: number, windowMs: number) =>
-    securityLogger.error({
-      ip,
-      email: email.toLowerCase(),
-      attempts,
-      windowMs,
-      event: 'security.brute_force',
-      domain: 'security',
-    }, `🔥 Intento de fuerza bruta: ${email} desde ${ip} (${attempts} intentos)`),
-
-  unauthorizedAccess: (ip: string, endpoint: string, reason: string, userAgent?: string) =>
-    securityLogger.warn({
-      ip,
-      endpoint,
-      reason,
-      userAgent,
-      event: 'security.unauthorized',
-      domain: 'security',
-    }, `🚫 Acceso no autorizado: ${ip} en ${endpoint} - ${reason}`),
-
   // ==============================================
   // EVENTOS DE BASE DE DATOS
   // ==============================================
-  dbQuery: (operation: string, table: string, duration: number, userId?: string) =>
+  dbQuery: (operation: string, table: string, duration: number, recordCount?: string) =>
     dbLogger.debug({
       operation,
       table,
       duration,
-      userId,
+      recordCount,
       event: 'db.query',
       domain: 'database',
-    }, `🗄️ Query ${operation} en ${table} (${duration}ms)`),
+    }, `🗄️ Query ${operation} en ${table} (${duration}ms)${recordCount ? ` - ${recordCount} registros` : ''}`),
 
   dbError: (error: Error, operation: string, table?: string, userId?: string) =>
     dbLogger.error({
@@ -455,23 +515,57 @@ export const loggers = {
       domain: 'cache',
     }, `❌ Error en cache (${operation}): ${key}`),
 
-  sessionStored: (userId: string, sessionId: string, ttl: number) =>
+  cacheInvalidated: (pattern: string, count: number, reason: string) =>
     redisLogger.info({
-      userId,
-      sessionId,
-      ttl,
-      event: 'session.stored',
-      domain: 'auth',
-    }, `💾 Sesión almacenada: ${sessionId} (TTL: ${ttl}s)`),
-
-  sessionDestroyed: (userId: string, sessionId: string, reason?: string) =>
-    redisLogger.info({
-      userId,
-      sessionId,
+      pattern,
+      count,
       reason,
-      event: 'session.destroyed',
-      domain: 'auth',
-    }, `🗑️ Sesión destruida: ${sessionId}`),
+      event: 'cache.invalidated',
+      domain: 'cache',
+    }, `🧹 Cache invalidado: ${count} claves con patrón "${pattern}" - ${reason}`),
+
+  // ==============================================
+  // EVENTOS DE BÚSQUEDA Y FILTRADO
+  // ==============================================
+  searchPerformed: (userId: string, query: string, resultsCount: number, duration: number) =>
+    taskLogger.info({
+      userId,
+      query,
+      resultsCount,
+      duration,
+      event: 'search.performed',
+      domain: 'business',
+    }, `🔍 Búsqueda realizada: "${query}" - ${resultsCount} resultados (${duration}ms)`),
+
+  filterApplied: (userId: string, filters: object, resultsCount: number) =>
+    taskLogger.info({
+      userId,
+      filters,
+      resultsCount,
+      event: 'filter.applied',
+      domain: 'business',
+    }, `🔧 Filtros aplicados - ${resultsCount} resultados`),
+
+  // ==============================================
+  // EVENTOS DE ESTADÍSTICAS
+  // ==============================================
+  statsUpdated: (userId: string, statsData: object, duration: number) =>
+    taskLogger.info({
+      userId,
+      statsData,
+      duration,
+      event: 'stats.updated',
+      domain: 'business',
+    }, `📊 Estadísticas actualizadas para usuario ${userId} (${duration}ms)`),
+
+  statsGenerated: (userId: string, period: string, metricsCount: number) =>
+    taskLogger.info({
+      userId,
+      period,
+      metricsCount,
+      event: 'stats.generated',
+      domain: 'business',
+    }, `📈 Estadísticas generadas: período ${period}, ${metricsCount} métricas`),
 
   // ==============================================
   // MONITOREO DE RENDIMIENTO
@@ -502,6 +596,35 @@ export const loggers = {
       event: 'performance.high_cpu',
       domain: 'performance',
     }, `⚡ Alto uso de CPU: ${usage}% > ${threshold}%`),
+
+  // ==============================================
+  // EVENTOS DE INTEGRACIÓN CON AUTH SERVICE
+  // ==============================================
+  authServiceCalled: (endpoint: string, duration: number, statusCode: number) =>
+    authLogger.debug({
+      endpoint,
+      duration,
+      statusCode,
+      event: 'auth_service.called',
+      domain: 'integration',
+    }, `🔗 Auth Service llamado: ${endpoint} - ${statusCode} (${duration}ms)`),
+
+  authServiceError: (endpoint: string, error: Error, duration: number) =>
+    authLogger.error({
+      endpoint,
+      error,
+      duration,
+      event: 'auth_service.error',
+      domain: 'integration',
+    }, `❌ Error en Auth Service: ${endpoint} - ${error.message} (${duration}ms)`),
+
+  authServiceTimeout: (endpoint: string, timeout: number) =>
+    authLogger.warn({
+      endpoint,
+      timeout,
+      event: 'auth_service.timeout',
+      domain: 'integration',
+    }, `⏱️ Timeout en Auth Service: ${endpoint} (${timeout}ms)`),
 };
 
 // ==============================================
@@ -528,7 +651,7 @@ export const logError = {
       userId,
       severity: 'high',
       ...context
-    }, `❌ Error crítico: ${error.message}`),
+    }, `❌ Error alto: ${error.message}`),
 
   medium: (error: Error, context?: object, userId?: string) =>
     logger.warn({
@@ -592,7 +715,7 @@ export const startup = {
       env,
       event: 'service.started',
       domain: 'startup',
-    }, `🚀 Auth Service iniciado en puerto ${port} (${env})`),
+    }, `🚀 Task Service iniciado en puerto ${port} (${env})`),
 
   configLoaded: (configSummary: object) =>
     logger.info({
@@ -618,7 +741,7 @@ export const startup = {
 };
 
 // ==============================================
-// FUNCIÓN PARA RECONFIGURER EL LOGGER DESPUÉS DE CARGAR ENVIRONMENT
+// FUNCIÓN PARA RECONFIGURAR EL LOGGER DESPUÉS DE CARGAR ENVIRONMENT
 // ==============================================
 let reconfiguredLogger: pino.Logger | null = null;
 
@@ -630,35 +753,34 @@ export const reconfigureLogger = (envConfig: any) => {
   const isDev = envConfig.app?.isDevelopment ?? envConfig.NODE_ENV === 'development';
   const isProd = envConfig.app?.isProduction ?? envConfig.NODE_ENV === 'production';
 
-const reconfiguredConfig: pino.LoggerOptions = {
-  level: logLevel,
-  base: {
-    service: 'auth-service',
-    version: process.env.npm_package_version || '1.0.0',
-    env: envConfig.app?.env || envConfig.NODE_ENV || 'development',
-    timezone: BOGOTA_TIMEZONE,
-  },
-  // Removemos el timestamp personalizado para evitar conflictos con pino-pretty
-  formatters: {
-    level: (label) => ({ level: label }),
-    log: (object) => {
-      if (object.err) {
-        const err = object.err as any;
-        return {
-          ...object,
-          error: {
-            type: err.constructor.name,
-            message: err.message,
-            stack: isDev ? err.stack : undefined,
-            code: err.code,
-            statusCode: err.statusCode,
-          },
-        };
-      }
-      return object;
+  const reconfiguredConfig: pino.LoggerOptions = {
+    level: logLevel,
+    base: {
+      service: 'task-service',
+      version: process.env.npm_package_version || '1.0.0',
+      env: envConfig.app?.env || envConfig.NODE_ENV || 'development',
+      timezone: BOGOTA_TIMEZONE,
     },
-  },
-};
+    formatters: {
+      level: (label) => ({ level: label }),
+      log: (object) => {
+        if (object.err) {
+          const err = object.err as any;
+          return {
+            ...object,
+            error: {
+              type: err.constructor.name,
+              message: err.message,
+              stack: isDev ? err.stack : undefined,
+              code: err.code,
+              statusCode: err.statusCode,
+            },
+          };
+        }
+        return object;
+      },
+    },
+  };
 
   if (isDev && logPretty) {
     reconfiguredConfig.transport = {
@@ -666,10 +788,9 @@ const reconfiguredConfig: pino.LoggerOptions = {
       options: {
         colorize: true,
         ignore: 'pid,hostname,timezone',
-        translateTime: 'SYS:yyyy-mm-dd HH:MM:ss', // Dejamos que pino-pretty maneje el timestamp
+        translateTime: 'SYS:yyyy-mm-dd HH:MM:ss',
         messageFormat: '[{service}] {msg}',
         singleLine: false,
-        // Sin customPrettifiers para evitar DataCloneError
       },
     };
   } else if (isProd) {
@@ -677,15 +798,15 @@ const reconfiguredConfig: pino.LoggerOptions = {
     const destinations = [
       {
         level: logLevel,
-        dest: path.join(LOG_DIR, 'auth.log'),
+        dest: path.join(LOG_DIR, 'task-service.log'),
       },
       {
         level: 'error',
-        dest: path.join(LOG_DIR, 'auth-error.log'),
+        dest: path.join(LOG_DIR, 'task-service-error.log'),
       },
       {
         level: 'warn',
-        dest: path.join(LOG_DIR, 'auth-security.log'),
+        dest: path.join(LOG_DIR, 'task-service-security.log'),
       },
       {
         level: logLevel,
@@ -714,7 +835,7 @@ const reconfiguredConfig: pino.LoggerOptions = {
     logDir: LOG_DIR,
     prettyPrint: isDev && logPretty,
     reconfigured: true,
-  }, '🔧 Auth Logger reconfigurado con environment cargado');
+  }, '🔧 Task Service Logger reconfigurado con environment cargado');
 
   return reconfiguredLogger;
 };
