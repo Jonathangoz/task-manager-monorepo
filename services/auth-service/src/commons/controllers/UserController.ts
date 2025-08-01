@@ -1,6 +1,6 @@
 // src/commons/controllers/UserController.ts
-
 import { Request, Response, NextFunction } from 'express';
+import { AuthenticatedRequest } from '@/typeExpress/express';
 import { IUserService } from '@/core/interfaces/IUserService';
 import { IAuthService } from '@/core/interfaces/IAuthService';
 import { logger } from '@/utils/logger';

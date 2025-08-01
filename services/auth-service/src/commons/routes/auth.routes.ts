@@ -1,5 +1,5 @@
 // src/commons/routes/auth.routes.ts
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { AuthController } from '@/commons/controllers/AuthController';
 import { IAuthService } from '@/core/interfaces/IAuthService';
 import { IUserService } from '@/core/interfaces/IUserService';

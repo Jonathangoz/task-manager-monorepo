@@ -2,7 +2,7 @@
 // Middleware de manejo de errores centralizado con soporte completo
 // para Prisma, validaciones Zod, rate limiting y logging estructurado
 
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response, NextFunction, RequestHandler } from 'express';
 import { Prisma } from '@prisma/client';
 import { ZodError, ZodIssue } from 'zod';
 import { logger } from '@/utils/logger';
@@ -387,6 +387,30 @@ const getStatusCodeFromErrorCode = (errorCode: string): number => {
     default:
       return HTTP_STATUS.INTERNAL_SERVER_ERROR;
   }
+};
+
+/**
+ * Wrapper para funciones async en rutas de Express
+ * Captura errores automáticamente y los pasa al error handler
+ */
+export const asyncHandler = (fn: (req: Request, res: Response, next: NextFunction) => Promise<any>): RequestHandler => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
+};
+
+// También agregar esta interfaz si no existe
+export interface AsyncRequestHandler {
+  (req: Request, res: Response, next: NextFunction): Promise<void | Response>;
+}
+
+/**
+ * Versión tipada del asyncHandler para mejor intellisense
+ */
+export const typedAsyncHandler = (fn: AsyncRequestHandler): RequestHandler => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
 };
 
 // MIDDLEWARE PRINCIPAL DE MANEJO DE ERRORES

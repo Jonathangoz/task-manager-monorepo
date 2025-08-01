@@ -387,8 +387,8 @@ declare global {
         email: string;
         username: string;
         sessionId: string;
-        iat?: number;
-        exp?: number;
+        iat: number;
+        exp: number;
       };
     }
   }
@@ -470,30 +470,66 @@ export const RATE_LIMIT_CONFIG = {
     WINDOW_MS: 15 * 60 * 1000, // 15 minutos
     MAX_REQUESTS: 100, // 100 requests por ventana
   },
+  // HEALTH CHECKS - SIN RATE LIMITING o muy permisivo
+  HEALTH_CHECK: {
+    WINDOW_MS: 1 * 60 * 1000, // 1 minuto
+    MAX_REQUESTS: 200, // 200 health checks por minuto (muy permisivo)
+  },
 } as const;
 
 // Configuración de timeouts
 export const TIMEOUT_CONFIG = {
-  DATABASE_QUERY: 30000, // 30 segundos
-  REDIS_OPERATION: 5000, // 5 segundos
-  HTTP_REQUEST: 10000, // 10 segundos
+  // HTTP requests normales
+  HTTP_REQUEST: 30000, // 30 segundos (era 10s, muy agresivo)
+  
+  // Health checks - MUY RÁPIDOS
+  HEALTH_CHECK_BASIC: 2000, // 2 segundos para health check básico
+  HEALTH_CHECK_DETAILED: 5000, // 5 segundos para health check detallado
+  
+  // Database operations
+  DATABASE_QUERY: 15000, // 15 segundos (era 30s, reducido)
+  DATABASE_HEALTH_CHECK: 3000, // 3 segundos para health check de DB
+  DATABASE_CONNECTION: 10000, // 10 segundos para conectar
+  
+  // Redis operations
+  REDIS_OPERATION: 5000, // 5 segundos (era 10s)
+  REDIS_HEALTH_CHECK: 2000, // 2 segundos para health check de Redis
+  REDIS_CONNECTION: 5000, // 5 segundos para conectar
+  
+  // Email y operaciones externas
   EMAIL_SEND: 15000, // 15 segundos
+  EXTERNAL_API: 10000, // 10 segundos
+  
+  // Server timeouts
+  SERVER_REQUEST: 30000, // 30 segundos
+  SERVER_KEEP_ALIVE: 65000, // 65 segundos
+  SERVER_HEADERS: 66000, // 66 segundos
 } as const;
 
-// Configuración de health checks
+// Configuración de health checks optimizada
 export const HEALTH_CHECK_CONFIG = {
   DATABASE: {
-    TIMEOUT: 5000,
-    RETRY_COUNT: 3,
+    TIMEOUT: 3000, // 3 segundos (era 10s)
+    RETRY_COUNT: 2, // 2 reintentos (era 3)
+    QUICK_CHECK_TIMEOUT: 1000, // 1 segundo para check básico
   },
   REDIS: {
-    TIMEOUT: 3000,
-    RETRY_COUNT: 2,
+    TIMEOUT: 2000, // 2 segundos (era 10s)
+    RETRY_COUNT: 2, // 2 reintentos
+    QUICK_CHECK_TIMEOUT: 500, // 500ms para check básico
   },
   EXTERNAL_SERVICE: {
-    TIMEOUT: 10000,
-    RETRY_COUNT: 2,
+    TIMEOUT: 5000, // 5 segundos (era 10s)
+    RETRY_COUNT: 1, // 1 reintento (era 2)
+    QUICK_CHECK_TIMEOUT: 2000, // 2 segundos para check básico
   },
+  // Configuración específica para Docker health checks
+  DOCKER_HEALTH_CHECK: {
+    INTERVAL: 10000, // 10 segundos
+    TIMEOUT: 5000, // 5 segundos
+    START_PERIOD: 30000, // 30 segundos
+    RETRIES: 3,
+  }
 } as const;
 
 // Límites de sistema
@@ -538,9 +574,36 @@ export const ENVIRONMENT_CONFIG = {
 
 export const MIDDLEWARE_CONFIG = {
   CORRELATION_ID_HEADER: 'x-correlation-id',
-  REQUEST_TIMEOUT: 30000,
+  REQUEST_TIMEOUT: 30000, // 30 segundos (era muy bajo)
   MAX_REQUEST_SIZE: '10mb',
   COMPRESSION_THRESHOLD: 1024,
+  
+  // Paths que NO deben tener timeouts agresivos
+  TIMEOUT_EXEMPT_PATHS: [
+    '/health',
+    '/api/v1/health',
+    '/api/v1/health/live',
+    '/api/v1/health/ready',
+    '/metrics',
+    '/favicon.ico'
+  ],
+  
+  // Paths que NO deben tener rate limiting
+  RATE_LIMIT_EXEMPT_PATHS: [
+    '/health',
+    '/api/v1/health',
+    '/api/v1/health/live', 
+    '/api/v1/health/ready',
+    '/metrics'
+  ],
+  
+  // Paths que NO deben tener logging detallado
+  MINIMAL_LOGGING_PATHS: [
+    '/health',
+    '/api/v1/health',
+    '/metrics',
+    '/favicon.ico'
+  ]
 } as const;
 
 export const VALIDATION_MESSAGES = {
@@ -571,4 +634,3 @@ export const EXTENDED_CONSTANTS = {
   LOG_LEVELS,
   ENVIRONMENT_CONFIG,
 } as const;
-

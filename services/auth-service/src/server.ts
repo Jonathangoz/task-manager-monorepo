@@ -1,9 +1,7 @@
-// ==============================================
 // src/server.ts - Auth Service Server
 // Servidor HTTP con inicialización de dependencias y shutdown graceful
-// ==============================================
-
 import { Server } from 'http';
+import { Socket } from 'net';
 import App from './app';
 import { environment } from '@/config/environment';
 import { 
@@ -18,27 +16,25 @@ import {
   connectDatabase, 
   disconnectDatabase, 
   cleanupExpiredTokens, 
-  cleanupExpiredSessions 
+  cleanupExpiredSessions,
+  db
 } from '@/config/database';
 import { redisConnection } from '@/config/redis';
 
-// ==============================================
 // CLASE DEL SERVIDOR AUTH
-// ==============================================
 class AuthServer {
   private app: App;
   private server: Server | null = null;
   private cleanupIntervals: NodeJS.Timeout[] = [];
   private isShuttingDown = false;
   private readonly serverLogger = createContextLogger({ component: 'server' });
+  private consecutiveHealthCheckFailures = 0;
 
   constructor() {
     this.app = new App();
   }
 
-  // ==============================================
   // INICIO DEL SERVIDOR
-  // ==============================================
   public async start(): Promise<void> {
     try {
       startup.serviceStarted(environment.app.port, environment.app.env);
@@ -80,9 +76,7 @@ class AuthServer {
     }
   }
 
-  // ==============================================
   // INICIALIZACIÓN DE BASE DE DATOS
-  // ==============================================
   private async initializeDatabase(): Promise<void> {
     try {
       startup.dependencyConnected('PostgreSQL Database');
@@ -98,9 +92,7 @@ class AuthServer {
     }
   }
 
-  // ==============================================
   // INICIALIZACIÓN DE REDIS
-  // ==============================================
   private async initializeRedis(): Promise<void> {
     try {
       startup.dependencyConnected('Redis Cache');
@@ -117,9 +109,7 @@ class AuthServer {
     }
   }
 
-  // ==============================================
   // CONFIGURACIÓN DE TRABAJOS DE LIMPIEZA
-  // ==============================================
   private setupCleanupJobs(): void {
     this.serverLogger.info('Setting up cleanup jobs...');
 
@@ -159,9 +149,7 @@ class AuthServer {
     });
   }
 
-  // ==============================================
   // INICIO DEL SERVIDOR HTTP
-  // ==============================================
   private async startHttpServer(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
@@ -174,11 +162,36 @@ class AuthServer {
           resolve();
         });
 
-        // Configurar timeouts del servidor
-        this.server.timeout = 30000; // 30 segundos
-        this.server.keepAliveTimeout = 65000; // 65 segundos
-        this.server.headersTimeout = 66000; // 66 segundos
-        this.server.maxHeadersCount = 1000; // Máximo headers por request
+        if (!this.server) {
+          const error = new Error('Server object failed to initialize.');
+          this.serverLogger.error('Failed to start HTTP server', { error });
+          return reject(error);
+        }
+
+        // Configurar timeouts del servidor - OPTIMIZADOS
+      this.server.timeout = 60000;          // Era 45s, ahora 60s
+      this.server.keepAliveTimeout = 90000;  // Era 75s, ahora 90s  
+      this.server.headersTimeout = 91000;    // Era 76s, ahora 91s
+      this.server.maxHeadersCount = 1000;    // Mantener
+      this.server.requestTimeout = 50000;    // Era 40s, ahora 50s
+
+        // Configurar límites de conexión
+        this.server.maxConnections = 1000;
+        
+        // Configurar eventos del servidor
+        this.server.on('connection', (socket: Socket) => {
+          // Configurar timeouts de socket más permisivos
+          socket.setTimeout(60000); // 60 segundos para socket timeout
+          socket.setKeepAlive(true, 30000); // Keep alive cada 30 segundos
+          
+          socket.on('timeout', () => {
+            this.serverLogger.warn('Socket timeout', {
+              remoteAddress: socket.remoteAddress || 'unknown',
+              remotePort: socket.remotePort || 'unknown'
+            });
+            socket.destroy();
+          });
+        });
 
         // Manejar errores del servidor
         this.server.on('error', (error: NodeJS.ErrnoException) => {
@@ -199,16 +212,36 @@ class AuthServer {
           reject(error);
         });
 
-        // Manejar errores de cliente
-        this.server.on('clientError', (error, socket) => {
-          this.serverLogger.warn('Client error', { 
-            error: error.message,
-            remoteAddress: socket,
-            remotePort: socket
-          });
+        // Manejar errores de cliente de forma más silenciosa
+        this.server.on('clientError', (error, socket: Socket) => {
+          // Solo log si no es un error común de health check
+          if (!error.message.includes('ECONNRESET') && !error.message.includes('EPIPE')) {
+            this.serverLogger.warn('Client error', { 
+              error: error.message,
+              remoteAddress: socket.remoteAddress || 'unknown',
+              remotePort: socket.remotePort || 'unknown'
+            });
+          }
+          
           if (socket.writable) {
             socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
           }
+        });
+
+        // Evento para cuando el servidor está listo
+        this.server.on('listening', () => {
+          // Solo mostrar timeouts si el servidor existe
+          const timeouts = this.server ? {
+            server: this.server.timeout,
+            keepAlive: this.server.keepAliveTimeout,
+            headers: this.server.headersTimeout,
+            request: this.server.requestTimeout
+          } : undefined;
+
+          this.serverLogger.info('Server is ready to accept connections', {
+            port: environment.app.port,
+            timeouts
+          });
         });
 
       } catch (error) {
@@ -218,9 +251,7 @@ class AuthServer {
     });
   }
 
-  // ==============================================
   // CONFIGURACIÓN DE SHUTDOWN GRACEFUL
-  // ==============================================
   private setupGracefulShutdown(): void {
     const signals: NodeJS.Signals[] = ['SIGTERM', 'SIGINT'];
     
@@ -262,9 +293,7 @@ class AuthServer {
     });
   }
 
-  // ==============================================
   // SHUTDOWN GRACEFUL
-  // ==============================================
   public async shutdown(exitCode: number = 0): Promise<void> {
     if (this.isShuttingDown) {
       this.serverLogger.warn('Shutdown already in progress');
@@ -277,14 +306,14 @@ class AuthServer {
     const shutdownTimeout = setTimeout(() => {
       this.serverLogger.error('Shutdown timeout reached, forcing exit');
       process.exit(1);
-    }, 15000); // 15 segundos de timeout
+    }, 30000); // antes 15 segundos de timeout ahora 30s
 
     try {
       // Detener aceptación de nuevas conexiones
       if (this.server) {
         this.serverLogger.info('Closing HTTP server...');
         await new Promise<void>((resolve, reject) => {
-          this.server!.close((error) => {
+          this.server!.close((error) => { 
             if (error) {
               this.serverLogger.error('Error closing HTTP server', { error });
               reject(error);
@@ -325,9 +354,7 @@ class AuthServer {
     }
   }
 
-  // ==============================================
   // HEALTH CHECK
-  // ==============================================
   public async performHealthCheck(): Promise<{
     status: 'healthy' | 'unhealthy';
     services: {
@@ -355,25 +382,55 @@ class AuthServer {
       // Verificar servidor
       services.server = this.server !== null && this.server.listening && !this.isShuttingDown;
 
-      // Verificar Redis
-      services.redis = redisConnection.isHealthy();
-
-      // Verificar base de datos (test de conexión simple)
+      // Verificar Redis con timeout MUY corto
       try {
-        const { db } = await import('@/config/database');
-        await db.$queryRaw`SELECT 1`;
+        services.redis = redisConnection.isHealthy();
+        if (services.redis) {
+          // Test rápido de Redis usando el cliente
+          const redisClient = redisConnection.getClient();
+          await Promise.race([
+            redisClient.ping(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Redis timeout')), 3000) // antes 1000 - 1 segundo ahora 3s
+            )
+          ]);
+        }
+      } catch (error) {
+        services.redis = false;
+      }
+      // Verificar base de datos con timeout MUY corto
+      try {
+        await Promise.race([
+          db.$queryRaw`SELECT 1`,
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Database timeout')), 5000) // antes 2000 - 2 segundos ahora 5s
+          )
+        ]);
         services.database = true;
-        healthCheck.passed('database', 0);
       } catch (error) {
         services.database = false;
-        healthCheck.failed('database', error as Error, 0);
+        // Solo log si es un error persistente (no cada health check)
+        if (this.consecutiveHealthCheckFailures > 3) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          this.serverLogger.warn('Persistent database health check failure', {
+            error: errorMessage,
+            failures: this.consecutiveHealthCheckFailures
+          });
+        }
       }
 
-      const isHealthy = Object.values(services).every(status => status);
+      const isHealthy = services.server && services.database; // Redis no es crítico
       const memUsage = process.memoryUsage();
 
-      const healthData = {
-        status: isHealthy ? 'healthy' as const : 'unhealthy' as const,
+      // Resetear counter de fallos si está saludable
+      if (isHealthy) {
+        this.consecutiveHealthCheckFailures = 0;
+      } else {
+        this.consecutiveHealthCheckFailures++;
+      }
+
+      return {
+        status: isHealthy ? 'healthy' : 'unhealthy',
         services,
         uptime: process.uptime(),
         timestamp: new Date().toISOString(),
@@ -386,20 +443,16 @@ class AuthServer {
         }
       };
 
-      if (isHealthy) {
-        healthCheck.passed('auth-service', 0, { services });
-      } else {
-        healthCheck.degraded('auth-service', 'Some services are unhealthy', 0);
-      }
-
-      return healthData;
-
     } catch (error) {
-      this.serverLogger.error('Health check failed', { 
-        error: error instanceof Error ? error.message : String(error)
-      });
+      this.consecutiveHealthCheckFailures++;
       
-      healthCheck.failed('auth-service', error as Error, 0);
+      // Solo log errores de health check si son persistentes
+      if (this.consecutiveHealthCheckFailures > 5) {
+        this.serverLogger.error('Persistent health check failure', { 
+          error: error instanceof Error ? error.message : String(error),
+          failures: this.consecutiveHealthCheckFailures
+        });
+      }
       
       return {
         status: 'unhealthy',
@@ -417,9 +470,7 @@ class AuthServer {
     }
   }
 
-  // ==============================================
   // ESTADÍSTICAS DEL SERVIDOR
-  // ==============================================
   public getServerStats(): {
     memory: NodeJS.MemoryUsage;
     uptime: number;
@@ -442,9 +493,7 @@ class AuthServer {
     };
   }
 
-  // ==============================================
   // GETTERS PÚBLICOS
-  // ==============================================
   public getApp(): App {
     return this.app;
   }
@@ -458,9 +507,7 @@ class AuthServer {
   }
 }
 
-// ==============================================
 // INSTANCIA DEL SERVIDOR
-// ==============================================
 const authServer = new AuthServer();
 
 // Iniciar el servidor solo si es el módulo principal

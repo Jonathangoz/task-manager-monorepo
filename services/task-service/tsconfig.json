@@ -1,28 +1,33 @@
-// services/task-service/tsconfig.json
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./",
     "baseUrl": "./",
+    "tsBuildInfoFile": "./dist/.tsbuildinfo",
     "paths": {
-      "@/*": ["src/*"],
+      "@/*": ["./src/*"],
+      "@/typeExpress/*": ["./types/express.d.ts"],
       "@/schema/*": ["./prisma/*"],
       "@/commons/*": ["./src/commons/*"],
-      "@/commons/controllers/*": ["src/commons/controllers/*"],
-      "@/commons/middlewares/*": ["src/commons/middlewares/*"],
-      "@/commons/routes/*": ["src/commons/routes/*"],
-      "@/commons/validators/*": ["src/commons/validators/*"],
-      "@/config/*": ["src/config/*"],
-      "@/core/*": ["src/core/*"],
+      "@/commons/controllers/*": ["./src/commons/controllers/*"],
+      "@/commons/middlewares/*": ["./src/commons/middlewares/*"],
+      "@/commons/routes/*": ["./src/commons/routes/*"],
+      "@/commons/validators/*": ["./src/commons/validators/*"],
+      "@/config/*": ["./src/config/*"],
+      "@/core/*": ["./src/core/*"],
       "@/core/application/*": ["./src/core/application/*"],
       "@/core/entities/*": ["./src/core/domain/entities/*"],
       "@/core/interfaces/*": ["./src/core/domain/interfaces/*"],
-      "@/core/types/*": ["./src/core/domain/types/*"],
       "@/core/cache/*": ["./src/core/infrastructure/cache/*"],
       "@/core/repositories/*": ["./src/core/infrastructure/repositories/*"],
-      "@/utils/*": ["src/utils/*"]
+      "@/core/types/*": ["./src/core/domain/types/*"],
+      "@/utils/*": ["./src/utils/*"]
     },
+    "typeRoots": [
+      "./node_modules/@types",
+      "./types"
+    ]
   },
   "include": [
     "src/**/*",
@@ -36,8 +41,10 @@
     "**/*.spec.ts",
     "coverage"
   ],
-    "ts-node": {
+  "ts-node": {
     "require": ["tsconfig-paths/register"],
-    "compiler": "typescript"
+    "compiler": "typescript",
+    "transpileOnly": true,
+    "files": true
   }
 }

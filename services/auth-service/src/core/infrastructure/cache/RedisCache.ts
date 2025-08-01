@@ -27,7 +27,7 @@ const CacheOptionsSchema = z.object({
 
 // CLASE REDISCACHE
 export class RedisCache implements ICacheService {
-  private client: Redis;
+  public client: Redis;
   private readonly prefix: string;
   private isConnected = false;
 

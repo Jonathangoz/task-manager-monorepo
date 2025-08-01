@@ -1,5 +1,6 @@
 // src/presentation/middlewares/error.middleware.ts
 import { Request, Response, NextFunction } from 'express';
+import { AuthenticatedRequest } from '@/typeExpress/express';
 import { logger } from '@/utils/logger';
 import { environment } from '@/config/environment';
 import { 

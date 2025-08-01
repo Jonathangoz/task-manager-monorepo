@@ -1,673 +1,233 @@
-// ==============================================
-// src/presentation/routes/health.routes.ts - Production Ready Health Check Routes
-// Rutas de health check optimizadas con logging estructurado, métricas y coherencia
-// ==============================================
-
-import { Router, Request, Response } from 'express';
-import { taskDatabase, databaseHealthCheck } from '@/config/database';
-import { taskRedisConnection } from '@/config/redis';
+// src/commons/routes/health.routes.ts - Task Service Health Routes
+import express, { Router } from 'express';
+import { HealthController } from '@/commons/controllers/HealthController';
+import { asyncHandler } from '@/commons/middlewares/error.middleware';
 import { config } from '@/config/environment';
-import { logger, loggers, healthCheck, logError } from '@/utils/logger';
+import { logger } from '@/utils/logger';
 import { 
-  HTTP_STATUS, 
-  ERROR_CODES, 
-  ERROR_MESSAGES, 
-  EVENT_TYPES,
-  SERVICE_NAMES 
-} from '@/utils/constants';
+  healthRequestId, 
+  healthLogger, 
+  healthCache, 
+  healthTimeout 
+} from '@/commons/middlewares/health.middleware';
 
-const router: Router = Router();
+export class HealthRoutes {
+  static get routes(): Router {
+    const router = Router();
+    const healthController = new HealthController();
 
-// ==============================================
-// TYPES & INTERFACES
-// ==============================================
-interface HealthCheckResult {
-  status: 'up' | 'down';
-  responseTime?: number;
-  error?: string;
-  details?: any;
-}
+    // Log de inicialización de rutas de health
+    logger.info({
+      component: 'health_routes',
+      environment: config.app.env,
+      productionMode: config.app.isProduction,
+      event: 'health_routes_initialization'
+    }, '🏥 Configurando rutas de health checks para Task Service');
 
-interface DetailedHealthStatus {
-  status: 'healthy' | 'unhealthy' | 'degraded';
-  timestamp: string;
-  service: string;
-  version: string;
-  uptime: number;
-  environment: string;
-  checks: {
-    database: HealthCheckResult;
-    redis: HealthCheckResult;
-    authService?: HealthCheckResult;
-  };
-  metrics?: {
-    totalResponseTime: number;
-    criticalServices: number;
-    healthyServices: number;
-    degradedServices: number;
-  };
-}
+    // Aplicar middlewares específicos de health
+    router.use(healthRequestId);
+    router.use(healthLogger);
 
-interface ReadinessStatus {
-  status: 'ready' | 'not-ready';
-  timestamp: string;
-  service: string;
-  checks: {
-    database: boolean;
-    redis?: boolean;
-  };
-  error?: string;
-}
-
-interface LivenessStatus {
-  status: 'alive';
-  timestamp: string;
-  service: string;
-  uptime: number;
-  pid: number;
-  memory: {
-    used: number;
-    free: number;
-    total: number;
-  };
-}
-
-// ==============================================
-// HEALTH CHECK SERVICE CLASS
-// ==============================================
-class HealthCheckService {
-  private readonly serviceName = SERVICE_NAMES.TASK_SERVICE;
-  private readonly serviceVersion = process.env.npm_package_version || '1.0.0';
-
-  /**
-   * Realiza health check de la base de datos
-   */
-  async checkDatabase(): Promise<HealthCheckResult> {
-    const startTime = Date.now();
+    // === HEALTH CHECKS BÁSICOS (SIEMPRE DISPONIBLES) ===
     
-    try {
-      const healthResult = await databaseHealthCheck();
-      const responseTime = Date.now() - startTime;
+    /**
+     * GET /api/v1/health
+     * Health check básico - ULTRA RÁPIDO para Docker health checks
+     * Solo verifica que el servidor responda, no dependencias
+     * Timeout: ~1ms
+     */
+    router.get(
+      '/',
+      healthCache(5), // Cache de 5 segundos
+      healthTimeout(2000), // Timeout de 2 segundos
+      asyncHandler(healthController.basicHealthCheck.bind(healthController))
+    );
 
-      if (healthResult.healthy) {
-        logger.info({ 
-          event: 'health_check.database.passed',
-          domain: 'health_check',
-          component: 'database',
-          responseTime, 
-          details: healthResult.details 
-        }, 'Database health check passed');
+    /**
+     * GET /api/v1/health/ready
+     * Readiness probe - verifica dependencias con timeouts agresivos
+     * Mejor para depends_on: service_healthy en Docker Compose
+     * Timeout: ~5s
+     */
+    router.get(
+      '/ready',
+      healthTimeout(8000), // Timeout de 8 segundos
+      asyncHandler(healthController.readinessCheck.bind(healthController))
+    );
 
-        return {
-          status: 'up',
-          responseTime,
-          details: healthResult.details
-        };
-      } else {
-        logger.warn({
-          event: 'health_check.database.failed',
-          domain: 'health_check',
-          component: 'database',
-          responseTime, 
-          error: healthResult.details?.error 
-        }, 'Database health check failed');
+    /**
+     * GET /api/v1/health/live
+     * Liveness probe - solo verifica que el proceso esté vivo
+     * Timeout: ~1ms
+     */
+    router.get(
+      '/live',
+      healthCache(3), // Cache de 3 segundos
+      healthTimeout(2000), // Timeout de 2 segundos
+      asyncHandler(healthController.livenessCheck.bind(healthController))
+    );
 
-        return {
-          status: 'down',
-          responseTime,
-          error: healthResult.details?.error || 'Database health check failed'
-        };
-      }
-    } catch (error) {
-      const responseTime = Date.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : 'Unknown database error';
+    // === HEALTH CHECKS DETALLADOS (solo en desarrollo/staging) ===
+    if (!config.app.isProduction) {
+      logger.info({
+        component: 'health_routes',
+        environment: config.app.env,
+        event: 'detailed_health_checks_enabled'
+      }, '🔧 Habilitando health checks detallados para desarrollo');
 
-      loggers.dbError(error as Error, 'health_check_database');
-      
-      return {
-        status: 'down',
-        responseTime,
-        error: errorMessage
-      };
-    }
-  }
+      /**
+       * GET /api/v1/health/detailed
+       * Health check detallado con métricas del sistema
+       * Solo disponible en desarrollo/staging
+       */
+      router.get(
+        '/detailed',
+        healthTimeout(15000), // Timeout de 15 segundos para checks detallados
+        asyncHandler(healthController.detailedHealthCheck.bind(healthController))
+      );
 
-  /**
-   * Realiza health check de Redis
-   */
-  async checkRedis(): Promise<HealthCheckResult> {
-    const startTime = Date.now();
-    
-    try {
-      const healthResult = await taskRedisConnection.healthCheck();
-      const responseTime = Date.now() - startTime;
+      /**
+       * GET /api/v1/health/database
+       * Health check específico de la base de datos
+       */
+      router.get(
+        '/database',
+        healthTimeout(10000), // Timeout de 10 segundos
+        asyncHandler(healthController.databaseHealthCheck.bind(healthController))
+      );
 
-      if (healthResult.status === 'healthy') {
-        logger.debug({
-          event: EVENT_TYPES.CACHE_HIT,
-          component: 'redis',
-          responseTime,
-          details: healthResult
-        }, 'Redis health check passed');
+      /**
+       * GET /api/v1/health/redis
+       * Health check específico de Redis
+       */
+      router.get(
+        '/redis',
+        healthTimeout(5000), // Timeout de 5 segundos
+        asyncHandler(healthController.redisHealthCheck.bind(healthController))
+      );
 
-        return {
-          status: 'up',
-          responseTime,
-          details: {
-            latency: healthResult.latency,
-            memory: healthResult.memory,
-            connections: healthResult.connections
+      /**
+       * GET /api/v1/health/auth-service
+       * Health check específico del Auth Service
+       */
+      router.get(
+        '/auth-service',
+        healthTimeout(8000), // Timeout de 8 segundos
+        asyncHandler(healthController.authServiceHealthCheck.bind(healthController))
+      );
+
+      // Endpoint de documentación de health checks (solo desarrollo)
+      router.get('/docs', (req, res) => {
+        res.json({
+          success: true,
+          message: 'Task Service Health Check Documentation',
+          data: {
+            service: 'task-service',
+            version: config.app.apiVersion,
+            environment: config.app.env,
+            endpoints: {
+              production: {
+                basic: {
+                  path: '/api/v1/health',
+                  purpose: 'Ultra-fast health check for Docker',
+                  timeout: '~1ms',
+                  checks: ['server_response']
+                },
+                readiness: {
+                  path: '/api/v1/health/ready',
+                  purpose: 'Service readiness for traffic',
+                  timeout: '~5s',
+                  checks: ['database', 'redis', 'auth_service_optional', 'server']
+                },
+                liveness: {
+                  path: '/api/v1/health/live',
+                  purpose: 'Process liveness check',
+                  timeout: '~1ms',
+                  checks: ['memory', 'pid', 'uptime']
+                }
+              },
+              development: {
+                detailed: {
+                  path: '/api/v1/health/detailed',
+                  purpose: 'Complete system information',
+                  timeout: '~15s',
+                  checks: ['all_systems', 'metrics', 'performance']
+                },
+                specific: {
+                  database: '/api/v1/health/database',
+                  redis: '/api/v1/health/redis',
+                  authService: '/api/v1/health/auth-service'
+                }
+              }
+            },
+            usage: {
+              docker_compose: {
+                healthcheck: 'curl -f http://localhost:3002/api/v1/health',
+                depends_on: 'condition: service_healthy'
+              },
+              kubernetes: {
+                livenessProbe: '/api/v1/health/live',
+                readinessProbe: '/api/v1/health/ready'
+              }
+            }
+          },
+          meta: {
+            timestamp: new Date().toISOString(),
+            requestId: req.headers['x-request-id']
           }
-        };
-      } else {
-        logger.warn({
-          event: EVENT_TYPES.CACHE_ERROR,
-          component: 'redis',
-          responseTime,
-          details: healthResult
-        }, 'Redis health check failed');
+        });
+      });
 
-        return {
-          status: 'down',
-          responseTime,
-          error: 'Redis health check failed',
-          details: healthResult
-        };
-      }
-    } catch (error) {
-      const responseTime = Date.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : 'Unknown Redis error';
+    } else {
+      logger.info({
+        component: 'health_routes',
+        environment: config.app.env,
+        event: 'detailed_health_checks_disabled'
+      }, '🔒 Health checks detallados deshabilitados en producción');
 
-      logger.error({
-        error,
-        event: EVENT_TYPES.CACHE_ERROR,
-        component: 'redis',
-        responseTime
-      }, 'Redis health check error');
-
-      return {
-        status: 'down',
-        responseTime,
-        error: errorMessage
+      // En producción, devolver 404 para endpoints detallados
+      const productionNotFound = (req: express.Request, res: express.Response) => {
+        res.status(404).json({
+          success: false,
+          message: 'Health check endpoint not available in production',
+          error: {
+            code: 'ENDPOINT_NOT_AVAILABLE_IN_PRODUCTION'
+          },
+          meta: {
+            timestamp: new Date().toISOString(),
+            requestId: req.headers['x-request-id']
+          }
+        });
       };
-    }
-  }
 
-  /**
-   * Realiza health check del servicio de autenticación (opcional)
-   */
-  async checkAuthService(): Promise<HealthCheckResult> {
-    // Esta implementación se puede agregar cuando sea necesario
-    // Por ahora retornamos un resultado neutral
-    return {
-      status: 'up',
-      responseTime: 0,
-      details: { message: 'Auth service check not implemented' }
-    };
-  }
-
-  /**
-   * Determina el estado general del servicio basado en los checks individuales
-   */
-  determineOverallStatus(checks: DetailedHealthStatus['checks']): DetailedHealthStatus['status'] {
-    const { database, redis } = checks;
-
-    // La base de datos es crítica
-    if (database.status === 'down') {
-      return 'unhealthy';
+      router.get('/detailed', productionNotFound);
+      router.get('/database', productionNotFound);
+      router.get('/redis', productionNotFound);
+      router.get('/auth-service', productionNotFound);
+      router.get('/docs', productionNotFound);
     }
 
-    // Redis es importante pero no crítico
-    if (redis.status === 'down') {
-      return 'degraded';
-    }
+    // Log de rutas configuradas
+    const availableEndpoints = ['/', '/ready', '/live'];
+    const developmentEndpoints = !config.app.isProduction ? 
+      ['/detailed', '/database', '/redis', '/auth-service', '/docs'] : 
+      [];
 
-    return 'healthy';
-  }
-
-  /**
-   * Calcula métricas del health check
-   */
-  calculateMetrics(checks: DetailedHealthStatus['checks']): DetailedHealthStatus['metrics'] {
-    const services = Object.values(checks);
-    const totalResponseTime = services.reduce((sum, check) => sum + (check.responseTime || 0), 0);
-    
-    let healthyServices = 0;
-    let degradedServices = 0;
-    let criticalServices = 0;
-
-    services.forEach(check => {
-      if (check.status === 'up') {
-        healthyServices++;
-      } else {
-        if (check === checks.database) {
-          criticalServices++; // Database es crítico
-        } else {
-          degradedServices++; // Otros servicios son degradados
-        }
+    logger.info({
+      component: 'health_routes',
+      environment: config.app.env,
+      event: 'health_routes_configured',
+      endpoints: {
+        production: availableEndpoints,
+        development: developmentEndpoints,
+        total: availableEndpoints.length + developmentEndpoints.length
       }
-    });
+    }, '✅ Rutas de health checks configuradas para Task Service');
 
-    return {
-      totalResponseTime,
-      criticalServices,
-      healthyServices,
-      degradedServices
-    };
-  }
-
-  /**
-   * Obtiene información de memoria del proceso
-   */
-  getMemoryUsage(): LivenessStatus['memory'] {
-    const memUsage = process.memoryUsage();
-    const totalMemory = require('os').totalmem();
-    const freeMemory = require('os').freemem();
-
-    return {
-      used: Math.round(memUsage.heapUsed / 1024 / 1024), // MB
-      free: Math.round(freeMemory / 1024 / 1024), // MB
-      total: Math.round(totalMemory / 1024 / 1024) // MB
-    };
+    return router;
   }
 }
 
-// ==============================================
-// INSTANCIA DEL SERVICIO
-// ==============================================
-const healthCheckService = new HealthCheckService();
-
-// ==============================================
-// ROUTES
-// ==============================================
-
-/**
- * @swagger
- * /api/v1/health:
- * get:
- * summary: Comprehensive health check endpoint
- * tags: [System]
- * responses:
- * 200:
- * description: Service is healthy or degraded
- * content:
- * application/json:
- * schema:
- * type: object
- * properties:
- * status:
- * type: string
- * enum: [healthy, unhealthy, degraded]
- * timestamp:
- * type: string
- * format: date-time
- * service:
- * type: string
- * version:
- * type: string
- * uptime:
- * type: number
- * environment:
- * type: string
- * checks:
- * type: object
- * properties:
- * database:
- * type: object
- * properties:
- * status:
- * type: string
- * enum: [up, down]
- * responseTime:
- * type: number
- * redis:
- * type: object
- * properties:
- * status:
- * type: string
- * enum: [up, down]
- * responseTime:
- * type: number
- * metrics:
- * type: object
- * properties:
- * totalResponseTime:
- * type: number
- * criticalServices:
- * type: number
- * healthyServices:
- * type: number
- * 503:
- * description: Service is unhealthy
- */
-router.get('/', async (req: Request, res: Response): Promise<void> => {
-  const requestStartTime = Date.now();
-  
-  try {
-    // Realizar todos los health checks en paralelo para mejor performance
-    const [databaseCheck, redisCheck] = await Promise.allSettled([
-      healthCheckService.checkDatabase(),
-      healthCheckService.checkRedis(),
-      // healthCheckService.checkAuthService() // Descomentear cuando sea necesario
-    ]);
-
-    // Procesar resultados de los checks
-    const checks: DetailedHealthStatus['checks'] = {
-      database: databaseCheck.status === 'fulfilled' 
-        ? databaseCheck.value 
-        : { status: 'down', error: 'Database check failed' },
-      redis: redisCheck.status === 'fulfilled' 
-        ? redisCheck.value 
-        : { status: 'down', error: 'Redis check failed' }
-    };
-
-    // Construir respuesta completa
-    const healthStatus: DetailedHealthStatus = {
-      status: healthCheckService.determineOverallStatus(checks),
-      timestamp: new Date().toISOString(),
-      service: SERVICE_NAMES.TASK_SERVICE,
-      version: healthCheckService['serviceVersion'],
-      uptime: process.uptime(),
-      environment: config.app.env,
-      checks,
-      metrics: healthCheckService.calculateMetrics(checks)
-    };
-
-    const totalResponseTime = Date.now() - requestStartTime;
-
-    // Log estructurado del health check
-    logger.info({
-      healthStatus,
-      responseTime: totalResponseTime,
-      event: EVENT_TYPES.CACHE_HIT, // Reutilizamos este event type
-      domain: 'health_check',
-      requestId: req.headers['x-request-id']
-    }, `🏥 Health check completed: ${healthStatus.status}`);
-
-    // Registrar métricas en el health check tracker
-    if (healthStatus.status === 'healthy') {
-      healthCheck.passed('overall_health', totalResponseTime, healthStatus);
-    } else if (healthStatus.status === 'degraded') {
-      healthCheck.degraded('overall_health', 'Some services degraded', totalResponseTime);
-    } else {
-      healthCheck.failed('overall_health', new Error('Critical services down'), totalResponseTime);
-    }
-
-    // Determinar código de estado HTTP
-    const httpStatus = healthStatus.status === 'unhealthy' 
-      ? HTTP_STATUS.SERVICE_UNAVAILABLE
-      : HTTP_STATUS.OK;
-
-    res.status(httpStatus).json(healthStatus);
-
-  } catch (error) {
-    const totalResponseTime = Date.now() - requestStartTime;
-    
-    logError.high(error as Error, {
-      context: 'health_check_endpoint',
-      responseTime: totalResponseTime,
-      requestId: req.headers['x-request-id']
-    });
-
-    const errorResponse: DetailedHealthStatus = {
-      status: 'unhealthy',
-      timestamp: new Date().toISOString(),
-      service: SERVICE_NAMES.TASK_SERVICE,
-      version: healthCheckService['serviceVersion'],
-      uptime: process.uptime(),
-      environment: config.app.env,
-      checks: {
-        database: { status: 'down', error: 'Health check failed' },
-        redis: { status: 'down', error: 'Health check failed' }
-      }
-    };
-
-    res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(errorResponse);
-  }
-});
-
-/**
- * @swagger
- * /api/v1/health/ready:
- * get:
- * summary: Kubernetes/Docker readiness probe
- * tags: [System]
- * responses:
- * 200:
- * description: Service is ready to accept traffic
- * content:
- * application/json:
- * schema:
- * type: object
- * properties:
- * status:
- * type: string
- * enum: [ready]
- * timestamp:
- * type: string
- * format: date-time
- * service:
- * type: string
- * 503:
- * description: Service is not ready
- */
-router.get('/ready', async (req: Request, res: Response): Promise<void> => {
-  const startTime = Date.now();
-  
-  try {
-    // Para readiness, solo verificamos servicios críticos
-    const databaseReady = await taskDatabase.isHealthy();
-    
-    if (!databaseReady) {
-      // Intentar un health check rápido
-      await healthCheckService.checkDatabase();
-    }
-
-    const readinessStatus: ReadinessStatus = {
-      status: databaseReady ? 'ready' : 'not-ready',
-      timestamp: new Date().toISOString(),
-      service: SERVICE_NAMES.TASK_SERVICE,
-      checks: {
-        database: databaseReady,
-        redis: taskRedisConnection.isHealthy() // Opcional para readiness
-      }
-    };
-
-    const responseTime = Date.now() - startTime;
-
-    logger.debug({
-      readinessStatus,
-      responseTime,
-      event: 'readiness_check',
-      domain: 'health_check',
-      requestId: req.headers['x-request-id']
-    }, `🚦 Readiness check: ${readinessStatus.status}`);
-
-    if (readinessStatus.status === 'ready') {
-      res.status(HTTP_STATUS.OK).json(readinessStatus);
-    } else {
-      readinessStatus.error = ERROR_MESSAGES.DATABASE_ERROR;
-      res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(readinessStatus);
-    }
-
-  } catch (error) {
-    const responseTime = Date.now() - startTime;
-    
-    logError.medium(error as Error, {
-      context: 'readiness_check',
-      responseTime,
-      requestId: req.headers['x-request-id']
-    });
-
-    const errorResponse: ReadinessStatus = {
-      status: 'not-ready',
-      timestamp: new Date().toISOString(),
-      service: SERVICE_NAMES.TASK_SERVICE,
-      checks: {
-        database: false,
-        redis: false
-      },
-      error: error instanceof Error ? error.message : ERROR_MESSAGES.INTERNAL_ERROR
-    };
-
-    res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(errorResponse);
-  }
-});
-
-/**
- * @swagger
- * /api/v1/health/live:
- * get:
- * summary: Kubernetes/Docker liveness probe
- * tags: [System]
- * responses:
- * 200:
- * description: Service is alive
- * content:
- * application/json:
- * schema:
- * type: object
- * properties:
- * status:
- * type: string
- * enum: [alive]
- * timestamp:
- * type: string
- * format: date-time
- * service:
- * type: string
- * uptime:
- * type: number
- * pid:
- * type: number
- * memory:
- * type: object
- */
-router.get('/live', (req: Request, res: Response): void => {
-  const startTime = Date.now();
-  
-  try {
-    const livenessStatus: LivenessStatus = {
-      status: 'alive',
-      timestamp: new Date().toISOString(),
-      service: SERVICE_NAMES.TASK_SERVICE,
-      uptime: process.uptime(),
-      pid: process.pid,
-      memory: healthCheckService.getMemoryUsage()
-    };
-
-    const responseTime = Date.now() - startTime;
-
-    // Solo log en debug para liveness (se llama frecuentemente)
-    logger.debug({
-      livenessStatus,
-      responseTime,
-      event: 'liveness_check',
-      domain: 'health_check'
-    }, '💓 Liveness check completed');
-
-    res.status(HTTP_STATUS.OK).json(livenessStatus);
-
-  } catch (error) {
-    // El liveness check nunca debería fallar, pero por precaución
-    logError.critical(error as Error, {
-      context: 'liveness_check',
-      pid: process.pid,
-      uptime: process.uptime()
-    });
-
-    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-      status: 'error',
-      timestamp: new Date().toISOString(),
-      service: SERVICE_NAMES.TASK_SERVICE,
-      error: 'Liveness check failed'
-    });
-  }
-});
-
-/**
- * @swagger
- * /api/v1/health/detailed:
- * get:
- * summary: Detailed health check with metrics (admin only)
- * tags: [System]
- * security:
- * - bearerAuth: []
- * responses:
- * 200:
- * description: Detailed health information
- * 403:
- * description: Access denied
- */
-router.get('/detailed', async (req: Request, res: Response): Promise<void> => {
-  // Este endpoint podría requerir autenticación admin en el futuro
-  // Por ahora devolvemos información detallada
-  
-  const startTime = Date.now();
-  
-  try {
-    // Obtener información detallada del sistema
-    const [databaseMetrics, memoryUsage] = await Promise.allSettled([
-      import('@/config/database').then(db => db.getDatabaseMetrics()),
-      Promise.resolve(healthCheckService.getMemoryUsage())
-    ]);
-
-    const detailedInfo = {
-      service: SERVICE_NAMES.TASK_SERVICE,
-      version: healthCheckService['serviceVersion'],
-      environment: config.app.env,
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      pid: process.pid,
-      memory: memoryUsage.status === 'fulfilled' ? memoryUsage.value : null,
-      database: databaseMetrics.status === 'fulfilled' ? databaseMetrics.value : null,
-      configuration: {
-        nodeEnv: config.app.env,
-        port: config.app.port,
-        apiVersion: config.app.apiVersion,
-        features: config.features
-      },
-      runtime: {
-        nodeVersion: process.version,
-        platform: process.platform,
-        arch: process.arch
-      }
-    };
-
-    const responseTime = Date.now() - startTime;
-
-    logger.info({
-      detailedInfo,
-      responseTime,
-      event: 'detailed_health_check',
-      domain: 'health_check',
-      requestId: req.headers['x-request-id']
-    }, '🔍 Detailed health check completed');
-
-    res.status(HTTP_STATUS.OK).json(detailedInfo);
-
-  } catch (error) {
-    const responseTime = Date.now() - startTime;
-    
-    logError.medium(error as Error, {
-      context: 'detailed_health_check',
-      responseTime,
-      requestId: req.headers['x-request-id']
-    });
-
-    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-      error: ERROR_CODES.INTERNAL_ERROR,
-      message: ERROR_MESSAGES.INTERNAL_ERROR,
-      timestamp: new Date().toISOString(),
-      service: SERVICE_NAMES.TASK_SERVICE
-    });
-  }
-});
-
-// ==============================================
-// EXPORTACIÓN
-// ==============================================
-export default router;
-
-// Export del servicio para testing
-export { HealthCheckService, healthCheckService };
+// Exportación por defecto para compatibilidad
+const healthRoutes = HealthRoutes.routes;
+export default healthRoutes;

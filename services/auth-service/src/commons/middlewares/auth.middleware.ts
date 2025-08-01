@@ -5,6 +5,7 @@ import { ICacheService } from '@/core/interfaces/ICacheService';
 import { TokenPayload } from '@/core/interfaces/IAuthService';
 import { RedisCache } from '@/core/cache/RedisCache';
 import { Request, Response, NextFunction } from 'express';
+import  AuthenticatedRequest  from '@/typeExpress/express';
 import { logger } from '@/utils/logger';
 import { 
   HTTP_STATUS, 

@@ -1,6 +1,7 @@
 // src/app.ts - Auth Service Application
 // Configuración principal de la aplicación Express con middlewares de seguridad optimizados
-import express, { Express, Request, Response, NextFunction } from 'express';
+
+import express, { Request, Response, NextFunction, Application } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -11,6 +12,9 @@ import swaggerUi from 'swagger-ui-express';
 import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 import slowDown from 'express-slow-down';
+
+// Import tipos personalizados
+import { AppRequest } from '../types/express';
 
 // Configuration
 import { environment } from '@/config/environment';
@@ -66,18 +70,6 @@ import { IUserRepository } from '@/core/interfaces/IUserRepository';
 import { ICacheService } from '@/core/interfaces/ICacheService';
 
 // INTERFACES Y TIPOS
-interface AppRequest extends Request {
-  correlationId?: string;
-  requestId?: string;
-  startTime?: number;
-  clientIp?: string;
-  deviceInfo?: {
-    userAgent: string;
-    platform?: string;
-    browser?: string;
-  };
-}
-
 interface SecurityConfig {
   helmet: any;
   cors: cors.CorsOptions;
@@ -114,8 +106,6 @@ const CorsOriginSchema = z.union([
 // HELPER FUNCTIONS
 /**
  * Convierte un string de tamaño (e.g., '10mb') a bytes.
- * @param sizeStr - El string de tamaño.
- * @returns El tamaño en bytes.
  */
 const parseSize = (sizeStr: string): number => {
     const sizeRegex = /^(\d+)(mb|kb|gb)$/i;
@@ -139,7 +129,7 @@ const parseSize = (sizeStr: string): number => {
 
 // CLASE PRINCIPAL DE LA APLICACIÓN
 class App {
-  public app: Express;
+  public app: Application;
   private readonly appLogger = createContextLogger({ component: 'app' });
   private securityConfig: SecurityConfig;
   private services: ServiceDependencies;
@@ -147,7 +137,7 @@ class App {
   constructor() {
     this.app = express();
     this.securityConfig = this.buildSecurityConfig();
-    this.services = {} as ServiceDependencies; // Se inicializará en initializeServices
+    this.services = {} as ServiceDependencies;
     this.initializeApp();
   }
 
@@ -160,13 +150,8 @@ class App {
         swaggerEnabled: environment.features?.swaggerEnabled
       });
 
-      // Validar configuración inicial
       await this.validateConfiguration();
-      
-      // Inicializar servicios y dependencias
       await this.initializeServices();
-      
-      // Inicializar en orden específico
       await this.initializeSecurityMiddlewares();
       await this.initializeCoreMiddlewares();
       await this.initializeValidationMiddlewares();
@@ -174,46 +159,23 @@ class App {
       this.initializeSwagger();
       this.initializeErrorHandling();
 
-      this.appLogger.info('Auth Service application initialized successfully', {
-        environment: environment.app.env,
-        port: environment.app.port,
-        apiVersion: environment.app.apiVersion,
-        features: {
-          swagger: !environment.app.isProduction,
-          rateLimit: !environment.app.isTest,
-          compression: true,
-          security: environment.app.isProduction
-        }
-      });
+      this.appLogger.info('Auth Service application initialized successfully');
     } catch (error) {
-      this.appLogger.fatal('Failed to initialize application', {
-        error: error instanceof Error ? {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        } : error
-      });
+      this.appLogger.fatal('Failed to initialize application', { error });
       process.exit(1);
     }
   }
 
-  // INICIALIZACIÓN DE SERVICIOS Y DEPENDENCIAS
   private async initializeServices(): Promise<void> {
     this.appLogger.info('Initializing services and dependencies...');
 
     try {
-      // 1. Inicializar dependencias de infraestructura
       const userRepository: IUserRepository = new UserRepository(db);
       const cacheService: ICacheService = new RedisCache();
-
-      // 2. Inicializar TokenService con sus dependencias
       const tokenService: ITokenService = new TokenService(userRepository, cacheService);
-
-      // 3. Inicializar servicios de aplicación
       const userService: IUserService = new UserService(userRepository, cacheService);
       const authService: IAuthService = new AuthService(userRepository, tokenService, cacheService);
 
-      // 4. Guardar servicios en la instancia
       this.services = {
         userRepository,
         cacheService,
@@ -222,23 +184,17 @@ class App {
         authService
       };
 
-      this.appLogger.info('Services initialized successfully', {
-        services: ['UserRepository', 'RedisCache', 'TokenService', 'UserService', 'AuthService']
-      });
+      this.appLogger.info('Services initialized successfully');
     } catch (error) {
-      this.appLogger.error('Failed to initialize services', {
-        error: error instanceof Error ? error.message : String(error)
-      });
+      this.appLogger.error('Failed to initialize services', { error });
       throw error;
     }
   }
 
-  // VALIDACIÓN DE CONFIGURACIÓN
   private async validateConfiguration(): Promise<void> {
     this.appLogger.info('Validating application configuration...');
 
     try {
-      // Validar variables de entorno críticas
       const requiredEnvVars = ['JWT_SECRET', 'DATABASE_URL'];
       const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
@@ -246,19 +202,14 @@ class App {
         throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
       }
 
-      // Validar configuración de CORS
       if (environment.cors?.origin) {
         CorsOriginSchema.parse(environment.cors.origin);
       }
 
-      // Validar especificación de Swagger si está habilitada
       if (environment.features?.swaggerEnabled && !environment.app.isProduction) {
         if (!validateSwaggerSpec()) {
           throw new Error('Invalid Swagger specification');
         }
-
-        const swaggerInfo = getSwaggerInfo();
-        this.appLogger.info('Swagger validation successful', swaggerInfo);
       }
 
       this.appLogger.info('Configuration validation completed successfully');
@@ -268,7 +219,6 @@ class App {
     }
   }
 
-  // CONFIGURACIÓN DE SEGURIDAD
   private buildSecurityConfig(): SecurityConfig {
     const helmetConfig = environment.app.isProduction ? {
       contentSecurityPolicy: {
@@ -289,14 +239,14 @@ class App {
           manifestSrc: ["'self'"]
         },
       },
-      crossOriginEmbedderPolicy: { policy: "credentialless" },
-      crossOriginOpenerPolicy: { policy: "same-origin" },
-      crossOriginResourcePolicy: { policy: "cross-origin" },
+      crossOriginEmbedderPolicy: { policy: "credentialless" as const },
+      crossOriginOpenerPolicy: { policy: "same-origin" as const },
+      crossOriginResourcePolicy: { policy: "cross-origin" as const },
       dnsPrefetchControl: { allow: false },
-      frameguard: { action: 'deny' },
+      frameguard: { action: 'deny' as const },
       hidePoweredBy: true,
       hsts: {
-        maxAge: 31536000, // 1 año
+        maxAge: 31536000,
         includeSubDomains: true,
         preload: true
       },
@@ -304,10 +254,9 @@ class App {
       noSniff: true,
       originAgentCluster: true,
       permittedCrossDomainPolicies: false,
-      referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+      referrerPolicy: { policy: "strict-origin-when-cross-origin" as const },
       xssFilter: true
     } : {
-      // Configuración más permisiva para desarrollo
       contentSecurityPolicy: false,
       crossOriginEmbedderPolicy: false,
       hsts: false
@@ -343,13 +292,13 @@ class App {
         REQUEST_HEADERS.CORRELATION_ID,
         REQUEST_HEADERS.REQUEST_ID
       ],
-      maxAge: 86400, // 24 horas
+      maxAge: 86400,
       optionsSuccessStatus: 200,
       preflightContinue: false
     };
 
     const rateLimitConfig = rateLimit({
-      windowMs: RATE_LIMIT_CONFIG.GENERAL.WINDOW_MS || 15 * 60 * 1000, // 15 minutos
+      windowMs: RATE_LIMIT_CONFIG.GENERAL.WINDOW_MS || 15 * 60 * 1000,
       max: RATE_LIMIT_CONFIG.GENERAL.MAX_REQUESTS || 100,
       message: {
         success: false,
@@ -375,16 +324,15 @@ class App {
         });
       },
       skip: (req: Request) => {
-        // Skip rate limiting for health checks
         return req.path.startsWith('/health');
       }
     });
 
     const slowDownConfig = slowDown({
-      windowMs: 15 * 60 * 1000, // 15 minutos
-      delayAfter: 50, // Permitir 50 requests normales
-      delayMs: (hits) => hits * 100, // Aumenta el delay con cada hit
-      maxDelayMs: 20000, // Máximo 20 segundos de delay
+      windowMs: 15 * 60 * 1000,
+      delayAfter: 50,
+      delayMs: (hits) => hits * 100,
+      maxDelayMs: 20000,
     });
 
     return {
@@ -395,39 +343,32 @@ class App {
     };
   }
 
-  // MIDDLEWARES DE SEGURIDAD
   private async initializeSecurityMiddlewares(): Promise<void> {
     this.appLogger.info('Initializing security middlewares...');
 
-    // Trust proxy para obtener IP real
-    this.app.set('trust proxy', environment.app.isProduction ? 1 : true);
-
-    // Helmet - Configuración de seguridad HTTP
+    this.app.set('trust proxy', environment.app.isProduction ? 1 : 1);
     this.app.use(helmet(this.securityConfig.helmet));
-
-    // CORS - Control de acceso entre orígenes
     this.app.use(cors(this.securityConfig.cors));
 
-    // Rate limiting y slow down (no en test)
     if (!environment.app.isTest) {
       this.app.use(this.securityConfig.slowDown);
       this.app.use(this.securityConfig.rateLimit);
     }
 
-    // Middleware de contexto de request (debe ir temprano)
     this.app.use(this.requestContextMiddleware.bind(this));
-
     this.appLogger.info('Security middlewares initialized successfully');
   }
 
-  // MIDDLEWARES CORE
   private async initializeCoreMiddlewares(): Promise<void> {
     this.appLogger.info('Initializing core middlewares...');
 
-    // Request timeout
-    this.app.use(timeout(String(TIMEOUT_CONFIG?.HTTP_REQUEST || '30s')));
+    this.app.use((req: Request, res: Response, next: NextFunction) => {
+      if (req.path.includes('/health')) {
+        return next();
+      }
+      return timeout(String(TIMEOUT_CONFIG?.HTTP_REQUEST || '30s'))(req, res, next);
+    });
 
-    // Compression con configuración optimizada
     this.app.use(compression({
       threshold: MIDDLEWARE_CONFIG?.COMPRESSION_THRESHOLD || 1024,
       level: environment.app.isProduction ? 6 : 1,
@@ -446,51 +387,53 @@ class App {
       }
     }));
 
-    // Body parsing con validación
     const maxRequestSizeBytes = parseSize(MIDDLEWARE_CONFIG?.MAX_REQUEST_SIZE || '10mb');
-    this.app.use(express.json({
-      limit: maxRequestSizeBytes,
-      strict: true,
-      type: ['application/json', 'application/*+json'],
-      verify: (req, res, buf) => {
-        if (buf && buf.length === 0) {
-          throw new Error('Request body cannot be empty');
-        }
-        const contentLength = parseInt(req.headers['content-length'] || '0', 10);
-        if (contentLength > maxRequestSizeBytes) {
-            // Este error será manejado por payloadTooLargeHandler
-            throw new Error('Payload too large');
-        }
+    
+    this.app.use((req: Request, res: Response, next: NextFunction) => {
+      if (req.path.includes('/health')) {
+        return next();
       }
-    }));
+      
+      return express.json({
+        limit: maxRequestSizeBytes,
+        strict: true,
+        type: ['application/json', 'application/*+json'],
+        verify: (req: any, res: Response, buf: Buffer) => {
+          if (buf && buf.length === 0) {
+            throw new Error('Request body cannot be empty');
+          }
+          const contentLength = parseInt(req.headers['content-length'] || '0', 10);
+          if (contentLength > maxRequestSizeBytes) {
+            throw new Error('Payload too large');
+          }
+        }
+      })(req, res, next);
+    });
 
-    this.app.use(express.urlencoded({
-      extended: true,
-      limit: maxRequestSizeBytes,
-      parameterLimit: 100,
-      type: 'application/x-www-form-urlencoded'
-    }));
+    this.app.use((req: Request, res: Response, next: NextFunction) => {
+      if (req.path.includes('/health')) {
+        return next();
+      }
+      
+      return express.urlencoded({
+        extended: true,
+        limit: maxRequestSizeBytes,
+        parameterLimit: 100,
+        type: 'application/x-www-form-urlencoded'
+      })(req, res, next);
+    });
 
-    // Cookie parser con secreto
     this.app.use(cookieParser(environment.jwt?.secret));
-
-    // Morgan HTTP logging con formato personalizado
     this.setupMorganLogging();
-
-    // Handlers de errores específicos
     this.app.use(jsonErrorHandler);
     this.app.use(payloadTooLargeHandler);
     this.app.use(timeoutHandler);
-
-    // Request logging personalizado
     this.app.use(this.requestLoggingMiddleware.bind(this));
 
     this.appLogger.info('Core middlewares initialized successfully');
   }
 
-  // CONFIGURACIÓN DE MORGAN
   private setupMorganLogging(): void {
-    // Tokens personalizados de Morgan
     morgan.token('correlation-id', (req: Request) => (req as AppRequest).correlationId || 'unknown');
     morgan.token('request-id', (req: Request) => (req as AppRequest).requestId || 'unknown');
     morgan.token('real-ip', (req: Request) => (req as AppRequest).clientIp || req.ip || 'unknown');
@@ -514,10 +457,20 @@ class App {
         }
       },
       skip: (req: Request, res: Response) => {
-        const skipPaths = ['/health', '/metrics', '/favicon.ico'];
+        const skipPaths = [
+          `/api/${environment.app.apiVersion}/health`,
+          `/health`,
+          '/metrics', 
+          '/favicon.ico'
+        ];
+        
         const shouldSkip = skipPaths.some(path => req.url.startsWith(path));
 
-        if (environment.app.isProduction && req.url.startsWith('/health') && res.statusCode < 400) {
+        if (environment.app.isProduction && req.url.includes('/health') && res.statusCode < 400) {
+          return true;
+        }
+
+        if (environment.app.isDevelopment && req.url.includes('/health') && res.statusCode < 400) {
           return true;
         }
 
@@ -526,7 +479,6 @@ class App {
     }));
   }
 
-  // MIDDLEWARES DE VALIDACIÓN
   private async initializeValidationMiddlewares(): Promise<void> {
     this.appLogger.info('Initializing validation middlewares...');
 
@@ -560,7 +512,6 @@ class App {
     this.appLogger.info('Validation middlewares initialized successfully');
   }
 
-  // MIDDLEWARE DE CONTEXTO DE REQUEST
   private requestContextMiddleware(req: AppRequest, res: Response, next: NextFunction): void {
     const startTime = Date.now();
 
@@ -596,7 +547,6 @@ class App {
     next();
   }
 
-  // MIDDLEWARE DE LOGGING DE REQUESTS
   private requestLoggingMiddleware(req: AppRequest, res: Response, next: NextFunction): void {
     const startTime = req.startTime || Date.now();
 
@@ -661,18 +611,15 @@ class App {
     next();
   }
 
-  // INICIALIZACIÓN DE RUTAS
   private async initializeRoutes(): Promise<void> {
     this.appLogger.info('Initializing routes...');
 
     const apiVersion = `/api/${environment.app.apiVersion}`;
     
-    // Health routes (no requieren servicios)
-    this.app.use('/health', HealthRoutes.routes);
+    this.app.use(`${apiVersion}/health`, HealthRoutes.routes); 
     this.app.get('/', this.createRootHandler());
 
     try {
-      // Auth routes - usar los servicios inicializados
       const authRoutes = AuthRoutes.create({
         authService: this.services.authService,
         userService: this.services.userService,
@@ -680,7 +627,6 @@ class App {
       });
       this.app.use(`${apiVersion}/auth`, authRoutes);
 
-      // User routes - crear controlador con servicios inyectados
       const userController = new UserController(
         this.services.userService,
         this.services.authService
@@ -689,28 +635,19 @@ class App {
       const userRoutesInstance = UserRoutes.create({ userController });
       this.app.use(`${apiVersion}/users`, userRoutesInstance.routes);
 
-      this.appLogger.info('Routes initialized successfully', {
-        apiVersion,
-        routes: ['auth', 'users', 'health'],
-        totalEndpoints: this.getRoutesCount()
-      });
+      this.appLogger.info('Routes initialized successfully');
     } catch (error) {
-      this.appLogger.error('Failed to initialize routes', {
-        error: error instanceof Error ? error.message : String(error)
-      });
+      this.appLogger.error('Failed to initialize routes', { error });
       throw error;
     }
 
-    // API info endpoint
     this.app.get(`${apiVersion}`, this.createApiInfoHandler(apiVersion));
 
-    // Development metrics endpoint
     if (environment.app.isDevelopment) {
-      this.app.get('/metrics', this.createMetricsHandler());
+      this.app.get(`${apiVersion}/metrics`, this.createMetricsHandler());
     }
   }
 
-  // HANDLERS DE ENDPOINTS
   private createRootHandler() {
     return (req: Request, res: Response) => {
       const uptime = process.uptime();
@@ -729,7 +666,7 @@ class App {
             total: `${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`
           },
           documentation: !environment.app.isProduction ? '/api-docs' : null,
-          healthCheck: '/health'
+          healthCheck: `/api/${environment.app.apiVersion}/health` 
         },
         meta: {
           correlationId: (req as AppRequest).correlationId,
@@ -756,7 +693,7 @@ class App {
             `${apiVersion}/auth/logout`,
             `${apiVersion}/users/profile`,
             `${apiVersion}/users/sessions`,
-            '/health'
+            `${apiVersion}/health` 
           ],
           documentation: !environment.app.isProduction ? '/api-docs' : null,
           rateLimit: {
@@ -802,7 +739,6 @@ class App {
     };
   }
 
-  // INICIALIZACIÓN DE SWAGGER
   private initializeSwagger(): void {
     if (environment.app.isProduction || !environment.features?.swaggerEnabled) {
       this.appLogger.info('Swagger disabled in production environment');
@@ -830,16 +766,10 @@ class App {
         ...swaggerInfo
       });
     } catch (error) {
-      this.appLogger.error('Failed to initialize Swagger documentation', {
-        error: error instanceof Error ? {
-          message: error.message,
-          stack: error.stack
-        } : error
-      });
+      this.appLogger.error('Failed to initialize Swagger documentation', { error });
     }
   }
 
-  // MANEJO DE ERRORES
   private initializeErrorHandling(): void {
     this.appLogger.info('Initializing error handling...');
 
@@ -850,7 +780,6 @@ class App {
     this.appLogger.info('Error handling initialized successfully');
   }
 
-  // GRACEFUL SHUTDOWN
   private setupGracefulShutdown(): void {
     process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
       this.appLogger.fatal('Unhandled Promise Rejection detected', {
@@ -907,26 +836,18 @@ class App {
         memoryUsage: process.memoryUsage()
       });
 
-      // Cerrar conexiones de servicios si tienen métodos de cleanup
       if (this.services.cacheService && typeof (this.services.cacheService as any).close === 'function') {
         await (this.services.cacheService as any).close();
       }
 
-      // Aquí iría la lógica para cerrar conexiones a DB, Redis, etc.
       shutdownLogger.info('Graceful shutdown completed successfully');
       process.exit(0);
     } catch (error) {
-      shutdownLogger.error('Error during graceful shutdown', {
-        error: error instanceof Error ? {
-          message: error.message,
-          stack: error.stack
-        } : error
-      });
+      shutdownLogger.error('Error during graceful shutdown', { error });
       process.exit(1);
     }
   }
 
-  // UTILIDADES HELPER
   private getCorsOrigins(): string | string[] | boolean {
     if (environment.app.isDevelopment) {
       return true;
@@ -988,12 +909,11 @@ class App {
   }
 
   private getRoutesCount(): number {
-    const stack = this.app._router?.stack || [];
+    const stack = (this.app as any)._router?.stack || [];
     return stack.filter((layer: any) => layer.route).length;
   }
 
-  // MÉTODOS PÚBLICOS
-  public getApp(): Express {
+  public getApp(): Application {
     return this.app;
   }
 
@@ -1043,40 +963,8 @@ class App {
     this.appLogger.info('Application configured for testing');
   }
 
-  // MÉTODO PARA OBTENER SERVICIOS (útil para testing)
   public getServices(): ServiceDependencies {
     return this.services;
-  }
-}
-
-// EXTENSIÓN DE INTERFACES GLOBALES
-declare global {
-  namespace Express {
-    interface Request {
-      correlationId?: string;
-      requestId?: string;
-      startTime?: number;
-      clientIP?: string;
-      deviceInfo?: {
-        userAgent: string;
-        platform?: string;
-        browser?: string;
-      };
-      user?: {
-        id: string;
-        email: string;
-        username: string;
-        sessionId: string;
-        iat?: number;
-        exp?: number;
-      };
-      validatedData?: {
-        body?: any;
-        query?: any;
-        params?: any;
-        headers?: any;
-      };
-    }
   }
 }
 
@@ -1110,12 +998,12 @@ export const APP_CONSTANTS = {
   DEFAULT_TIMEOUT: '30s',
   MAX_REQUEST_SIZE: '10mb',
   COMPRESSION_THRESHOLD: 1024,
-  RATE_LIMIT_WINDOW: 15 * 60 * 1000, // 15 minutos
+  RATE_LIMIT_WINDOW: 15 * 60 * 1000,
   RATE_LIMIT_MAX: 100,
-  COOKIE_MAX_AGE: 7 * 24 * 60 * 60 * 1000, // 7 días
-  SLOW_REQUEST_THRESHOLD: 5000, // 5 segundos
-  CORS_MAX_AGE: 86400, // 24 horas
-  HSTS_MAX_AGE: 31536000, // 1 año
+  COOKIE_MAX_AGE: 7 * 24 * 60 * 60 * 1000,
+  SLOW_REQUEST_THRESHOLD: 5000,
+  CORS_MAX_AGE: 86400,
+  HSTS_MAX_AGE: 31536000,
   SKIP_LOGGING_PATHS: ['/health', '/metrics', '/favicon.ico'],
   SKIP_RATE_LIMIT_PATHS: ['/health']
 } as const;

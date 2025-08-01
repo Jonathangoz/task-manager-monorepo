@@ -1,486 +1,419 @@
 // src/commons/controllers/HealthController.ts
-
 import { Request, Response, NextFunction } from 'express';
-import { logger } from '@/utils/logger';
-import { HTTP_STATUS } from '@/utils/constants';
-import type { ApiResponse } from '@/utils/constants';
+import { AuthenticatedRequest } from '@/typeExpress/express';
+import { db } from '@/config/database';
+import { redisConnection } from '@/config/redis';
+import { logger, createContextLogger } from '@/utils/logger';
+import { HTTP_STATUS, HEALTH_CHECK_CONFIG } from '@/utils/constants';
+import { environment } from '@/config/environment';
 
 export class HealthController {
+  private readonly healthLogger = createContextLogger({ component: 'health' });
+
   /**
-   * @swagger
-   * /api/v1/health:
-   *   get:
-   *     tags: [Health]
-   *     summary: Basic health check
-   *     description: Quick health check endpoint for load balancers
-   *     responses:
-   *       200:
-   *         description: Service is healthy
-   *         content:
-   *           application/json:
-   *             schema:
-   *               type: object
-   *               properties:
-   *                 status:
-   *                   type: string
-   *                   example: "ok"
-   *                 timestamp:
-   *                   type: string
-   *                   format: date-time
-   *                 uptime:
-   *                   type: number
-   *                   description: Process uptime in seconds
+   * Health check básico - ULTRA RÁPIDO para Docker health checks
+   * No verifica dependencias, solo que el servidor esté respondiendo
    */
-  public basicHealthCheck = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public async basicHealthCheck(req: Request, res: Response): Promise<void> {
     try {
-      const response = {
-        status: 'ok',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
+      // Respuesta inmediata sin verificar dependencias
+      res.status(HTTP_STATUS.OK).json({
+        success: true,
+        status: 'healthy',
         service: 'auth-service',
-        version: process.env.npm_package_version || '1.0.0',
-      };
-
-      res.status(HTTP_STATUS.OK).json(response);
-    } catch (error) {
-      logger.error({
-        event: 'basic_health_check_error',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      next(error);
-    }
-  };
-
-  /**
-   * @swagger
-   * /api/v1/health/ready:
-   *   get:
-   *     tags: [Health]
-   *     summary: Readiness probe
-   *     description: Kubernetes readiness probe - checks if service is ready to receive traffic
-   *     responses:
-   *       200:
-   *         description: Service is ready
-   *       503:
-   *         description: Service is not ready
-   */
-  public readinessCheck = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      // Aquí puedes agregar checks específicos para determinar si el servicio está listo
-      // Por ejemplo: verificar conexión a base de datos, Redis, etc.
-      
-      const checks = {
-        database: await this.checkDatabase(),
-        redis: await this.checkRedis(),
-      };
-
-      const isReady = Object.values(checks).every(check => check.status === 'ok');
-
-      const response: ApiResponse = {
-        success: isReady,
-        message: isReady ? 'Service is ready' : 'Service is not ready',
-        data: {
-          status: isReady ? 'ready' : 'not_ready',
-          timestamp: new Date().toISOString(),
-          checks,
-        },
-        meta: {
-          timestamp: new Date().toISOString(),
-          requestId: req.headers['x-request-id'] as string,
-        },
-      };
-
-      const statusCode = isReady ? HTTP_STATUS.OK : HTTP_STATUS.SERVICE_UNAVAILABLE;
-      res.status(statusCode).json(response);
-    } catch (error) {
-      logger.error({
-        event: 'readiness_check_error',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-
-      const response: ApiResponse = {
-        success: false,
-        message: 'Readiness check failed',
-        error: {
-          code: 'READINESS_CHECK_FAILED',
-          message: error instanceof Error ? error.message : 'Unknown error'
-        },
-        meta: {
-          timestamp: new Date().toISOString(),
-          requestId: req.headers['x-request-id'] as string,
-        },
-      };
-
-      res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(response);
-    }
-  };
-
-  /**
-   * @swagger
-   * /api/v1/health/live:
-   *   get:
-   *     tags: [Health]
-   *     summary: Liveness probe
-   *     description: Kubernetes liveness probe - checks if service is alive
-   *     responses:
-   *       200:
-   *         description: Service is alive
-   *       503:
-   *         description: Service is not responding
-   */
-  public livenessCheck = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      // Check básico de que el proceso está vivo
-      const response = {
-        status: 'alive',
         timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        memory: process.memoryUsage(),
-        pid: process.pid,
-      };
-
-      res.status(HTTP_STATUS.OK).json(response);
-    } catch (error) {
-      logger.error({
-        event: 'liveness_check_error',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        uptime: Math.floor(process.uptime()),
+        version: environment.app.apiVersion || '1.0.0'
       });
-
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.healthLogger.error('Basic health check failed', { error: errorMessage });
       res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json({
-        status: 'error',
-        timestamp: new Date().toISOString(),
-        error: error instanceof Error ? error.message : 'Unknown error'
+        success: false,
+        status: 'unhealthy',
+        error: 'Service unavailable'
       });
     }
-  };
+  }
 
   /**
-   * @swagger
-   * /api/v1/health/detailed:
-   *   get:
-   *     tags: [Health]
-   *     summary: Detailed health check
-   *     description: Comprehensive health check with system information (non-production only)
-   *     responses:
-   *       200:
-   *         description: Detailed health information
+   * Readiness check - Verifica si el servicio está listo para recibir tráfico
+   * Con timeouts agresivos para evitar bloqueos
    */
-  public detailedHealthCheck = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  public async readinessCheck(req: Request, res: Response): Promise<void> {
     try {
       const checks = {
-        database: await this.checkDatabase(),
-        redis: await this.checkRedis(),
-        memory: this.checkMemory(),
-        disk: await this.checkDisk(),
+        database: false,
+        redis: false,
+        server: true // El servidor está funcionando si llegamos aquí
       };
 
-      const overallHealth = Object.values(checks).every(check => check.status === 'ok');
+      // Check database con timeout muy corto
+      try {
+        const dbPromise = db.$queryRaw`SELECT 1`;
+        const dbResult = await Promise.race([
+          dbPromise,
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('DB timeout')), 2000) // 2s timeout
+          )
+        ]);
+        checks.database = true;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown database error';
+        this.healthLogger.warn('Database readiness check failed', { error: errorMessage });
+        checks.database = false;
+      }
 
-      const response: ApiResponse = {
-        success: overallHealth,
-        message: overallHealth ? 'All systems operational' : 'Some systems have issues',
-        data: {
-          status: overallHealth ? 'healthy' : 'degraded',
-          timestamp: new Date().toISOString(),
+      // Check Redis con timeout muy corto
+      try {
+        const redisClient = redisConnection.getClient();
+        const redisPromise = redisClient.ping();
+        await Promise.race([
+          redisPromise,
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Redis timeout')), 1000) // 1s timeout
+          )
+        ]);
+        checks.redis = redisConnection.isHealthy();
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown redis error';
+        this.healthLogger.warn('Redis readiness check failed', { error: errorMessage });
+        checks.redis = false;
+      }
+
+      const isReady = checks.database && checks.redis && checks.server;
+      
+      res.status(isReady ? HTTP_STATUS.OK : HTTP_STATUS.SERVICE_UNAVAILABLE).json({
+        success: isReady,
+        status: isReady ? 'ready' : 'not_ready',
+        service: 'auth-service',
+        checks,
+        timestamp: new Date().toISOString(),
+        uptime: Math.floor(process.uptime())
+      });
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.healthLogger.error('Readiness check failed', { error: errorMessage });
+      res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json({
+        success: false,
+        status: 'not_ready',
+        error: 'Readiness check failed'
+      });
+    }
+  }
+
+  /**
+   * Liveness check - Solo verifica que el proceso esté vivo
+   */
+  public async livenessCheck(req: Request, res: Response): Promise<void> {
+    try {
+      const memUsage = process.memoryUsage();
+      const isAlive = process.uptime() > 0 && memUsage.heapUsed > 0;
+      
+      res.status(HTTP_STATUS.OK).json({
+        success: true,
+        status: 'alive',
+        service: 'auth-service',
+        timestamp: new Date().toISOString(),
+        uptime: Math.floor(process.uptime()),
+        memory: {
+          used: Math.round(memUsage.heapUsed / 1024 / 1024), // MB
+          total: Math.round(memUsage.heapTotal / 1024 / 1024) // MB
+        },
+        pid: process.pid
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.healthLogger.error('Liveness check failed', { error: errorMessage });
+      res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json({
+        success: false,
+        status: 'dead',
+        error: 'Process check failed'
+      });
+    }
+  }
+
+  /**
+   * Health check detallado - Solo para desarrollo/debugging
+   */
+  public async detailedHealthCheck(req: Request, res: Response): Promise<Response | void> {
+    if (environment.app.isProduction) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
+        success: false,
+        message: 'Endpoint not available in production'
+      });
+    }
+
+    try {
+      const startTime = Date.now();
+      const checks = {
+        database: { status: false, responseTime: 0, error: null as string | null },
+        redis: { status: false, responseTime: 0, error: null as string | null },
+        server: { status: true, responseTime: 0, error: null as string | null }
+      };
+
+      // Database check con métricas
+      try {
+        const dbStart = Date.now();
+        await Promise.race([
+          db.$queryRaw`SELECT 1`,
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Database timeout')), 5000)
+          )
+        ]);
+        checks.database.status = true;
+        checks.database.responseTime = Date.now() - dbStart;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown database error';
+        checks.database.error = errorMessage;
+        checks.database.responseTime = Date.now() - startTime;
+      }
+
+      // Redis check con métricas
+      try {
+        const redisStart = Date.now();
+        const redisClient = redisConnection.getClient();
+        await Promise.race([
+          redisClient.ping(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Redis timeout')), 3000)
+          )
+        ]);
+        checks.redis.status = redisConnection.isHealthy();
+        checks.redis.responseTime = Date.now() - redisStart;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown redis error';
+        checks.redis.error = errorMessage;
+        checks.redis.responseTime = Date.now() - startTime;
+      }
+
+      const memUsage = process.memoryUsage();
+      const isHealthy = checks.database.status && checks.redis.status;
+
+      res.status(isHealthy ? HTTP_STATUS.OK : HTTP_STATUS.SERVICE_UNAVAILABLE).json({
+        success: isHealthy,
+        status: isHealthy ? 'healthy' : 'degraded',
+        service: 'auth-service',
+        version: environment.app.apiVersion || '1.0.0',
+        environment: environment.app.env,
+        checks,
+        metrics: {
           uptime: process.uptime(),
-          version: process.env.npm_package_version || '1.0.0',
-          environment: process.env.NODE_ENV || 'development',
-          checks,
-          system: {
+          responseTime: Date.now() - startTime,
+          memory: {
+            rss: Math.round(memUsage.rss / 1024 / 1024),
+            heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+            heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+            external: Math.round(memUsage.external / 1024 / 1024)
+          },
+          cpu: process.cpuUsage(),
+          pid: process.pid,
+          platform: process.platform,
+          nodeVersion: process.version
+        },
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.healthLogger.error('Detailed health check failed', { error: errorMessage });
+      res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json({
+        success: false,
+        status: 'unhealthy',
+        error: errorMessage,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
+
+  /**
+   * Database-specific health check
+   */
+  public async databaseHealthCheck(req: Request, res: Response): Promise<void> {
+    try {
+      const startTime = Date.now();
+      
+      await Promise.race([
+        db.$queryRaw`SELECT 1 as status, version() as version, now() as timestamp`,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Database timeout')), 10000)
+        )
+      ]);
+
+      const responseTime = Date.now() - startTime;
+
+      res.status(HTTP_STATUS.OK).json({
+        success: true,
+        status: 'healthy',
+        service: 'database',
+        responseTime,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown database error';
+      this.healthLogger.error('Database health check failed', { error: errorMessage });
+      res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json({
+        success: false,
+        status: 'unhealthy',
+        service: 'database',
+        error: errorMessage,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
+
+  /**
+   * Redis-specific health check
+   */
+  public async redisHealthCheck(req: Request, res: Response): Promise<void> {
+    try {
+      const startTime = Date.now();
+      const redisClient = redisConnection.getClient();
+      
+      await Promise.race([
+        redisClient.ping(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Redis timeout')), 5000)
+        )
+      ]);
+
+      const responseTime = Date.now() - startTime;
+      const isHealthy = redisConnection.isHealthy();
+
+      res.status(isHealthy ? HTTP_STATUS.OK : HTTP_STATUS.SERVICE_UNAVAILABLE).json({
+        success: isHealthy,
+        status: isHealthy ? 'healthy' : 'unhealthy',
+        service: 'redis',
+        responseTime,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown redis error';
+      this.healthLogger.error('Redis health check failed', { error: errorMessage });
+      res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json({
+        success: false,
+        status: 'unhealthy',
+        service: 'redis',
+        error: errorMessage,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
+
+  /**
+   * Dependencies health check
+   */
+  public async dependenciesHealthCheck(req: Request, res: Response): Promise<void> {
+    try {
+      const checks = await Promise.allSettled([
+        this.checkDatabaseConnection(),
+        this.checkRedisConnection()
+      ]);
+
+      const results = {
+        database: checks[0].status === 'fulfilled' ? checks[0].value : { status: false, error: checks[0].reason?.message || 'Unknown error' },
+        redis: checks[1].status === 'fulfilled' ? checks[1].value : { status: false, error: checks[1].reason?.message || 'Unknown error' }
+      };
+
+      const allHealthy = Object.values(results).every(result => result.status);
+
+      res.status(allHealthy ? HTTP_STATUS.OK : HTTP_STATUS.SERVICE_UNAVAILABLE).json({
+        success: allHealthy,
+        status: allHealthy ? 'healthy' : 'degraded',
+        dependencies: results,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.healthLogger.error('Dependencies health check failed', { error: errorMessage });
+      res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json({
+        success: false,
+        status: 'unhealthy',
+        error: errorMessage,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
+
+  /**
+   * System metrics
+   */
+  public async getMetrics(req: Request, res: Response): Promise<void> {
+    try {
+      const memUsage = process.memoryUsage();
+      const cpuUsage = process.cpuUsage();
+
+      res.status(HTTP_STATUS.OK).json({
+        success: true,
+        metrics: {
+          process: {
+            uptime: process.uptime(),
+            pid: process.pid,
             platform: process.platform,
             arch: process.arch,
-            nodeVersion: process.version,
-            memory: process.memoryUsage(),
-            cpu: process.cpuUsage(),
-            pid: process.pid,
+            nodeVersion: process.version
           },
-        },
-        meta: {
-          timestamp: new Date().toISOString(),
-          requestId: req.headers['x-request-id'] as string,
-        },
-      };
-
-      res.status(HTTP_STATUS.OK).json(response);
-    } catch (error) {
-      logger.error({
-        event: 'detailed_health_check_error',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      next(error);
-    }
-  };
-
-  /**
-   * @swagger
-   * /api/v1/health/database:
-   *   get:
-   *     tags: [Health]
-   *     summary: Database health check
-   *     description: Check database connectivity and performance
-   *     responses:
-   *       200:
-   *         description: Database is healthy
-   *       503:
-   *         description: Database issues detected
-   */
-  public databaseHealthCheck = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const dbCheck = await this.checkDatabase();
-      
-      const response: ApiResponse = {
-        success: dbCheck.status === 'ok',
-        message: dbCheck.status === 'ok' ? 'Database is healthy' : 'Database issues detected',
-        data: dbCheck,
-        meta: {
-          timestamp: new Date().toISOString(),
-          requestId: req.headers['x-request-id'] as string,
-        },
-      };
-
-      const statusCode = dbCheck.status === 'ok' ? HTTP_STATUS.OK : HTTP_STATUS.SERVICE_UNAVAILABLE;
-      res.status(statusCode).json(response);
-    } catch (error) {
-      logger.error({
-        event: 'database_health_check_error',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      next(error);
-    }
-  };
-
-  /**
-   * @swagger
-   * /api/v1/health/redis:
-   *   get:
-   *     tags: [Health]
-   *     summary: Redis health check
-   *     description: Check Redis connectivity and performance
-   *     responses:
-   *       200:
-   *         description: Redis is healthy
-   *       503:
-   *         description: Redis issues detected
-   */
-  public redisHealthCheck = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const redisCheck = await this.checkRedis();
-      
-      const response: ApiResponse = {
-        success: redisCheck.status === 'ok',
-        message: redisCheck.status === 'ok' ? 'Redis is healthy' : 'Redis issues detected',
-        data: redisCheck,
-        meta: {
-          timestamp: new Date().toISOString(),
-          requestId: req.headers['x-request-id'] as string,
-        },
-      };
-
-      const statusCode = redisCheck.status === 'ok' ? HTTP_STATUS.OK : HTTP_STATUS.SERVICE_UNAVAILABLE;
-      res.status(statusCode).json(response);
-    } catch (error) {
-      logger.error({
-        event: 'redis_health_check_error',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      next(error);
-    }
-  };
-
-  /**
-   * @swagger
-   * /api/v1/health/dependencies:
-   *   get:
-   *     tags: [Health]
-   *     summary: External dependencies health check
-   *     description: Check all external dependencies
-   *     responses:
-   *       200:
-   *         description: All dependencies are healthy
-   *       503:
-   *         description: Some dependencies have issues
-   */
-  public dependenciesHealthCheck = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const checks = {
-        database: await this.checkDatabase(),
-        redis: await this.checkRedis(),
-        // Aquí puedes agregar más dependencias externas
-      };
-
-      const allHealthy = Object.values(checks).every(check => check.status === 'ok');
-
-      const response: ApiResponse = {
-        success: allHealthy,
-        message: allHealthy ? 'All dependencies are healthy' : 'Some dependencies have issues',
-        data: {
-          status: allHealthy ? 'healthy' : 'degraded',
-          timestamp: new Date().toISOString(),
-          checks,
-        },
-        meta: {
-          timestamp: new Date().toISOString(),
-          requestId: req.headers['x-request-id'] as string,
-        },
-      };
-
-      const statusCode = allHealthy ? HTTP_STATUS.OK : HTTP_STATUS.SERVICE_UNAVAILABLE;
-      res.status(statusCode).json(response);
-    } catch (error) {
-      logger.error({
-        event: 'dependencies_health_check_error',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      next(error);
-    }
-  };
-
-  /**
-   * @swagger
-   * /api/v1/health/metrics:
-   *   get:
-   *     tags: [Health]
-   *     summary: System metrics
-   *     description: Get system performance metrics
-   *     responses:
-   *       200:
-   *         description: Metrics retrieved successfully
-   */
-  public getMetrics = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const metrics = {
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        memory: process.memoryUsage(),
-        cpu: process.cpuUsage(),
-        system: {
-          platform: process.platform,
-          arch: process.arch,
-          nodeVersion: process.version,
-          pid: process.pid,
-        },
-        environment: {
-          nodeEnv: process.env.NODE_ENV,
-          version: process.env.npm_package_version || '1.0.0',
-        },
-      };
-
-      const response: ApiResponse = {
-        success: true,
-        message: 'Metrics retrieved successfully',
-        data: metrics,
-        meta: {
-          timestamp: new Date().toISOString(),
-          requestId: req.headers['x-request-id'] as string,
-        },
-      };
-
-      res.status(HTTP_STATUS.OK).json(response);
-    } catch (error) {
-      logger.error({
-        event: 'get_metrics_error',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      next(error);
-    }
-  };
-
-  // Métodos privados para los checks específicos
-  private async checkDatabase(): Promise<{ status: string; responseTime?: number; error?: string; info?: any }> {
-    try {
-      const start = Date.now();
-      
-      // Aquí deberías importar y usar tu cliente de Prisma
-      // const { PrismaClient } = require('@prisma/client');
-      // const prisma = new PrismaClient();
-      // await prisma.$queryRaw`SELECT 1`;
-      
-      // Por ahora, simulamos el check
-      const responseTime = Date.now() - start;
-      
-      return {
-        status: 'ok',
-        responseTime,
-        info: {
-          connected: true,
-          pool: {
-            // Información del pool de conexiones si está disponible
+          memory: {
+            rss: memUsage.rss,
+            heapTotal: memUsage.heapTotal,
+            heapUsed: memUsage.heapUsed,
+            external: memUsage.external,
+            arrayBuffers: memUsage.arrayBuffers
+          },
+          cpu: {
+            user: cpuUsage.user,
+            system: cpuUsage.system
           }
-        }
-      };
+        },
+        timestamp: new Date().toISOString()
+      });
+
     } catch (error) {
-      return {
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Database connection failed'
-      };
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.healthLogger.error('Metrics collection failed', { error: errorMessage });
+      res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json({
+        success: false,
+        error: errorMessage,
+        timestamp: new Date().toISOString()
+      });
     }
   }
 
-  private async checkRedis(): Promise<{ status: string; responseTime?: number; error?: string; info?: any }> {
+  // Helper methods
+  private async checkDatabaseConnection(): Promise<{ status: boolean; responseTime: number; error?: string }> {
+    const startTime = Date.now();
     try {
-      const start = Date.now();
-      
-      // Aquí deberías importar y usar tu cliente de Redis
-      // const Redis = require('ioredis');
-      // const redis = new Redis(process.env.REDIS_URL);
-      // await redis.ping();
-      
-      // Por ahora, simulamos el check
-      const responseTime = Date.now() - start;
-      
-      return {
-        status: 'ok',
-        responseTime,
-        info: {
-          connected: true,
-          mode: 'standalone' // o 'cluster' dependiendo de tu configuración
-        }
-      };
+      await Promise.race([
+        db.$queryRaw`SELECT 1`,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Database timeout')), 5000)
+        )
+      ]);
+      return { status: true, responseTime: Date.now() - startTime };
     } catch (error) {
-      return {
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Redis connection failed'
-      };
+      const errorMessage = error instanceof Error ? error.message : 'Unknown database error';
+      return { status: false, responseTime: Date.now() - startTime, error: errorMessage };
     }
   }
 
-  private checkMemory(): { status: string; usage: NodeJS.MemoryUsage; info?: any } {
-    const usage = process.memoryUsage();
-    const maxMemory = 512 * 1024 * 1024; // 512MB como ejemplo
-    const memoryUsagePercent = (usage.heapUsed / maxMemory) * 100;
-    
-    return {
-      status: memoryUsagePercent > 90 ? 'warning' : 'ok',
-      usage,
-      info: {
-        usagePercent: memoryUsagePercent,
-        maxMemory,
-        warning: memoryUsagePercent > 90 ? 'High memory usage detected' : null
-      }
-    };
-  }
-
-  private async checkDisk(): Promise<{ status: string; info?: any; error?: string }> {
+  private async checkRedisConnection(): Promise<{ status: boolean; responseTime: number; error?: string }> {
+    const startTime = Date.now();
     try {
-      // En un entorno real, podrías usar librerías como 'diskusage' para obtener info del disco
-      // const diskusage = require('diskusage');
-      // const info = await diskusage.check('/');
-      
-      // Por ahora, simulamos el check
-      return {
-        status: 'ok',
-        info: {
-          available: '10GB', // Espacio disponible simulado
-          used: '5GB',       // Espacio usado simulado
-          total: '15GB',     // Espacio total simulado
-          usagePercent: 33.3
-        }
-      };
+      const redisClient = redisConnection.getClient();
+      await Promise.race([
+        redisClient.ping(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Redis timeout')), 3000)
+        )
+      ]);
+      return { status: redisConnection.isHealthy(), responseTime: Date.now() - startTime };
     } catch (error) {
-      return {
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Disk check failed'
-      };
+      const errorMessage = error instanceof Error ? error.message : 'Unknown redis error';
+      return { status: false, responseTime: Date.now() - startTime, error: errorMessage };
     }
   }
 }

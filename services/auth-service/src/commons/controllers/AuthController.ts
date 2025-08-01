@@ -1,6 +1,6 @@
 // src/commons/controllers/AuthController.ts
-
 import { Request, Response, NextFunction } from 'express';
+import { AuthenticatedRequest } from '@/typeExpress/express';
 import { IAuthService } from '@/core/interfaces/IAuthService';
 import { IUserService } from '@/core/interfaces/IUserService';
 import { ITokenService } from '@/core/interfaces/ITokenService';
