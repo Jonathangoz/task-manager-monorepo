@@ -14,7 +14,7 @@ services:
       pnpm prisma:generate
       pnpm build
     startCommand: pnpm start:prod
-    healthCheckPath: /health
+    healthCheckPath: /api/v1/health  # ✅ CORREGIDO - path completo
     autoDeploy: true
     envVars:
       # Variables específicas del servicio
@@ -62,9 +62,9 @@ services:
       
       # 🌐 CORS Configuration
       - key: CORS_ORIGIN
-        value: "https://your-frontend-url.onrender.com"  # Cambiar por tu frontend
+        value: "https://your-frontend-url.onrender.com"
         
-      # 🔧 Logging y configuración
+      # 🔧 Logging y configuración - OPTIMIZADO PARA RENDER
       - key: LOG_LEVEL
         value: "info"
       - key: LOG_PRETTY
@@ -78,7 +78,15 @@ services:
       - key: HEALTH_CHECK_ENABLED
         value: "true"
       - key: SWAGGER_ENABLED
-        value: "true"
+        value: "false"  # ✅ Deshabilitado en producción
+      
+      # ✅ TIMEOUTS OPTIMIZADOS PARA RENDER
+      - key: HTTP_REQUEST_TIMEOUT
+        value: "120000"  # 2 minutos
+      - key: HEALTH_CHECK_TIMEOUT
+        value: "5000"    # 5 segundos
+      - key: DATABASE_TIMEOUT
+        value: "30000"   # 30 segundos
 
   # ✅ Task Service - Production
   - type: web
@@ -94,7 +102,7 @@ services:
       pnpm prisma:generate
       pnpm build
     startCommand: pnpm start:prod
-    healthCheckPath: /api/v1/health
+    healthCheckPath: /api/v1/health  # ✅ CORREGIDO - path completo
     autoDeploy: true
     envVars:
       # Variables específicas del servicio
@@ -120,7 +128,7 @@ services:
         
       # 🔗 Comunicación entre servicios
       - key: AUTH_SERVICE_URL
-        value: "https://task-manager-auth-service.onrender.com"  # URL interno de Render
+        value: "https://task-manager-auth-service.onrender.com"
       - key: AUTH_SERVICE_VERIFY_ENDPOINT
         value: "/api/v1/auth/verify-token"
       - key: AUTH_SERVICE_API_KEY
@@ -164,7 +172,15 @@ services:
       - key: HEALTH_CHECK_ENABLED
         value: "true"
       - key: SWAGGER_ENABLED
-        value: "true"
+        value: "false"  # ✅ Deshabilitado en producción
+      
+      # ✅ TIMEOUTS OPTIMIZADOS PARA RENDER
+      - key: HTTP_REQUEST_TIMEOUT
+        value: "120000"
+      - key: HEALTH_CHECK_TIMEOUT
+        value: "5000"
+      - key: DATABASE_TIMEOUT
+        value: "30000"
 
   # Production Redis Cache
   - type: keyvalue

@@ -362,18 +362,31 @@ class App {
   private async initializeCoreMiddlewares(): Promise<void> {
     this.appLogger.info('Initializing core middlewares...');
 
+    // ✅ TIMEOUT OPTIMIZADO PARA RENDER - excluir health checks
     this.app.use((req: Request, res: Response, next: NextFunction) => {
-      if (req.path.includes('/health')) {
+      // ✅ NO aplicar timeout a health checks (muy importante para Render)
+      if (req.path.includes('/health') || 
+          req.path.includes('/api/v1/health') ||
+          req.path === '/' ||
+          req.path.includes('/metrics')) {
         return next();
       }
-      return timeout(String(TIMEOUT_CONFIG?.HTTP_REQUEST || '30s'))(req, res, next);
+      
+      // ✅ Timeout más generoso para requests normales en cloud
+      const timeoutValue = environment.app.isProduction ? '120000' : '30000'; // 2 min en prod, 30s en dev
+      return timeout(timeoutValue)(req, res, next);
     });
 
+    // ✅ Compression optimizado
     this.app.use(compression({
       threshold: MIDDLEWARE_CONFIG?.COMPRESSION_THRESHOLD || 1024,
       level: environment.app.isProduction ? 6 : 1,
       filter: (req, res) => {
         if (req.headers['x-no-compression']) {
+          return false;
+        }
+        // ✅ No comprimir health checks para mayor velocidad
+        if (req.path.includes('/health')) {
           return false;
         }
         const contentType = res.getHeader('content-type');
@@ -389,7 +402,9 @@ class App {
 
     const maxRequestSizeBytes = parseSize(MIDDLEWARE_CONFIG?.MAX_REQUEST_SIZE || '10mb');
     
+    // ✅ JSON parser optimizado
     this.app.use((req: Request, res: Response, next: NextFunction) => {
+      // ✅ Health checks no necesitan parsing JSON
       if (req.path.includes('/health')) {
         return next();
       }
@@ -410,6 +425,7 @@ class App {
       })(req, res, next);
     });
 
+    // ✅ URL encoded parser optimizado
     this.app.use((req: Request, res: Response, next: NextFunction) => {
       if (req.path.includes('/health')) {
         return next();
@@ -457,20 +473,23 @@ class App {
         }
       },
       skip: (req: Request, res: Response) => {
+        // ✅ SKIP MÁS AGRESIVO para health checks y evitar spam de logs
         const skipPaths = [
           `/api/${environment.app.apiVersion}/health`,
           `/health`,
           '/metrics', 
-          '/favicon.ico'
+          '/favicon.ico',
+          // ✅ Agregar más paths de health checks
+          `/api/${environment.app.apiVersion}/health/ready`,
+          `/api/${environment.app.apiVersion}/health/live`,
+          '/health/ready',
+          '/health/live'
         ];
         
         const shouldSkip = skipPaths.some(path => req.url.startsWith(path));
 
+        // ✅ En producción, skip TODOS los health checks exitosos
         if (environment.app.isProduction && req.url.includes('/health') && res.statusCode < 400) {
-          return true;
-        }
-
-        if (environment.app.isDevelopment && req.url.includes('/health') && res.statusCode < 400) {
           return true;
         }
 
@@ -550,7 +569,8 @@ class App {
   private requestLoggingMiddleware(req: AppRequest, res: Response, next: NextFunction): void {
     const startTime = req.startTime || Date.now();
 
-    if (environment.app.isDevelopment) {
+    // ✅ NO log debug para health checks en producción
+    if (environment.app.isDevelopment && !req.path.includes('/health')) {
       this.appLogger.debug('Incoming request', {
         correlationId: req.correlationId,
         method: req.method,
@@ -562,6 +582,8 @@ class App {
 
     res.on('finish', () => {
       const duration = Date.now() - startTime;
+      const isHealthCheck = req.path.includes('/health');
+      
       const logData = {
         correlationId: req.correlationId,
         requestId: req.requestId,
@@ -578,15 +600,20 @@ class App {
 
       res.setHeader('X-Response-Time', `${duration}ms`);
 
+      // ✅ LOG MÁS INTELIGENTE - menos logs para health checks exitosos
       if (res.statusCode >= 500) {
         httpLogger.error('HTTP Request Error', logData);
       } else if (res.statusCode >= 400) {
         httpLogger.warn('HTTP Request Warning', logData);
       } else {
-        httpLogger.info('HTTP Request Completed', logData);
+        // ✅ Solo log health checks si fallan o en desarrollo
+        if (!isHealthCheck || !environment.app.isProduction || res.statusCode >= 400) {
+          httpLogger.info('HTTP Request Completed', logData);
+        }
       }
 
-      if (duration > 5000) {
+      // ✅ Warning para requests lentos (pero no health checks normales)
+      if (duration > 5000 && !isHealthCheck) {
         securityLogger.warn('Slow request detected', {
           ...logData,
           threshold: '5000ms'
@@ -597,14 +624,19 @@ class App {
     res.on('close', () => {
       if (!res.writableEnded) {
         const duration = Date.now() - startTime;
-        httpLogger.warn('HTTP Request closed before completion', {
-          correlationId: req.correlationId,
-          requestId: req.requestId,
-          method: req.method,
-          url: req.url,
-          duration: `${duration}ms`,
-          event: 'REQUEST_CLOSED_EARLY'
-        });
+        const isHealthCheck = req.path.includes('/health');
+        
+        // ✅ Solo log closes inesperados si no son health checks
+        if (!isHealthCheck) {
+          httpLogger.warn('HTTP Request closed before completion', {
+            correlationId: req.correlationId,
+            requestId: req.requestId,
+            method: req.method,
+            url: req.url,
+            duration: `${duration}ms`,
+            event: 'REQUEST_CLOSED_EARLY'
+          });
+        }
       }
     });
 
