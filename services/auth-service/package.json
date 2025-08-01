@@ -12,7 +12,7 @@
     "clean": "rimraf dist",
     "build": "pnpm run clean && tsc && tsc-alias",
     "dev:watch": "tsc-watch --onSuccess \"tsc-alias && node dist/src/server.js\"",
-    "dev": "nodemon --exec ts-node -r tsconfig-paths/register dist/src/server.ts && tsc --watch & tsc-alias --watch",
+    "dev": "tsc --watch & tsc-alias --watch && nodemon --exec ts-node -r tsconfig-paths/register src/server.ts",
     "start": "tsc && tsc-alias && node dist/server.js",
     "start:prod": "NODE_ENV=production node dist/src/server.js",
     "lint:check": "eslint src/**/*.ts",
