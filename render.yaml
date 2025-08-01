@@ -14,7 +14,7 @@ services:
       pnpm prisma:generate
       pnpm build
     startCommand: pnpm start:prod
-    healthCheckPath: /api/v1/health
+    healthCheckPath: /health
     autoDeploy: true
     envVars:
       # Variables específicas del servicio
