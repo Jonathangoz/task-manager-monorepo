@@ -1,10 +1,9 @@
 // src/commons/controllers/HealthController.ts - OPTIMIZADO PARA RENDER.COM
 import { Request, Response, NextFunction } from 'express';
-import { AuthenticatedRequest } from '@/typeExpress/express';
 import { db } from '@/config/database';
 import { redisConnection } from '@/config/redis';
 import { createContextLogger } from '@/utils/logger';
-import { HTTP_STATUS, HEALTH_CHECK_CONFIG } from '@/utils/constants';
+import { HTTP_STATUS } from '@/utils/constants';
 import { environment } from '@/config/environment';
 
 export class HealthController {

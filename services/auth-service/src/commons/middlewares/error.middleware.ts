@@ -6,6 +6,8 @@ import { HTTP_STATUS, ERROR_CODES, ERROR_MESSAGES } from '@/utils/constants';
 
 interface ErrorRequest extends Request {
   correlationId?: string;
+  isHealthCheck?: boolean;
+  skipTimeout?: boolean;
 }
 
 interface ErrorResponse {
@@ -182,7 +184,8 @@ export class ErrorMiddleware {
       error: {
         code: errorCode,
         message,
-        ...(details && { details }),
+        // ✅ FIX: Usar sintaxis condicional en lugar de spread
+        ...(details !== undefined && { details }),
       },
       meta: {
         correlationId,
@@ -405,8 +408,8 @@ export class ErrorMiddleware {
       req.path === '/ping' ||
       req.path === '/status' ||
       req.path === '/healthz' ||
-      (req as Record<string, unknown>).isHealthCheck ||
-      (req as Record<string, unknown>).skipTimeout;
+      req.isHealthCheck ||
+      req.skipTimeout;
 
     if (isHealthCheck) {
       // Para health checks, solo log debug (no warning)
@@ -522,7 +525,7 @@ export class ErrorMiddleware {
 
     sensitiveFields.forEach((field) => {
       if (sanitized[field]) {
-        sanitized[field] = '[REDACTED]';
+        sanitized[field] = '[REDRACTED]';
       }
     });
 
