@@ -6,7 +6,6 @@
 import pino from 'pino';
 import path from 'path';
 import { mkdirSync, existsSync } from 'fs';
-import { unknown } from 'zod';
 
 // ==============================================
 // CONFIGURACIÓN DE TIMEZONE BOGOTÁ
@@ -67,15 +66,15 @@ const baseLoggerConfig: pino.LoggerOptions = {
     level: (label: string) => ({ level: label }),
     log: (object: LogObject) => {
       if (object.err) {
-        const err = object.err as unknown;
+        const err = object.err as ErrorObject;
         return {
           ...object,
           error: {
-            type: unknown.constructor.name,
-            message: unknown,
-            stack: isDevelopment ? unknown : undefined,
-            code: unknown,
-            statusCode: unknown,
+            type: err.constructor.name,
+            message: err.message,
+            stack: isDevelopment ? err.stack : undefined,
+            code: err.code,
+            statusCode: err.statusCode,
           },
         };
       }

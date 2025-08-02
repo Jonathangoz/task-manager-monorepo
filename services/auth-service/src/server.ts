@@ -9,7 +9,7 @@ import {
   redisLogger,
   startup,
   createContextLogger,
-  healthCheck,
+  // healthCheck, // ✅ Removido porque no se usa
 } from '@/utils/logger';
 import {
   connectDatabase,
@@ -331,7 +331,8 @@ class AuthServer {
           if (socket.writable && !socket.destroyed) {
             try {
               socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
-            } catch (e) {
+            } catch (_e) {
+              // ✅ Usar _e para indicar que es intencionalmente ignorado
               socket.destroy();
             }
           }
@@ -478,9 +479,10 @@ class AuthServer {
             ),
           ]);
         }
-      } catch (error) {
+      } catch (_error) {
+        // ✅ Usar _error para indicar que es intencionalmente ignorado
         redisLogger.warn('Error closing Redis connection', {
-          error: error instanceof Error ? error.message : String(error),
+          error: _error instanceof Error ? _error.message : String(_error),
         });
       }
 
@@ -559,7 +561,8 @@ class AuthServer {
           ]);
           services.redis = true;
         }
-      } catch (error) {
+      } catch (_error) {
+        // ✅ Usar _error para indicar que es intencionalmente ignorado
         services.redis = false;
       }
 

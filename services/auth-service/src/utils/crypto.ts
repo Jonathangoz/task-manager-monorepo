@@ -519,7 +519,8 @@ export class CryptoUtils {
     try {
       createHash('sha256');
       createHash('sha512');
-    } catch (error) {
+    } catch (_error: unknown) {
+      // ✅ Usar _error para indicar que es intencionalmente ignorado
       warnings.push('Algoritmos de hash no disponibles');
     }
 

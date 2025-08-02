@@ -13,6 +13,14 @@ interface TokenPayload {
   exp: number;
 }
 
+// Tipo genérico para datos validados
+interface ValidatedData {
+  body?: Record<string, unknown>;
+  query?: Record<string, string | string[]>;
+  params?: Record<string, string>;
+  headers?: Record<string, string | string[] | undefined>;
+}
+
 // Extender la interfaz global de Express
 declare global {
   namespace Express {
@@ -41,12 +49,7 @@ declare global {
         browser?: string;
       };
       auth?: TokenPayload;
-      validatedData?: {
-        body?: any;
-        query?: any;
-        params?: any;
-        headers?: any;
-      };
+      validatedData?: ValidatedData;
     }
   }
 }
@@ -201,7 +204,7 @@ export interface LogContext {
   responseTime?: number;
   event?: string;
   error?: string | Error;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 // Extensión específica para la aplicación
@@ -218,7 +221,7 @@ export interface AppRequest extends Request {
 }
 
 // Export explícito del TokenPayload para uso en otros archivos
-export { TokenPayload };
+export { TokenPayload, ValidatedData };
 
 // Export para asegurar que el módulo sea tratado como un módulo
 export {};

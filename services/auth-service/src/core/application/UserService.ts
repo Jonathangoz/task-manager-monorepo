@@ -3,8 +3,6 @@ import { User } from '@/core/entities/User';
 import {
   IUserRepository,
   CreateUserData,
-  UpdateUserData,
-  UserWithPassword,
   UserWithoutPassword,
 } from '@/core/interfaces/IUserRepository';
 import { ICacheService } from '@/core/interfaces/ICacheService';
@@ -20,14 +18,7 @@ import {
 } from '@/core/interfaces/IUserService';
 import { hashPassword, validatePasswordStrength } from '@/utils/crypto';
 import { logger } from '@/utils/logger';
-import {
-  ERROR_CODES,
-  ERROR_MESSAGES,
-  SUCCESS_MESSAGES,
-  SECURITY_CONFIG,
-  CACHE_KEYS,
-  CACHE_TTL,
-} from '@/utils/constants';
+import { ERROR_MESSAGES, CACHE_KEYS, CACHE_TTL } from '@/utils/constants';
 
 export interface UserProfileUpdate {
   firstName?: string;

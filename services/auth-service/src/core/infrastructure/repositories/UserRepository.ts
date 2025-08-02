@@ -17,11 +17,34 @@ import {
   UserSession,
 } from '@/core/domain/interfaces/IUserService';
 import {
-  ERROR_CODES,
   ERROR_MESSAGES,
   PRISMA_ERROR_CODES,
   DEFAULT_VALUES,
 } from '@/utils/constants';
+
+// Tipos específicos para manejo de errores de Prisma
+interface PrismaError extends Error {
+  code?: string;
+  meta?: {
+    target?: string[];
+    [key: string]: unknown;
+  };
+}
+
+// Tipo para sesiones de Prisma
+interface PrismaUserSession {
+  id: string;
+  sessionId: string | null;
+  userId: string;
+  device: string | null;
+  ipAddress: string | null;
+  location: string | null;
+  userAgent: string | null;
+  isActive: boolean;
+  lastSeen: Date;
+  createdAt: Date;
+  expiresAt: Date;
+}
 
 export class UserRepository implements IUserRepository {
   constructor(private database: PrismaClient = db) {}
@@ -66,9 +89,9 @@ export class UserRepository implements IUserRepository {
       );
 
       return this.mapToUserWithPassword(user);
-    } catch (error: any) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      loggers.dbError(error, 'create', 'user');
+      loggers.dbError(error as Error, 'create', 'user');
 
       dbLogger.error(
         {
@@ -81,12 +104,10 @@ export class UserRepository implements IUserRepository {
       );
 
       // Manejar errores específicos de Prisma
-      if (error.code === PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION) {
-        const target = error.meta?.target;
-        if (target?.includes('email')) {
-          throw new Error(ERROR_MESSAGES.USER_ALREADY_EXISTS);
-        }
-        if (target?.includes('username')) {
+      const prismaError = error as PrismaError;
+      if (prismaError.code === PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION) {
+        const target = prismaError.meta?.target;
+        if (target?.includes('email') || target?.includes('username')) {
           throw new Error(ERROR_MESSAGES.USER_ALREADY_EXISTS);
         }
         throw new Error(ERROR_MESSAGES.USER_ALREADY_EXISTS);
@@ -136,9 +157,9 @@ export class UserRepository implements IUserRepository {
 
       dbLogger.debug({ userId: id, duration }, 'User found by ID');
       return this.mapToUserWithoutPassword(user);
-    } catch (error: any) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      loggers.dbError(error, 'findUnique', 'user', id);
+      loggers.dbError(error as Error, 'findUnique', 'user', id);
 
       dbLogger.error(
         {
@@ -183,9 +204,9 @@ export class UserRepository implements IUserRepository {
         'User found by ID with password',
       );
       return this.mapToUserWithPassword(user);
-    } catch (error: any) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      loggers.dbError(error, 'findUnique', 'user', id);
+      loggers.dbError(error as Error, 'findUnique', 'user', id);
 
       dbLogger.error(
         {
@@ -259,9 +280,9 @@ export class UserRepository implements IUserRepository {
       );
 
       return this.mapToUserWithoutPassword(user);
-    } catch (error: any) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      loggers.dbError(error, 'findUnique', 'user');
+      loggers.dbError(error as Error, 'findUnique', 'user');
 
       dbLogger.error(
         {
@@ -323,9 +344,9 @@ export class UserRepository implements IUserRepository {
       );
 
       return this.mapToUserWithPassword(user);
-    } catch (error: any) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      loggers.dbError(error, 'findUnique', 'user');
+      loggers.dbError(error as Error, 'findUnique', 'user');
 
       dbLogger.error(
         {
@@ -398,9 +419,9 @@ export class UserRepository implements IUserRepository {
       );
 
       return this.mapToUserWithoutPassword(user);
-    } catch (error: any) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      loggers.dbError(error, 'findUnique', 'user');
+      loggers.dbError(error as Error, 'findUnique', 'user');
 
       dbLogger.error(
         {
@@ -461,9 +482,9 @@ export class UserRepository implements IUserRepository {
       );
 
       return this.mapToUserWithPassword(user);
-    } catch (error: any) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      loggers.dbError(error, 'findUnique', 'user');
+      loggers.dbError(error as Error, 'findUnique', 'user');
 
       dbLogger.error(
         {
@@ -530,9 +551,9 @@ export class UserRepository implements IUserRepository {
       );
 
       return this.mapToUserWithoutPassword(user);
-    } catch (error: any) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      loggers.dbError(error, 'update', 'user', id);
+      loggers.dbError(error as Error, 'update', 'user', id);
 
       dbLogger.error(
         {
@@ -545,16 +566,14 @@ export class UserRepository implements IUserRepository {
         'Failed to update user',
       );
 
-      if (error.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND) {
+      const prismaError = error as PrismaError;
+      if (prismaError.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND) {
         throw new Error(ERROR_MESSAGES.USER_NOT_FOUND);
       }
 
-      if (error.code === PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION) {
-        const target = error.meta?.target;
-        if (target?.includes('email')) {
-          throw new Error(ERROR_MESSAGES.USER_ALREADY_EXISTS);
-        }
-        if (target?.includes('username')) {
+      if (prismaError.code === PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION) {
+        const target = prismaError.meta?.target;
+        if (target?.includes('email') || target?.includes('username')) {
           throw new Error(ERROR_MESSAGES.USER_ALREADY_EXISTS);
         }
         throw new Error(ERROR_MESSAGES.USER_ALREADY_EXISTS);
@@ -597,9 +616,9 @@ export class UserRepository implements IUserRepository {
         },
         'User last login updated',
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      loggers.dbError(error, 'update', 'user', id);
+      loggers.dbError(error as Error, 'update', 'user', id);
 
       dbLogger.error(
         {
@@ -611,7 +630,8 @@ export class UserRepository implements IUserRepository {
         'Failed to update last login',
       );
 
-      if (error.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND) {
+      const prismaError = error as PrismaError;
+      if (prismaError.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND) {
         throw new Error(ERROR_MESSAGES.USER_NOT_FOUND);
       }
 
@@ -655,9 +675,9 @@ export class UserRepository implements IUserRepository {
 
       // Log de seguridad
       loggers.passwordChanged(id, '', ''); // Email se obtendría en el servicio
-    } catch (error: any) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      loggers.dbError(error, 'update', 'user', id);
+      loggers.dbError(error as Error, 'update', 'user', id);
 
       dbLogger.error(
         {
@@ -669,7 +689,8 @@ export class UserRepository implements IUserRepository {
         'Failed to update password',
       );
 
-      if (error.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND) {
+      const prismaError = error as PrismaError;
+      if (prismaError.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND) {
         throw new Error(ERROR_MESSAGES.USER_NOT_FOUND);
       }
 
@@ -703,6 +724,7 @@ export class UserRepository implements IUserRepository {
         'Finding multiple users',
       );
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const where: any = {};
 
       // Aplicar filtros
@@ -744,6 +766,7 @@ export class UserRepository implements IUserRepository {
       }
 
       // Configurar ordenamiento
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let orderBy: any = { createdAt: 'desc' };
       if (pagination?.sortBy) {
         const validSortFields = [
@@ -813,9 +836,9 @@ export class UserRepository implements IUserRepository {
         limit,
         totalPages,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      loggers.dbError(error, 'findMany', 'user');
+      loggers.dbError(error as Error, 'findMany', 'user');
 
       dbLogger.error(
         {
@@ -875,9 +898,9 @@ export class UserRepository implements IUserRepository {
       );
 
       return exists;
-    } catch (error: any) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      loggers.dbError(error, 'count', 'user');
+      loggers.dbError(error as Error, 'count', 'user');
 
       dbLogger.error(
         {
@@ -929,22 +952,22 @@ export class UserRepository implements IUserRepository {
         'User sessions retrieved',
       );
 
-      return sessions.map((session) => ({
+      return sessions.map((session: PrismaUserSession) => ({
         id: session.id,
         sessionId: session.sessionId || session.id, // Fallback si no existe sessionId
         userId: session.userId,
-        device: session.device || undefined, // Corregido: usar 'device' en lugar de 'deviceInfo'
+        device: session.device || undefined,
         ipAddress: session.ipAddress || undefined,
-        location: session.location || undefined, // Usar el campo correcto
+        location: session.location || undefined,
         userAgent: session.userAgent || undefined,
         isActive: session.isActive,
         lastSeen: session.lastSeen,
         createdAt: session.createdAt,
         expiresAt: session.expiresAt,
       }));
-    } catch (error: any) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      loggers.dbError(error, 'findMany', 'userSession', userId);
+      loggers.dbError(error as Error, 'findMany', 'userSession', userId);
 
       dbLogger.error(
         {
@@ -993,9 +1016,9 @@ export class UserRepository implements IUserRepository {
         },
         'User deactivated successfully',
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      loggers.dbError(error, 'update', 'user', id);
+      loggers.dbError(error as Error, 'update', 'user', id);
 
       dbLogger.error(
         {
@@ -1007,7 +1030,8 @@ export class UserRepository implements IUserRepository {
         'Failed to deactivate user',
       );
 
-      if (error.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND) {
+      const prismaError = error as PrismaError;
+      if (prismaError.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND) {
         throw new Error(ERROR_MESSAGES.USER_NOT_FOUND);
       }
 
@@ -1048,9 +1072,9 @@ export class UserRepository implements IUserRepository {
         },
         'User activated successfully',
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      loggers.dbError(error, 'update', 'user', id);
+      loggers.dbError(error as Error, 'update', 'user', id);
 
       dbLogger.error(
         {
@@ -1062,7 +1086,8 @@ export class UserRepository implements IUserRepository {
         'Failed to activate user',
       );
 
-      if (error.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND) {
+      const prismaError = error as PrismaError;
+      if (prismaError.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND) {
         throw new Error(ERROR_MESSAGES.USER_NOT_FOUND);
       }
 
@@ -1133,9 +1158,9 @@ export class UserRepository implements IUserRepository {
         },
         'User hard deleted successfully',
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      loggers.dbError(error, 'delete', 'user', id);
+      loggers.dbError(error as Error, 'delete', 'user', id);
 
       dbLogger.error(
         {
@@ -1147,7 +1172,8 @@ export class UserRepository implements IUserRepository {
         'Failed to delete user',
       );
 
-      if (error.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND) {
+      const prismaError = error as PrismaError;
+      if (prismaError.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND) {
         throw new Error(ERROR_MESSAGES.USER_NOT_FOUND);
       }
 
@@ -1174,7 +1200,7 @@ export class UserRepository implements IUserRepository {
         createdAt: prismaUser.createdAt,
         updatedAt: prismaUser.updatedAt,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       dbLogger.error(
         {
           error,
@@ -1206,7 +1232,7 @@ export class UserRepository implements IUserRepository {
         createdAt: prismaUser.createdAt,
         updatedAt: prismaUser.updatedAt,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       dbLogger.error(
         {
           error,
@@ -1260,9 +1286,9 @@ export class UserRepository implements IUserRepository {
       );
 
       return stats;
-    } catch (error: any) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      loggers.dbError(error, 'count', 'user');
+      loggers.dbError(error as Error, 'count', 'user');
 
       dbLogger.error(
         {

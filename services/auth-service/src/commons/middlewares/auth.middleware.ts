@@ -5,7 +5,6 @@ import { ICacheService } from '@/core/interfaces/ICacheService';
 import { TokenPayload } from '@/core/interfaces/IAuthService';
 import { RedisCache } from '@/core/cache/RedisCache';
 import { Request, Response, NextFunction } from 'express';
-import AuthenticatedRequest from '@/typeExpress/express';
 import { logger } from '@/utils/logger';
 import {
   HTTP_STATUS,
@@ -15,9 +14,8 @@ import {
   CACHE_KEYS,
 } from '@/utils/constants';
 
-interface AuthenticatedRequest extends Request {
-  correlationId?: string;
-}
+// Remove the duplicate AuthenticatedRequest interface declaration
+// It's already defined in the global Express namespace extension
 
 export class AuthMiddleware {
   private static tokenService: ITokenService;
@@ -41,7 +39,7 @@ export class AuthMiddleware {
    * Middleware para verificar token JWT en las peticiones
    */
   static async verifyToken(
-    req: AuthenticatedRequest,
+    req: Request,
     res: Response,
     next: NextFunction,
   ): Promise<void> {
@@ -170,7 +168,7 @@ export class AuthMiddleware {
    * Middleware opcional - no falla si no hay token
    */
   static async optionalAuth(
-    req: AuthenticatedRequest,
+    req: Request,
     res: Response,
     next: NextFunction,
   ): Promise<void> {
@@ -221,11 +219,11 @@ export class AuthMiddleware {
    * Middleware para verificar que el usuario esté verificado
    */
   static requireVerifiedUser(
-    req: AuthenticatedRequest,
+    req: Request,
     res: Response,
     next: NextFunction,
   ): void {
-    const correlationId =
+    const _correlationId =
       req.correlationId ||
       `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -247,14 +245,9 @@ export class AuthMiddleware {
    * Middleware para verificar owner de recurso
    */
   static requireOwnership(userIdParam: string = 'userId') {
-    return (
-      req: AuthenticatedRequest,
-      res: Response,
-      next: NextFunction,
-    ): void => {
+    return (req: Request, res: Response, next: NextFunction): void => {
       const correlationId =
-        req.correlationId ||
-        `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        req.correlationId || `req-${Date.now()}-${Math.random().toString(36)}`;
 
       if (!req.user) {
         res.status(HTTP_STATUS.UNAUTHORIZED).json({
@@ -313,7 +306,7 @@ export class AuthMiddleware {
    * Middleware para extraer información de sesión
    */
   static extractSessionInfo(
-    req: AuthenticatedRequest,
+    req: Request,
     res: Response,
     next: NextFunction,
   ): void {
@@ -325,7 +318,16 @@ export class AuthMiddleware {
     const userAgent = req.get('User-Agent') || 'unknown';
     const ipAddress = req.ip || req.connection.remoteAddress || 'unknown';
 
-    (req as any).sessionInfo = {
+    // Using proper typing instead of 'any'
+    interface SessionInfoRequest extends Request {
+      sessionInfo?: {
+        userAgent: string;
+        ipAddress: string;
+        correlationId: string;
+      };
+    }
+
+    (req as SessionInfoRequest).sessionInfo = {
       userAgent,
       ipAddress,
       correlationId,
@@ -338,7 +340,7 @@ export class AuthMiddleware {
    * Middleware para verificar límites de sesiones concurrentes
    */
   static async checkConcurrentSessions(
-    req: AuthenticatedRequest,
+    req: Request,
     res: Response,
     next: NextFunction,
   ): Promise<void> {

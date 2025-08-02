@@ -1,6 +1,5 @@
 // src/presentation/middlewares/error.middleware.ts
 import { Request, Response, NextFunction } from 'express';
-import { AuthenticatedRequest } from '@/typeExpress/express';
 import { logger } from '@/utils/logger';
 import { environment } from '@/config/environment';
 import { HTTP_STATUS, ERROR_CODES, ERROR_MESSAGES } from '@/utils/constants';
@@ -14,7 +13,7 @@ interface ErrorResponse {
   error: {
     code: string;
     message: string;
-    details?: any;
+    details?: unknown;
   };
   meta: {
     correlationId?: string;
@@ -25,18 +24,44 @@ interface ErrorResponse {
   stack?: string;
 }
 
+// Tipos para errores conocidos
+interface ValidationErrorObject {
+  name: string;
+  message: string;
+  errors?: Record<string, { message: string }>;
+}
+
+interface PrismaErrorObject {
+  name: string;
+  message: string;
+  code: string;
+  meta?: {
+    target?: string[];
+  };
+}
+
+interface SystemErrorObject {
+  name: string;
+  message: string;
+  code?: string;
+  type?: string;
+  limit?: number;
+  length?: number;
+  stack?: string;
+}
+
 // Clase personalizada para errores de aplicación
 export class AppError extends Error {
   public statusCode: number;
   public code: string;
-  public details?: any;
+  public details?: unknown;
   public isOperational: boolean;
 
   constructor(
     message: string,
     statusCode: number = HTTP_STATUS.INTERNAL_SERVER_ERROR,
     code: string = ERROR_CODES.INTERNAL_ERROR,
-    details?: any,
+    details?: unknown,
   ) {
     super(message);
     this.name = 'AppError';
@@ -54,10 +79,10 @@ export class ErrorMiddleware {
    * Middleware principal de manejo de errores
    */
   static handle(
-    error: any,
+    error: unknown,
     req: ErrorRequest,
     res: Response,
-    next: NextFunction,
+    _next: NextFunction,
   ): void {
     const correlationId =
       req.correlationId ||
@@ -65,13 +90,13 @@ export class ErrorMiddleware {
 
     // Si ya se envió una respuesta, delegar al manejador de errores por defecto
     if (res.headersSent) {
-      return next(error);
+      return _next(error);
     }
 
     let statusCode: number = HTTP_STATUS.INTERNAL_SERVER_ERROR;
     let errorCode: string = ERROR_CODES.INTERNAL_ERROR;
     let message: string = ERROR_MESSAGES.INTERNAL_ERROR;
-    let details: any = undefined;
+    let details: unknown = undefined;
 
     // Determinar el tipo de error y configurar la respuesta
     if (error instanceof AppError) {
@@ -79,35 +104,37 @@ export class ErrorMiddleware {
       errorCode = error.code;
       message = error.message;
       details = error.details;
-    } else if (error.name === 'ValidationError') {
+    } else if (ErrorMiddleware.isValidationError(error)) {
       statusCode = HTTP_STATUS.BAD_REQUEST;
       errorCode = ERROR_CODES.VALIDATION_ERROR;
       message = ERROR_MESSAGES.VALIDATION_ERROR;
       details = ErrorMiddleware.formatValidationError(error);
-    } else if (error.name === 'PrismaClientValidationError') {
+    } else if (ErrorMiddleware.isPrismaValidationError(error)) {
       statusCode = HTTP_STATUS.BAD_REQUEST;
       errorCode = ERROR_CODES.VALIDATION_ERROR;
       message = 'Error de validación en base de datos';
-      details = { prismaError: error.message };
-    } else if (error.name === 'PrismaClientKnownRequestError') {
-      const prismaError = ErrorMiddleware.handlePrismaError(error);
+      details = { prismaError: (error as Error).message };
+    } else if (ErrorMiddleware.isPrismaKnownRequestError(error)) {
+      const prismaError = ErrorMiddleware.handlePrismaError(
+        error as PrismaErrorObject,
+      );
       statusCode = prismaError.statusCode;
       errorCode = prismaError.code;
       message = prismaError.message;
       details = prismaError.details;
-    } else if (error.name === 'JsonWebTokenError') {
+    } else if (ErrorMiddleware.isJWTError(error)) {
       statusCode = HTTP_STATUS.UNAUTHORIZED;
       errorCode = ERROR_CODES.TOKEN_INVALID;
       message = ERROR_MESSAGES.TOKEN_INVALID;
-    } else if (error.name === 'TokenExpiredError') {
+    } else if (ErrorMiddleware.isTokenExpiredError(error)) {
       statusCode = HTTP_STATUS.UNAUTHORIZED;
       errorCode = ERROR_CODES.TOKEN_EXPIRED;
       message = ERROR_MESSAGES.TOKEN_EXPIRED;
-    } else if (error.code === 'ECONNREFUSED') {
+    } else if (ErrorMiddleware.isConnectionError(error)) {
       statusCode = HTTP_STATUS.SERVICE_UNAVAILABLE;
       errorCode = ERROR_CODES.SERVICE_UNAVAILABLE;
       message = ERROR_MESSAGES.SERVICE_UNAVAILABLE;
-    } else if (error.code === 'ETIMEDOUT') {
+    } else if (ErrorMiddleware.isTimeoutError(error)) {
       statusCode = HTTP_STATUS.SERVICE_UNAVAILABLE;
       errorCode = ERROR_CODES.SERVICE_UNAVAILABLE;
       message = 'Tiempo de espera agotado';
@@ -118,10 +145,10 @@ export class ErrorMiddleware {
       logger.error('Error interno del servidor', {
         correlationId,
         error: {
-          message: error.message,
-          stack: error.stack,
-          name: error.name,
-          code: error.code,
+          message: (error as Error).message,
+          stack: (error as Error).stack,
+          name: (error as Error).name,
+          code: (error as SystemErrorObject).code,
         },
         request: {
           method: req.method,
@@ -136,9 +163,9 @@ export class ErrorMiddleware {
       logger.warn('Error de cliente', {
         correlationId,
         error: {
-          message: error.message,
-          name: error.name,
-          code: error.code,
+          message: (error as Error).message,
+          name: (error as Error).name,
+          code: (error as SystemErrorObject).code,
         },
         request: {
           method: req.method,
@@ -166,8 +193,8 @@ export class ErrorMiddleware {
     };
 
     // Incluir stack trace solo en desarrollo
-    if (environment.NODE_ENV === 'development' && error.stack) {
-      errorResponse.stack = error.stack;
+    if (environment.NODE_ENV === 'development' && (error as Error).stack) {
+      errorResponse.stack = (error as Error).stack;
     }
 
     res.status(statusCode).json(errorResponse);
@@ -176,7 +203,7 @@ export class ErrorMiddleware {
   /**
    * Middleware para capturar errores 404
    */
-  static notFound(req: ErrorRequest, res: Response, next: NextFunction): void {
+  static notFound(req: ErrorRequest, res: Response, _next: NextFunction): void {
     const correlationId =
       req.correlationId ||
       `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -213,13 +240,48 @@ export class ErrorMiddleware {
   }
 
   /**
+   * Type guards para identificar tipos de error
+   */
+  private static isValidationError(
+    error: unknown,
+  ): error is ValidationErrorObject {
+    return (error as ValidationErrorObject)?.name === 'ValidationError';
+  }
+
+  private static isPrismaValidationError(error: unknown): error is Error {
+    return (error as Error)?.name === 'PrismaClientValidationError';
+  }
+
+  private static isPrismaKnownRequestError(
+    error: unknown,
+  ): error is PrismaErrorObject {
+    return (error as Error)?.name === 'PrismaClientKnownRequestError';
+  }
+
+  private static isJWTError(error: unknown): error is Error {
+    return (error as Error)?.name === 'JsonWebTokenError';
+  }
+
+  private static isTokenExpiredError(error: unknown): error is Error {
+    return (error as Error)?.name === 'TokenExpiredError';
+  }
+
+  private static isConnectionError(error: unknown): error is SystemErrorObject {
+    return (error as SystemErrorObject)?.code === 'ECONNREFUSED';
+  }
+
+  private static isTimeoutError(error: unknown): error is SystemErrorObject {
+    return (error as SystemErrorObject)?.code === 'ETIMEDOUT';
+  }
+
+  /**
    * Maneja errores específicos de Prisma
    */
-  private static handlePrismaError(error: any): {
+  private static handlePrismaError(error: PrismaErrorObject): {
     statusCode: number;
     code: string;
     message: string;
-    details?: any;
+    details?: unknown;
   } {
     switch (error.code) {
       case 'P2002':
@@ -265,12 +327,14 @@ export class ErrorMiddleware {
   /**
    * Formatea errores de validación
    */
-  private static formatValidationError(error: any): any {
-    const errors: any = {};
+  private static formatValidationError(
+    error: ValidationErrorObject,
+  ): Record<string, string> {
+    const errors: Record<string, string> = {};
 
     if (error.errors) {
       Object.keys(error.errors).forEach((key) => {
-        errors[key] = error.errors[key].message;
+        errors[key] = error.errors![key].message;
       });
     }
 
@@ -281,7 +345,7 @@ export class ErrorMiddleware {
    * Middleware para manejar errores de límite de tamaño de payload
    */
   static payloadTooLarge(
-    error: any,
+    error: unknown,
     req: ErrorRequest,
     res: Response,
     next: NextFunction,
@@ -290,11 +354,12 @@ export class ErrorMiddleware {
       req.correlationId ||
       `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    if (error.type === 'entity.too.large') {
+    const systemError = error as SystemErrorObject;
+    if (systemError.type === 'entity.too.large') {
       logger.warn('Payload demasiado grande', {
         correlationId,
-        limit: error.limit,
-        length: error.length,
+        limit: systemError.limit,
+        length: systemError.length,
         method: req.method,
         url: req.url,
       });
@@ -305,8 +370,8 @@ export class ErrorMiddleware {
           code: 'PAYLOAD_TOO_LARGE',
           message: 'El tamaño del payload excede el límite permitido',
           details: {
-            limit: error.limit,
-            received: error.length,
+            limit: systemError.limit,
+            received: systemError.length,
           },
         },
         meta: {
@@ -328,18 +393,41 @@ export class ErrorMiddleware {
   static handleTimeout(
     req: ErrorRequest,
     res: Response,
-    next: NextFunction,
+    _next: NextFunction,
   ): void {
     const correlationId =
       req.correlationId ||
       `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
+    // ✅ CRÍTICO: NO responder si es un health check
+    const isHealthCheck =
+      req.path.includes('/health') ||
+      req.path === '/ping' ||
+      req.path === '/status' ||
+      req.path === '/healthz' ||
+      (req as Record<string, unknown>).isHealthCheck ||
+      (req as Record<string, unknown>).skipTimeout;
+
+    if (isHealthCheck) {
+      // Para health checks, solo log debug (no warning)
+      logger.debug('Health check timeout (ignoring)', {
+        correlationId,
+        method: req.method,
+        url: req.url,
+      });
+      return; // ✅ NO responder para health checks
+    }
+
+    // Solo log para requests que NO son health checks
     logger.warn('Request timeout', {
       correlationId,
       method: req.method,
       url: req.url,
+      userAgent: req.get('User-Agent'),
+      ip: req.ip,
     });
 
+    // Solo responder si no se han enviado headers
     if (!res.headersSent) {
       res.status(408).json({
         success: false,
@@ -361,7 +449,7 @@ export class ErrorMiddleware {
    * Middleware para capturar errores de parsing JSON
    */
   static handleJSONError(
-    error: any,
+    error: unknown,
     req: ErrorRequest,
     res: Response,
     next: NextFunction,
@@ -373,7 +461,7 @@ export class ErrorMiddleware {
     if (error instanceof SyntaxError && 'body' in error) {
       logger.warn('Error de sintaxis JSON', {
         correlationId,
-        error: error.message,
+        error: (error as Error).message,
         method: req.method,
         url: req.url,
       });
@@ -400,7 +488,9 @@ export class ErrorMiddleware {
   /**
    * Sanitiza headers sensibles para logging
    */
-  private static sanitizeHeaders(headers: any): any {
+  private static sanitizeHeaders(
+    headers: Record<string, unknown>,
+  ): Record<string, unknown> {
     const sanitized = { ...headers };
     const sensitiveHeaders = ['authorization', 'cookie', 'x-api-key'];
 
@@ -416,12 +506,12 @@ export class ErrorMiddleware {
   /**
    * Sanitiza body sensible para logging
    */
-  private static sanitizeBody(body: any): any {
+  private static sanitizeBody(body: unknown): unknown {
     if (!body || typeof body !== 'object') {
       return body;
     }
 
-    const sanitized = { ...body };
+    const sanitized = { ...(body as Record<string, unknown>) };
     const sensitiveFields = [
       'password',
       'token',
@@ -454,22 +544,25 @@ process.on('uncaughtException', (error: Error) => {
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
-  logger.error('Promesa rechazada no manejada', {
-    reason:
-      reason instanceof Error
-        ? {
-            message: reason.message,
-            stack: reason.stack,
-            name: reason.name,
-          }
-        : reason,
-    promise: promise.toString(),
-  });
+process.on(
+  'unhandledRejection',
+  (reason: unknown, promise: Promise<unknown>) => {
+    logger.error('Promesa rechazada no manejada', {
+      reason:
+        reason instanceof Error
+          ? {
+              message: reason.message,
+              stack: reason.stack,
+              name: reason.name,
+            }
+          : reason,
+      promise: promise.toString(),
+    });
 
-  // Cerrar el servidor gracefully
-  process.exit(1);
-});
+    // Cerrar el servidor gracefully
+    process.exit(1);
+  },
+);
 
 // Exportar middlewares para uso directo
 export const errorHandler = ErrorMiddleware.handle;
