@@ -1,5 +1,5 @@
 // src/commons/routes/user.routes.ts - Versión actualizada sin método deprecated
-import express, { Router } from 'express';
+import { Router } from 'express';
 import { UserController } from '@/commons/controllers/UserController';
 import {
   verifyToken,
@@ -8,9 +8,7 @@ import {
 } from '@/commons/middlewares/auth.middleware';
 import {
   createValidator,
-  validatePagination,
   requireBody,
-  validateCUID,
   sanitizeInput,
 } from '@/commons/middlewares/validation.middleware';
 import RateLimitMiddleware from '@/commons/middlewares/rateLimit.middleware';
@@ -20,7 +18,6 @@ import {
   validateUpdateAvatarBody,
   validateDeactivateUserBody,
   validateUserParams,
-  validateVerifyEmailTokenParams,
   UserParamsSchema,
   VerifyEmailTokenParamsSchema,
 } from '@/commons/validators/user.validator';

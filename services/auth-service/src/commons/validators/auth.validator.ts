@@ -3,9 +3,9 @@ import { z } from 'zod';
 import {
   VALIDATION_PATTERNS,
   SECURITY_CONFIG,
-  ERROR_MESSAGES,
   PASSWORD_VALIDATION,
 } from '@/utils/constants';
+import { Request, Response, NextFunction } from 'express';
 
 // Base Schemas - Reutilización y principio DRY
 const EmailSchema = z
@@ -189,7 +189,7 @@ class AuthValidationFactory {
   }
 
   static createBodyValidator<T extends z.ZodSchema>(schema: T) {
-    return (req: any, res: any, next: any) => {
+    return (req: Request, res: Response, next: NextFunction) => {
       try {
         req.body = schema.parse(req.body);
         next();
@@ -197,13 +197,13 @@ class AuthValidationFactory {
         if (error instanceof z.ZodError) {
           return res.status(400).json(this.createErrorResponse(error));
         }
-        next(error);
+        return next(error);
       }
     };
   }
 
   static createOptionalBodyValidator<T extends z.ZodSchema>(schema: T) {
-    return (req: any, res: any, next: any) => {
+    return (req: Request, res: Response, next: NextFunction) => {
       // Si no hay body, continúa sin validar
       if (!req.body || Object.keys(req.body).length === 0) {
         return next();
@@ -445,7 +445,7 @@ export class AuthValidationCompositor {
   static createConditionalValidator(conditions: {
     [key: string]: z.ZodSchema;
   }) {
-    return (req: any, res: any, next: any) => {
+    return (req: Request, res: Response, next: NextFunction) => {
       const operationType = req.body?.operationType || req.query?.type;
       const schema = conditions[operationType];
 
@@ -472,7 +472,7 @@ export class AuthValidationCompositor {
             })),
           });
         }
-        next(error);
+        return next(error);
       }
     };
   }
@@ -481,12 +481,14 @@ export class AuthValidationCompositor {
    * Combina múltiples validadores en uno solo
    */
   static combineValidators(
-    ...validators: Array<(req: any, res: any, next: any) => void>
+    ...validators: Array<
+      (req: Request, res: Response, next: NextFunction) => void
+    >
   ) {
-    return (req: any, res: any, next: any) => {
+    return (req: Request, res: Response, next: NextFunction) => {
       let currentIndex = 0;
 
-      const runNext = (error?: any) => {
+      const runNext = (error?: unknown) => {
         if (error) return next(error);
 
         if (currentIndex >= validators.length) {

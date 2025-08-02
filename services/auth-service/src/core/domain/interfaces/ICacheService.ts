@@ -168,14 +168,14 @@ export class CacheValidationHelpers {
 }
 
 // Wrapper decorator para validación automática (Open/Closed Principle)
-export function validateCacheMethod<T extends (...args: any[]) => any>(
-  target: any,
+export function validateCacheMethod<T extends (...args: unknown[]) => unknown>(
+  target: unknown,
   propertyName: string,
   descriptor: TypedPropertyDescriptor<T>,
 ): TypedPropertyDescriptor<T> | void {
   const method = descriptor.value!;
 
-  descriptor.value = function (this: any, ...args: any[]) {
+  descriptor.value = function (this: unknown, ...args: unknown[]) {
     // Aquí se puede agregar lógica de validación específica por método
     return method.apply(this, args);
   } as T;
@@ -183,7 +183,7 @@ export function validateCacheMethod<T extends (...args: any[]) => any>(
 
 // Tipos de utilidad para extender funcionalidad
 export type CacheKey = string;
-export type CacheValue<T = any> = T;
+export type CacheValue<T = unknown> = T;
 export type CacheTTL = number;
 
 // Enums para constantes del caché

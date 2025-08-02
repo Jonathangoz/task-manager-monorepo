@@ -1,5 +1,5 @@
 // src/core/infrastructure/repositories/UserRepository.ts - Repositorio de usuarios con logging estructurado y manejo de errores
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma, User as PrismaUser } from '@prisma/client';
 import { db } from '@/config/database';
 import { loggers, dbLogger } from '@/utils/logger';
 import { User } from '@/core/entities/User';
@@ -134,6 +134,7 @@ export class UserRepository implements IUserRepository {
         select: {
           id: true,
           email: true,
+          password: true,
           username: true,
           firstName: true,
           lastName: true,
@@ -243,6 +244,7 @@ export class UserRepository implements IUserRepository {
         select: {
           id: true,
           email: true,
+          password: true,
           username: true,
           firstName: true,
           lastName: true,
@@ -382,6 +384,7 @@ export class UserRepository implements IUserRepository {
         select: {
           id: true,
           email: true,
+          password: true,
           username: true,
           firstName: true,
           lastName: true,
@@ -525,6 +528,7 @@ export class UserRepository implements IUserRepository {
         select: {
           id: true,
           email: true,
+          password: true,
           username: true,
           firstName: true,
           lastName: true,
@@ -724,8 +728,7 @@ export class UserRepository implements IUserRepository {
         'Finding multiple users',
       );
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const where: any = {};
+      const where: Prisma.UserWhereInput = {};
 
       // Aplicar filtros
       if (filters?.isActive !== undefined) {
@@ -766,8 +769,7 @@ export class UserRepository implements IUserRepository {
       }
 
       // Configurar ordenamiento
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let orderBy: any = { createdAt: 'desc' };
+      let orderBy: Prisma.UserOrderByWithRelationInput = { createdAt: 'desc' };
       if (pagination?.sortBy) {
         const validSortFields = [
           'createdAt',
@@ -872,12 +874,12 @@ export class UserRepository implements IUserRepository {
         'Checking user existence',
       );
 
-      const where: any = {
+      const where: Prisma.UserWhereInput = {
         OR: [{ email: normalizedEmail }],
       };
 
       if (username) {
-        where.OR.push({ username });
+        where.OR?.push({ username });
       }
 
       const count = await this.database.user.count({ where });
@@ -1184,7 +1186,7 @@ export class UserRepository implements IUserRepository {
   /**
    * Mapear datos de Prisma a UserWithPassword
    */
-  private mapToUserWithPassword(prismaUser: any): UserWithPassword {
+  private mapToUserWithPassword(prismaUser: PrismaUser): UserWithPassword {
     try {
       return {
         id: prismaUser.id,
@@ -1217,7 +1219,9 @@ export class UserRepository implements IUserRepository {
   /**
    * Mapear datos de Prisma a UserWithoutPassword
    */
-  private mapToUserWithoutPassword(prismaUser: any): UserWithoutPassword {
+  private mapToUserWithoutPassword(
+    prismaUser: PrismaUser,
+  ): UserWithoutPassword {
     try {
       return {
         id: prismaUser.id,

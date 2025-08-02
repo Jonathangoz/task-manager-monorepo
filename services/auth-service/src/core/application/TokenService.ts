@@ -2,11 +2,7 @@
 
 import { SignJWT, jwtVerify, EncryptJWT, jwtDecrypt } from 'jose';
 import { createHash, randomBytes } from 'crypto';
-import {
-  ITokenService,
-  TokenOptions,
-  RefreshTokenData,
-} from '@/core/interfaces/ITokenService';
+import { ITokenService, TokenOptions } from '@/core/interfaces/ITokenService';
 import {
   TokenPayload,
   RefreshTokenPayload,
@@ -16,13 +12,7 @@ import { IUserRepository } from '@/core/interfaces/IUserRepository';
 import { ICacheService, CacheOptions } from '@/core/interfaces/ICacheService';
 import config from '@/config/environment';
 import { logger } from '@/utils/logger';
-import {
-  ERROR_CODES,
-  ERROR_MESSAGES,
-  TOKEN_CONFIG,
-  CACHE_KEYS,
-  CACHE_TTL,
-} from '@/utils/constants';
+import { ERROR_CODES, ERROR_MESSAGES, CACHE_KEYS } from '@/utils/constants';
 import { db } from '@/config/database';
 
 export class TokenService implements ITokenService {
@@ -114,11 +104,19 @@ export class TokenService implements ITokenService {
 
       return tokenPayload;
     } catch (error) {
-      if ((error as any).code === 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED') {
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        error.code === 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED'
+      ) {
         logger.warn({ err: error as Error }, 'Acceso del token fallido');
         throw new Error(ERROR_CODES.TOKEN_INVALID);
       }
-      if ((error as any).code === 'ERR_JWT_EXPIRED') {
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        error.code === 'ERR_JWT_EXPIRED'
+      ) {
         logger.warn(
           { err: error as Error },
           'Acceso de validación del token fallido: expirado',
@@ -248,14 +246,22 @@ export class TokenService implements ITokenService {
 
       return tokenPayload;
     } catch (error) {
-      if ((error as any).code === 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED') {
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        error.code === 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED'
+      ) {
         logger.warn(
           { err: error as Error },
           'verificación de refresh token fallida: firma inválida',
         );
         throw new Error(ERROR_CODES.REFRESH_TOKEN_INVALID);
       }
-      if ((error as any).code === 'ERR_JWT_EXPIRED') {
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        error.code === 'ERR_JWT_EXPIRED'
+      ) {
         logger.warn(
           { err: error as Error },
           'validacion de refresh token fallida: expirado',
