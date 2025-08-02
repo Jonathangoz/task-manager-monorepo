@@ -327,7 +327,7 @@ export class ValidationMiddleware {
     if (typeof obj === 'object') {
       const sanitized: any = {};
       for (const key in obj) {
-        if (obj.hasOwnProperty(key)) {
+        if (obj(key)) {
           sanitized[key] = ValidationMiddleware.sanitizeObject(obj[key]);
         }
       }

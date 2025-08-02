@@ -1,4 +1,4 @@
-# Render Blueprint corregido - variables directas
+# Render Blueprint corregido - HEALTH CHECKS OPTIMIZADOS
 services:
   # 🔐 Auth Service - Production
   - type: web
@@ -14,7 +14,12 @@ services:
       pnpm prisma:generate
       pnpm build
     startCommand: pnpm start:prod
-    healthCheckPath: /api/v1/health # ✅ CORREGIDO - path completo
+    # ✅ HEALTH CHECK PATH CORREGIDO - MÁS SIMPLE Y CONFIABLE
+    healthCheckPath: /api/v1/health
+    # ✅ CONFIGURACIÓN ADICIONAL PARA RENDER
+    healthCheckTimeout: 30s    # Timeout generoso para health checks
+    healthCheckInterval: 30s   # Verificar cada 30 segundos
+    healthCheckFailureThreshold: 5  # 5 fallos antes de marcar como unhealthy
     autoDeploy: true
     envVars:
       # Variables específicas del servicio
@@ -66,7 +71,7 @@ services:
 
       # 🔧 Logging y configuración - OPTIMIZADO PARA RENDER
       - key: LOG_LEVEL
-        value: 'info'
+        value: 'warn'  # ✅ Reducir logs para mejor performance
       - key: LOG_PRETTY
         value: 'false'
       - key: RATE_LIMIT_WINDOW_MS
@@ -80,13 +85,15 @@ services:
       - key: SWAGGER_ENABLED
         value: 'false' # ✅ Deshabilitado en producción
 
-      # ✅ TIMEOUTS OPTIMIZADOS PARA RENDER
+      # ✅ TIMEOUTS CRÍTICOS PARA RENDER - MÁS GENEROSOS
       - key: HTTP_REQUEST_TIMEOUT
-        value: '120000' # 2 minutos
+        value: '180000' # 3 minutos (más generoso)
       - key: HEALTH_CHECK_TIMEOUT
-        value: '5000' # 5 segundos
+        value: '10000'  # 10 segundos para health checks
       - key: DATABASE_TIMEOUT
-        value: '30000' # 30 segundos
+        value: '45000'  # 45 segundos para BD
+      - key: REDIS_TIMEOUT
+        value: '5000'   # 5 segundos para Redis
 
   # ✅ Task Service - Production
   - type: web
@@ -102,7 +109,12 @@ services:
       pnpm prisma:generate
       pnpm build
     startCommand: pnpm start:prod
-    healthCheckPath: /api/v1/health # ✅ CORREGIDO - path completo
+    # ✅ HEALTH CHECK PATH CORREGIDO
+    healthCheckPath: /api/v1/health
+    # ✅ CONFIGURACIÓN ADICIONAL PARA RENDER
+    healthCheckTimeout: 30s
+    healthCheckInterval: 30s
+    healthCheckFailureThreshold: 5
     autoDeploy: true
     envVars:
       # Variables específicas del servicio
@@ -134,7 +146,7 @@ services:
       - key: AUTH_SERVICE_API_KEY
         value: 'base64:2V9JFfBSkMoLGxi514RLAqhcfm5J6c50INEKK9cPaaI='
       - key: AUTH_SERVICE_TIMEOUT
-        value: '10000'
+        value: '15000'  # ✅ Más generoso para comunicación entre servicios
 
       # 🔑 JWT Configuration - MISMOS VALORES QUE AUTH
       - key: JWT_SECRET
@@ -160,7 +172,7 @@ services:
 
       # Variables de logging y configuración
       - key: LOG_LEVEL
-        value: 'info'
+        value: 'warn'  # ✅ Reducir logs
       - key: LOG_PRETTY
         value: 'false'
       - key: RATE_LIMIT_WINDOW_MS
@@ -174,13 +186,15 @@ services:
       - key: SWAGGER_ENABLED
         value: 'false' # ✅ Deshabilitado en producción
 
-      # ✅ TIMEOUTS OPTIMIZADOS PARA RENDER
+      # ✅ TIMEOUTS CRÍTICOS PARA RENDER
       - key: HTTP_REQUEST_TIMEOUT
-        value: '120000'
+        value: '180000'
       - key: HEALTH_CHECK_TIMEOUT
-        value: '5000'
+        value: '10000'
       - key: DATABASE_TIMEOUT
-        value: '30000'
+        value: '45000'
+      - key: REDIS_TIMEOUT
+        value: '5000'
 
   # Production Redis Cache
   - type: keyvalue

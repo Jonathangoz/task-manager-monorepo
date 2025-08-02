@@ -385,14 +385,38 @@ class App {
   private async initializeCoreMiddlewares(): Promise<void> {
     this.appLogger.info('Initializing core middlewares...');
 
-    // ✅ TIMEOUT OPTIMIZADO PARA RENDER - excluir health checks
+    // ✅ TIMEOUT MIDDLEWARE MEJORADO - EXCLUYE HEALTH CHECKS COMPLETAMENTE
     this.app.use((req: Request, res: Response, next: NextFunction) => {
-      // ✅ NO aplicar timeout a health checks (muy importante para Render)
+      // ✅ PATHS QUE NUNCA DEBEN TENER TIMEOUT (CRÍTICO PARA RENDER)
+      const noTimeoutPaths = [
+        '/health',
+        '/api/v1/health',
+        '/api/v1/health/ready',
+        '/api/v1/health/live',
+        '/api/v1/health/ping',
+        '/api/v1/health/status',
+        '/api/v1/health/healthz',
+        '/ping',
+        '/status',
+        '/healthz',
+        '/metrics',
+        '/', // Root también puede ser usado por Render
+      ];
+
+      // Verificar si es un health check (más flexible)
+      const isHealthCheck = noTimeoutPaths.some(
+        (path) =>
+          req.path === path ||
+          req.path.startsWith(path + '/') ||
+          req.url.includes('/health') ||
+          req.path.includes('/health'),
+      );
+
+      // ✅ SKIP TIMEOUT COMPLETAMENTE para health checks
       if (
-        req.path.includes('/health') ||
-        req.path.includes('/api/v1/health') ||
-        req.path === '/' ||
-        req.path.includes('/metrics')
+        isHealthCheck ||
+        (req as any).skipTimeout ||
+        (req as any).isHealthCheck
       ) {
         return next();
       }
@@ -402,7 +426,7 @@ class App {
       return timeout(timeoutValue)(req, res, next);
     });
 
-    // ✅ Compression optimizado
+    // ✅ Compression optimizado con exclusión de health checks
     this.app.use(
       compression({
         threshold: MIDDLEWARE_CONFIG?.COMPRESSION_THRESHOLD || 1024,
@@ -412,7 +436,11 @@ class App {
             return false;
           }
           // ✅ No comprimir health checks para mayor velocidad
-          if (req.path.includes('/health')) {
+          if (
+            req.path.includes('/health') ||
+            req.path === '/ping' ||
+            req.path === '/status'
+          ) {
             return false;
           }
           const contentType = res.getHeader('content-type');
@@ -437,10 +465,14 @@ class App {
       MIDDLEWARE_CONFIG?.MAX_REQUEST_SIZE || '10mb',
     );
 
-    // ✅ JSON parser optimizado
+    // ✅ JSON parser optimizado con exclusión de health checks
     this.app.use((req: Request, res: Response, next: NextFunction) => {
-      // ✅ Health checks no necesitan parsing JSON
-      if (req.path.includes('/health')) {
+      // ✅ Health checks no necesitan parsing JSON (más rápido)
+      if (
+        req.path.includes('/health') ||
+        req.path === '/ping' ||
+        req.path === '/status'
+      ) {
         return next();
       }
 
@@ -463,9 +495,13 @@ class App {
       })(req, res, next);
     });
 
-    // ✅ URL encoded parser optimizado
+    // ✅ URL encoded parser optimizado con exclusión de health checks
     this.app.use((req: Request, res: Response, next: NextFunction) => {
-      if (req.path.includes('/health')) {
+      if (
+        req.path.includes('/health') ||
+        req.path === '/ping' ||
+        req.path === '/status'
+      ) {
         return next();
       }
 

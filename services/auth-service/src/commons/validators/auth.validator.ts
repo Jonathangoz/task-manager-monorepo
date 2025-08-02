@@ -318,7 +318,7 @@ export class AuthValidationUtils {
   static sanitizeInput(input: string): string {
     return input
       .trim()
-      .replace(/[<>\"'%;()&+]/g, '') // Remover caracteres peligrosos
+      .replace(/[<>"'%;()&+]/g, '') // Remover caracteres peligrosos
       .substring(0, 500); // Limitar longitud
   }
 
