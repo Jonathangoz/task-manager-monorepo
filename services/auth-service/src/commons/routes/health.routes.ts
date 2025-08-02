@@ -50,13 +50,14 @@ export class HealthRoutes {
     );
 
     /**
-     * GET / (root health check)
-     * Render también puede verificar la raíz del health check
+     * HEALTH CHECK PRINCIPAL PARA RENDER.
+     * GET /health (mapeado a /api/v1/health en app.ts)
+     * Responde INMEDIATAMENTE si el proceso Node.js está vivo.
      */
     router.get(
-      '/',
+      '/', // La ruta base, que se convertirá en /api/v1/health
       healthCheckMiddleware,
-      asyncHandler(healthController.basicHealthCheck.bind(healthController)),
+      asyncHandler(healthController.livenessCheck.bind(healthController)),
     );
 
     /**
@@ -72,9 +73,8 @@ export class HealthRoutes {
     // === KUBERNETES-STYLE PROBES ===
 
     /**
+     * READINESS PROBE - Para que Render sepa cuándo el servicio puede aceptar tráfico real.
      * GET /health/ready
-     * Readiness probe - verifica dependencias críticas con timeouts mínimos
-     * Usado por Render para determinar si el servicio está listo
      */
     router.get(
       '/ready',
@@ -305,6 +305,7 @@ export class HealthRoutes {
         message: `Health endpoint ${req.originalUrl} not found`,
         availableEndpoints: environment.app.isProduction
           ? [
+              '/',
               '/health',
               '/health/ready',
               '/health/live',
@@ -313,6 +314,7 @@ export class HealthRoutes {
               '/healthz',
             ]
           : [
+              '/',
               '/health',
               '/health/ready',
               '/health/live',

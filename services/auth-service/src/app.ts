@@ -8,7 +8,6 @@ import { HelmetOptions } from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
-import timeout from 'connect-timeout';
 import swaggerUi from 'swagger-ui-express';
 import { z } from 'zod';
 import rateLimit, { RateLimitRequestHandler } from 'express-rate-limit';
@@ -26,12 +25,7 @@ import {
   securityLogger,
   createContextLogger,
 } from '@/utils/logger';
-import {
-  swaggerSpec,
-  swaggerUiOptions,
-  validateSwaggerSpec,
-  getSwaggerInfo,
-} from '@/utils/swagger';
+import { swaggerSpec, swaggerUiOptions, getSwaggerInfo } from '@/utils/swagger';
 import {
   REQUEST_HEADERS,
   MIDDLEWARE_CONFIG,
@@ -43,23 +37,14 @@ import {
   errorHandler,
   notFoundHandler,
   payloadTooLargeHandler,
-  timeoutHandler,
   jsonErrorHandler,
 } from '@/commons/middlewares/error.middleware';
 
 // Services and Dependencies
-import { UserService } from '@/core/application/UserService';
-import { AuthService } from '@/core/application/AuthService';
-import { TokenService } from '@/core/application/TokenService';
 import { UserController } from '@/commons/controllers/UserController';
 import { UserRoutes } from '@/commons/routes/user.routes';
 import { AuthRoutes } from '@/commons/routes/auth.routes';
 import { HealthRoutes } from '@/commons/routes/health.routes';
-
-// Infrastructure
-import { db } from '@/config/database';
-import { RedisCache } from '@/core/infrastructure/cache/RedisCache';
-import { UserRepository } from '@/core/infrastructure/repositories/UserRepository';
 
 // Interfaces
 import { IUserService } from '@/core/interfaces/IUserService';
@@ -205,23 +190,29 @@ class App {
         swaggerEnabled: environment.features?.swaggerEnabled,
       });
 
-      await this.validateConfiguration();
-      await this.initializeServices();
+      // Registrar el contexto y el router de health checks PRIMERO
+      this.initializePreSecurityMiddlewares();
+      this.initializeHealthRoutes();
+
+      // Registrar los middlewares de seguridad pesados
       await this.initializeSecurityMiddlewares();
+
+      //  await this.validateConfiguration();
+      //  await this.initializeServices();
       await this.initializeCoreMiddlewares();
       await this.initializeValidationMiddlewares();
       await this.initializeRoutes();
       this.initializeSwagger();
       this.initializeErrorHandling();
 
-      this.appLogger.info('Auth Service application initialized successfully');
+      this.appLogger.info('Auth Service aplicacion iniciada exitosamente');
     } catch (error) {
-      this.appLogger.fatal('Failed to initialize application', { error });
+      this.appLogger.fatal('Fallo al iniciar la aplicación', { error });
       process.exit(1);
     }
   }
 
-  private async initializeServices(): Promise<void> {
+  /*  private async initializeServices(): Promise<void> {
     this.appLogger.info('Initializing services and dependencies...');
 
     try {
@@ -289,7 +280,7 @@ class App {
       this.appLogger.error('Configuration validation failed', { error });
       throw error;
     }
-  }
+  } */
 
   private buildSecurityConfig(): SecurityConfig {
     // Fix: Definir helmetOptions como HelmetOptions en lugar de usar typeof
@@ -424,10 +415,20 @@ class App {
     };
   }
 
-  private async initializeSecurityMiddlewares(): Promise<void> {
-    this.appLogger.info('Initializing security middlewares...');
-
+  private initializePreSecurityMiddlewares(): void {
     this.app.set('trust proxy', environment.app.isProduction ? 1 : 1);
+    this.app.use(this.requestContextMiddleware.bind(this));
+  }
+
+  private initializeHealthRoutes(): void {
+    this.appLogger.info('Initializing health check routes (pre-security)...');
+    const apiVersion = `/api/${environment.app.apiVersion}`;
+    this.app.use(`${apiVersion}/health`, HealthRoutes.routes);
+  }
+
+  private async initializeSecurityMiddlewares(): Promise<void> {
+    this.appLogger.info('Inicializando Middleware sw Seguridad...');
+
     this.app.use(helmet(this.securityConfig.helmet));
     this.app.use(cors(this.securityConfig.cors));
 
@@ -436,8 +437,7 @@ class App {
       this.app.use(this.securityConfig.rateLimit);
     }
 
-    this.app.use(this.requestContextMiddleware.bind(this));
-    this.appLogger.info('Security middlewares initialized successfully');
+    this.appLogger.info('Middleware de Seguridad Iniciado Exitosamente');
   }
 
   private async initializeCoreMiddlewares(): Promise<void> {
@@ -478,10 +478,6 @@ class App {
       ) {
         return next();
       }
-
-      // ✅ Timeout más generoso para requests normales en cloud
-      const timeoutValue = environment.app.isProduction ? '120000' : '30000'; // 2 min en prod, 30s en dev
-      return timeout(timeoutValue)(req, res, next);
     });
 
     // ✅ Compression optimizado con exclusión de health checks
@@ -575,7 +571,6 @@ class App {
     this.setupMorganLogging();
     this.app.use(jsonErrorHandler);
     this.app.use(payloadTooLargeHandler);
-    this.app.use(timeoutHandler);
     this.app.use(this.requestLoggingMiddleware.bind(this));
 
     this.appLogger.info('Core middlewares initialized successfully');
@@ -812,11 +807,10 @@ class App {
   }
 
   private async initializeRoutes(): Promise<void> {
-    this.appLogger.info('Initializing routes...');
+    this.appLogger.info('Inicializando Rutas...');
 
     const apiVersion = `/api/${environment.app.apiVersion}`;
 
-    this.app.use(`${apiVersion}/health`, HealthRoutes.routes);
     this.app.get('/', this.createRootHandler());
 
     try {
@@ -1212,7 +1206,6 @@ export type ServiceDependenciesType = ServiceDependencies;
 
 // CONSTANTES DE CONFIGURACIÓN
 export const APP_CONSTANTS = {
-  DEFAULT_TIMEOUT: '30s',
   MAX_REQUEST_SIZE: '10mb',
   COMPRESSION_THRESHOLD: 1024,
   RATE_LIMIT_WINDOW: 15 * 60 * 1000,

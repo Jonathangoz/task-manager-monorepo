@@ -27,6 +27,7 @@ class AuthServer {
   private readonly serverLogger = createContextLogger({ component: 'server' });
   private consecutiveHealthCheckFailures = 0;
   private isInitialized = false;
+  public isReady = false;
 
   constructor() {
     this.app = new App();
@@ -37,32 +38,38 @@ class AuthServer {
     try {
       startup.serviceStarted(environment.app.port, environment.app.env);
 
-      // ✅ Inicializar dependencias con mejor manejo de errores
-      await this.initializeDependencies();
-
-      // ✅ Configurar trabajos de limpieza DESPUÉS de inicializar
-      this.setupCleanupJobs();
-
-      // ✅ Iniciar servidor HTTP con configuración optimizada
+      // Iniciar el servidor HTTP INMEDIATAMENTE.
       await this.startHttpServer();
 
-      // ✅ Configurar shutdown graceful
+      // Inicializar dependencias en segundo plano. No bloquea el loop de eventos.
+      this.initializeDependencies()
+        .then(() => {
+          this.isReady = true; // Marcar como listo cuando todo esté conectado
+          this.serverLogger.info(
+            'All dependencies are initialized. Service is fully ready.',
+          );
+          // Configurar trabajos de limpieza DESPUÉS de que todo esté listo.
+          this.setupCleanupJobs();
+        })
+        .catch((error) => {
+          this.serverLogger.fatal(
+            'Failed to initialize dependencies in background. Shutting down.',
+            { error },
+          );
+          this.shutdown(1);
+        });
+
+      // ✅ PASO 4: Configurar el apagado graceful.
       this.setupGracefulShutdown();
 
       this.isInitialized = true;
-
-      this.serverLogger.info('Auth Service started successfully', {
-        port: environment.app.port,
-        env: environment.app.env,
-        apiVersion: environment.app.apiVersion,
-        logLevel: environment.logging.level,
-        features: {
-          healthCheck: environment.features.healthCheckEnabled,
-          swagger: environment.features.swaggerEnabled,
-          emailVerification: environment.features.emailVerificationEnabled,
+      this.serverLogger.info(
+        'Auth Service HTTP server started. Initializing dependencies in background...',
+        {
+          port: environment.app.port,
+          env: environment.app.env,
         },
-        memory: this.getMemoryUsage(),
-      });
+      );
     } catch (error) {
       this.serverLogger.fatal('Failed to start Auth Service', {
         error:
@@ -85,6 +92,12 @@ class AuthServer {
 
     // Inicializar Redis (no crítico - puede fallar)
     await this.initializeRedis();
+    this.isReady = true;
+  }
+
+  // Método para que el exterior pueda consultar el estado
+  public isServiceReady(): boolean {
+    return this.isReady;
   }
 
   private async initializeDatabase(): Promise<void> {
@@ -536,7 +549,9 @@ class AuthServer {
     const services = {
       database: false,
       redis: false,
-      server: false,
+      // El servidor está "vivo" si está escuchando, pero "saludable" solo si está listo.
+      server:
+        this.server !== null && this.server.listening && !this.isShuttingDown,
     };
 
     try {
@@ -588,8 +603,8 @@ class AuthServer {
         }
       }
 
-      // ✅ Considerar saludable si servidor y DB funcionan
-      const isHealthy = services.server && services.database;
+      // ✅ Considerar saludable si servidor
+      const isHealthy = services.server && this.isReady;
       const memUsage = process.memoryUsage();
 
       return {
@@ -629,6 +644,16 @@ class AuthServer {
         },
       };
     }
+  }
+
+  // Método para que los health checks de liveness funcionen
+  public isServerListening(): boolean {
+    return (
+      this.isInitialized &&
+      this.server !== null &&
+      this.server.listening &&
+      !this.isShuttingDown
+    );
   }
 
   // ✅ UTILIDADES PRIVADAS
@@ -715,5 +740,6 @@ if (require.main === module) {
   });
 }
 
+//const authServer = new AuthServer();
 export default authServer;
 export { AuthServer };

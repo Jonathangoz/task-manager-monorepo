@@ -16,7 +16,7 @@ const envSchema = z.object({
     .string()
     .transform((val) => parseInt(val, 10))
     .pipe(z.number().positive())
-    .default('3001'),
+    .default('process.env.PORT'),
   API_VERSION: z.string().default('v1'),
 
   // DATABASE CONFIGURATION
