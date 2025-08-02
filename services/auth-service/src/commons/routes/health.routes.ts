@@ -1,8 +1,18 @@
 // src/commons/routes/health.routes.ts - OPTIMIZADO PARA RENDER.COM
-import express, { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { HealthController } from '@/commons/controllers/HealthController';
 import { asyncHandler } from '@/commons/middlewares/error.middleware';
 import { environment } from '@/config/environment';
+
+// ✅ FIX: Definir interfaces para los parámetros del middleware
+interface HealthCheckRequest extends Request {
+  isHealthCheck?: boolean;
+  skipTimeout?: boolean;
+}
+
+interface HealthCheckError extends Error {
+  statusCode?: number;
+}
 
 export class HealthRoutes {
   static get routes(): Router {
@@ -10,7 +20,11 @@ export class HealthRoutes {
     const healthController = new HealthController();
 
     // ✅ MIDDLEWARE ESPECIAL PARA HEALTH CHECKS - SIN TIMEOUT
-    const healthCheckMiddleware = (req: any, res: any, next: any) => {
+    const healthCheckMiddleware = (
+      req: HealthCheckRequest,
+      res: Response,
+      next: NextFunction,
+    ) => {
       // Marcar como health check para evitar timeouts y logging excesivo
       req.isHealthCheck = true;
       req.skipTimeout = true;
@@ -80,35 +94,43 @@ export class HealthRoutes {
      * GET /ping
      * Endpoint super simple para verificaciones rápidas
      */
-    router.get('/ping', healthCheckMiddleware, (req, res) => {
-      res.status(200).json({
-        success: true,
-        status: 'pong',
-        timestamp: new Date().toISOString(),
-        uptime: Math.floor(process.uptime()),
-      });
-    });
+    router.get(
+      '/ping',
+      healthCheckMiddleware,
+      (req: Request, res: Response) => {
+        res.status(200).json({
+          success: true,
+          status: 'pong',
+          timestamp: new Date().toISOString(),
+          uptime: Math.floor(process.uptime()),
+        });
+      },
+    );
 
     /**
      * GET /status
      * Status simple sin verificaciones externas
      */
-    router.get('/status', healthCheckMiddleware, (req, res) => {
-      const memUsage = process.memoryUsage();
-      res.status(200).json({
-        success: true,
-        status: 'ok',
-        service: 'auth-service',
-        version: environment.app.apiVersion || '1.0.0',
-        environment: environment.app.env,
-        uptime: Math.floor(process.uptime()),
-        memory: {
-          used: Math.round(memUsage.heapUsed / 1024 / 1024),
-          total: Math.round(memUsage.heapTotal / 1024 / 1024),
-        },
-        timestamp: new Date().toISOString(),
-      });
-    });
+    router.get(
+      '/status',
+      healthCheckMiddleware,
+      (req: Request, res: Response) => {
+        const memUsage = process.memoryUsage();
+        res.status(200).json({
+          success: true,
+          status: 'ok',
+          service: 'auth-service',
+          version: environment.app.apiVersion || '1.0.0',
+          environment: environment.app.env,
+          uptime: Math.floor(process.uptime()),
+          memory: {
+            used: Math.round(memUsage.heapUsed / 1024 / 1024),
+            total: Math.round(memUsage.heapTotal / 1024 / 1024),
+          },
+          timestamp: new Date().toISOString(),
+        });
+      },
+    );
 
     // === HEALTH CHECKS DETALLADOS (solo en desarrollo/staging) ===
     if (!environment.app.isProduction) {
@@ -170,20 +192,28 @@ export class HealthRoutes {
     }
 
     // ✅ HANDLER DE ERRORES ESPECÍFICO PARA HEALTH CHECKS
-    router.use((error: unknown, req: unknown, res: unknown, next: unknown) => {
-      // Si es un health check, responder rápido sin logs detallados
-      if (req.isHealthCheck) {
-        const statusCode = error.statusCode || 503;
-        return res.status(statusCode).json({
-          success: false,
-          status: 'unhealthy',
-          error: error.message || 'Service temporarily unavailable',
-          timestamp: new Date().toISOString(),
-          uptime: Math.floor(process.uptime()),
-        });
-      }
-      next(error);
-    });
+    router.use(
+      (
+        error: HealthCheckError,
+        req: HealthCheckRequest,
+        res: Response,
+        next: NextFunction,
+      ): void => {
+        // Si es un health check, responder rápido sin logs detallados
+        if (req.isHealthCheck) {
+          const statusCode = error.statusCode || 503;
+          res.status(statusCode).json({
+            success: false,
+            status: 'unhealthy',
+            error: error.message || 'Service temporarily unavailable',
+            timestamp: new Date().toISOString(),
+            uptime: Math.floor(process.uptime()),
+          });
+          return;
+        }
+        next(error);
+      },
+    );
 
     return router;
   }

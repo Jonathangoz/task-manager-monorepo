@@ -16,10 +16,6 @@ services:
     startCommand: pnpm start:prod
     # ✅ HEALTH CHECK PATH CORREGIDO - MÁS SIMPLE Y CONFIABLE
     healthCheckPath: /api/v1/health
-    # ✅ CONFIGURACIÓN ADICIONAL PARA RENDER
-    healthCheckTimeout: 30s    # Timeout generoso para health checks
-    healthCheckInterval: 30s   # Verificar cada 30 segundos
-    healthCheckFailureThreshold: 5  # 5 fallos antes de marcar como unhealthy
     autoDeploy: true
     envVars:
       # Variables específicas del servicio
@@ -111,10 +107,6 @@ services:
     startCommand: pnpm start:prod
     # ✅ HEALTH CHECK PATH CORREGIDO
     healthCheckPath: /api/v1/health
-    # ✅ CONFIGURACIÓN ADICIONAL PARA RENDER
-    healthCheckTimeout: 30s
-    healthCheckInterval: 30s
-    healthCheckFailureThreshold: 5
     autoDeploy: true
     envVars:
       # Variables específicas del servicio
