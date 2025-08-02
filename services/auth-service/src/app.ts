@@ -4,13 +4,14 @@
 import express, { Request, Response, NextFunction, Application } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import { HelmetOptions } from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import timeout from 'connect-timeout';
 import swaggerUi from 'swagger-ui-express';
 import { z } from 'zod';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { RateLimitRequestHandler } from 'express-rate-limit';
 import slowDown from 'express-slow-down';
 
 // Import tipos personalizados
@@ -69,10 +70,15 @@ import { ICacheService } from '@/core/interfaces/ICacheService';
 
 // INTERFACES Y TIPOS
 interface SecurityConfig {
-  helmet: any;
+  helmet: HelmetOptions;
   cors: cors.CorsOptions;
-  rateLimit: any;
-  slowDown: any;
+  rateLimit: RateLimitRequestHandler;
+  slowDown: (req: Request, res: Response, next: NextFunction) => void;
+}
+
+interface ExtendedRequest extends Request {
+  skipTimeout?: boolean;
+  isHealthCheck?: boolean;
 }
 
 interface ServiceDependencies {
@@ -82,6 +88,57 @@ interface ServiceDependencies {
   userService: IUserService;
   authService: IAuthService;
 }
+
+interface JsonRequest extends Request {
+  headers: Request['headers'] & {
+    'content-length'?: string;
+  };
+}
+
+interface CacheServiceWithClose extends ICacheService {
+  close?: () => Promise<void>;
+}
+
+interface AuthenticatedRequest extends Request {
+  user?: {
+    id: string;
+    email: string;
+    username: string;
+    sessionId: string;
+    iat: number;
+    exp: number;
+  };
+}
+
+interface SlowDownOptions {
+  windowMs?: number;
+  delayAfter?: number;
+  delayMs?: number | ((hits: number) => number);
+  maxDelayMs?: number;
+  skipFailedRequests?: boolean;
+  skipSuccessfulRequests?: boolean;
+  keyGenerator?: (req: Request) => string;
+  skip?: (req: Request) => boolean;
+  onLimitReached?: (
+    req: Request,
+    res: Response,
+    options: SlowDownOptions,
+  ) => void;
+}
+
+// Interface para Express Router Stack (Fix para ExpressAppWithRouter)
+interface RouterLayer {
+  route?: unknown;
+}
+
+interface ExpressRouter {
+  stack?: RouterLayer[];
+}
+
+// Fix: Hacer _router opcional para no conflictar con Application
+type ExpressAppWithRouter = Application & {
+  _router?: ExpressRouter;
+};
 
 // ESQUEMAS ZOD PARA VALIDACIÓN
 const RequestHeadersSchema = z.object({
@@ -235,7 +292,8 @@ class App {
   }
 
   private buildSecurityConfig(): SecurityConfig {
-    const helmetConfig = environment.app.isProduction
+    // Fix: Definir helmetOptions como HelmetOptions en lugar de usar typeof
+    const helmetOptions: HelmetOptions = environment.app.isProduction
       ? {
           contentSecurityPolicy: {
             directives: {
@@ -333,14 +391,14 @@ class App {
       },
       standardHeaders: true,
       legacyHeaders: false,
-      handler: (req: Request, res: Response) => {
+      handler: (req: Request, _res: Response) => {
         securityLogger.warn('Rate limit exceeded', {
           ip: req.ip,
           userAgent: req.get('User-Agent'),
           path: req.path,
           method: req.method,
         });
-        res.status(429).json({
+        _res.status(429).json({
           success: false,
           message: 'Too many requests, please try again later',
           error: { code: 'RATE_LIMIT_EXCEEDED' },
@@ -351,7 +409,7 @@ class App {
       },
     });
 
-    const slowDownConfig = slowDown({
+    const slowDownOptions = slowDown({
       windowMs: 15 * 60 * 1000,
       delayAfter: 50,
       delayMs: (hits) => hits * 100,
@@ -359,10 +417,10 @@ class App {
     });
 
     return {
-      helmet: helmetConfig,
+      helmet: helmetOptions,
       cors: corsConfig,
       rateLimit: rateLimitConfig,
-      slowDown: slowDownConfig,
+      slowDown: slowDownOptions,
     };
   }
 
@@ -415,8 +473,8 @@ class App {
       // ✅ SKIP TIMEOUT COMPLETAMENTE para health checks
       if (
         isHealthCheck ||
-        (req as any).skipTimeout ||
-        (req as any).isHealthCheck
+        (req as ExtendedRequest).skipTimeout ||
+        (req as ExtendedRequest).isHealthCheck
       ) {
         return next();
       }
@@ -480,7 +538,7 @@ class App {
         limit: maxRequestSizeBytes,
         strict: true,
         type: ['application/json', 'application/*+json'],
-        verify: (req: any, res: Response, buf: Buffer) => {
+        verify: (req: JsonRequest, _res: Response, buf: Buffer) => {
           if (buf && buf.length === 0) {
             throw new Error('Request body cannot be empty');
           }
@@ -536,8 +594,11 @@ class App {
       'real-ip',
       (req: Request) => (req as AppRequest).clientIp || req.ip || 'unknown',
     );
-    morgan.token('user-id', (req: any) => req.user?.id || 'anonymous');
-    morgan.token('response-time-ms', (req: Request, res: Response) => {
+    morgan.token(
+      'user-id',
+      (req: AuthenticatedRequest) => req.user?.id || 'anonymous',
+    );
+    morgan.token('response-time-ms', (req: Request, _res: Response) => {
       const startTime = (req as AppRequest).startTime || Date.now();
       return `${Date.now() - startTime}ms`;
     });
@@ -594,7 +655,7 @@ class App {
   private async initializeValidationMiddlewares(): Promise<void> {
     this.appLogger.info('Initializing validation middlewares...');
 
-    this.app.use((req: Request, res: Response, next: NextFunction) => {
+    this.app.use((req: Request, _res: Response, next: NextFunction) => {
       try {
         const headers = {
           'user-agent': req.get('user-agent'),
@@ -922,20 +983,23 @@ class App {
   }
 
   private setupGracefulShutdown(): void {
-    process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
-      this.appLogger.fatal('Unhandled Promise Rejection detected', {
-        reason:
-          reason instanceof Error
-            ? {
-                message: reason.message,
-                stack: reason.stack,
-                name: reason.name,
-              }
-            : reason,
-        promise: promise.toString(),
-      });
-      setTimeout(() => process.exit(1), 1000);
-    });
+    process.on(
+      'unhandledRejection',
+      (reason: unknown, promise: Promise<unknown>) => {
+        this.appLogger.fatal('Unhandled Promise Rejection detected', {
+          reason:
+            reason instanceof Error
+              ? {
+                  message: reason.message,
+                  stack: reason.stack,
+                  name: reason.name,
+                }
+              : reason,
+          promise: promise.toString(),
+        });
+        setTimeout(() => process.exit(1), 1000);
+      },
+    );
 
     process.on('uncaughtException', (error: Error) => {
       this.appLogger.fatal('Uncaught Exception detected', {
@@ -980,11 +1044,10 @@ class App {
         memoryUsage: process.memoryUsage(),
       });
 
-      if (
-        this.services.cacheService &&
-        typeof (this.services.cacheService as any).close === 'function'
-      ) {
-        await (this.services.cacheService as any).close();
+      // Fix: Verificar que el servicio existe y tiene el método close antes de llamarlo
+      const cacheService = this.services.cacheService as CacheServiceWithClose;
+      if (cacheService && typeof cacheService.close === 'function') {
+        await cacheService.close();
       }
 
       shutdownLogger.info('Graceful shutdown completed successfully');
@@ -1058,8 +1121,9 @@ class App {
   }
 
   private getRoutesCount(): number {
-    const stack = (this.app as any)._router?.stack || [];
-    return stack.filter((layer: any) => layer.route).length;
+    const app = this.app as ExpressAppWithRouter;
+    const stack = app._router?.stack || [];
+    return stack.filter((layer: RouterLayer) => layer.route).length;
   }
 
   public getApp(): Application {

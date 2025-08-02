@@ -1,6 +1,5 @@
 // src/presentation/middlewares/rateLimit.middleware.ts
 import { Request, Response, NextFunction } from 'express';
-import { AuthenticatedRequest } from '@/typeExpress/express';
 import { RedisCache } from '@/core/cache/RedisCache';
 import { securityLogger, logger } from '@/utils/logger';
 import { environment } from '@/config/environment';
@@ -9,8 +8,6 @@ import {
   ERROR_CODES,
   ERROR_MESSAGES,
   CACHE_KEYS,
-  CACHE_TTL,
-  SECURITY_CONFIG,
   RATE_LIMIT_CONFIG,
 } from '@/utils/constants';
 
@@ -271,7 +268,6 @@ export class RateLimitMiddleware {
     maxRequests: number,
   ): Promise<RateLimitInfo> {
     const now = Date.now();
-    const windowStart = now - windowMs;
 
     try {
       const isHealthy = await RateLimitMiddleware.cache.healthCheck();
@@ -299,7 +295,6 @@ export class RateLimitMiddleware {
       windowMs,
       maxRequests,
       now,
-      windowStart,
     );
   }
 
@@ -338,10 +333,8 @@ export class RateLimitMiddleware {
     windowMs: number,
     maxRequests: number,
     now: number,
-    windowStart: number,
   ): RateLimitInfo {
-    // Limpiar entradas expiradas
-    RateLimitMiddleware.cleanExpiredEntries(windowStart);
+    const windowStart = now - windowMs;
 
     // Obtener o crear info de rate limit
     let limitInfo = rateLimitStore.get(key);
@@ -362,17 +355,6 @@ export class RateLimitMiddleware {
     rateLimitStore.set(key, limitInfo);
 
     return limitInfo;
-  }
-
-  /**
-   * Limpia entradas expiradas del store en memoria
-   */
-  private static cleanExpiredEntries(windowStart: number): void {
-    for (const [key, info] of rateLimitStore.entries()) {
-      if (info.resetTime < Date.now()) {
-        rateLimitStore.delete(key);
-      }
-    }
   }
 
   /**

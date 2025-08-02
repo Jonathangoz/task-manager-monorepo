@@ -1,13 +1,11 @@
 // src/commons/controllers/UserController.ts
 import { Request, Response, NextFunction } from 'express';
-import { AuthenticatedRequest } from '@/typeExpress/express';
 import { IUserService } from '@/core/interfaces/IUserService';
 import { IAuthService } from '@/core/interfaces/IAuthService';
 import { logger } from '@/utils/logger';
 import {
   HTTP_STATUS,
   ERROR_CODES,
-  SUCCESS_MESSAGES,
   ERROR_MESSAGES,
   DEFAULT_VALUES,
 } from '@/utils/constants';

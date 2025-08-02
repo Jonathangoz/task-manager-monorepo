@@ -112,7 +112,7 @@ export interface IUserService {
     limit?: number;
     filters?: UserFilters;
   }): Promise<{
-    users: any[];
+    users: unknown[];
     pagination: {
       page: number;
       limit: number;

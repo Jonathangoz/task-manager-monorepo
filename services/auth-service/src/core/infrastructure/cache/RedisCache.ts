@@ -13,7 +13,6 @@ import {
   CACHE_KEYS,
   CACHE_TTL,
   ERROR_CODES,
-  SECURITY_CONFIG,
   TIMEOUT_CONFIG,
 } from '@/utils/constants';
 
@@ -494,7 +493,7 @@ export class RedisCache implements ICacheService {
 
   async storeSession(
     sessionId: string,
-    sessionData: any,
+    sessionData: unknown,
     ttl: number,
   ): Promise<void> {
     try {
@@ -591,7 +590,7 @@ export class RedisCache implements ICacheService {
 
   async storeRefreshToken(
     tokenId: string,
-    tokenData: any,
+    tokenData: unknown,
     ttl: number,
   ): Promise<void> {
     try {
@@ -781,10 +780,7 @@ export class RedisCache implements ICacheService {
       const key = CACHE_KEYS.LOGIN_ATTEMPTS(validatedEmail);
       const windowSeconds = CACHE_TTL.LOGIN_ATTEMPTS;
 
-      const result = await this.incrementRateLimit(
-        validatedEmail,
-        windowSeconds,
-      );
+      const result = await this.incrementRateLimit(key, windowSeconds);
 
       redisLogger.info(
         {
@@ -1004,7 +1000,7 @@ export class RedisCache implements ICacheService {
    */
   async setUserSession(
     sessionId: string,
-    sessionData: any,
+    sessionData: unknown,
     ttlSeconds?: number,
   ): Promise<void> {
     const ttl = ttlSeconds || CACHE_TTL.USER_SESSION;
@@ -1030,7 +1026,7 @@ export class RedisCache implements ICacheService {
    */
   async setRefreshToken(
     tokenId: string,
-    tokenData: any,
+    tokenData: unknown,
     ttlSeconds?: number,
   ): Promise<void> {
     const ttl = ttlSeconds || CACHE_TTL.REFRESH_TOKEN;
@@ -1126,7 +1122,7 @@ export class RedisCache implements ICacheService {
 
   async setUserProfile(
     userId: string,
-    profile: any,
+    profile: unknown,
     ttlSeconds?: number,
   ): Promise<void> {
     try {

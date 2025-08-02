@@ -6,6 +6,7 @@ import {
   DEFAULT_VALUES,
   PASSWORD_VALIDATION,
 } from '@/utils/constants';
+import { Request, Response, NextFunction } from 'express';
 
 // ============================================================================
 // Base Schemas - Principio DRY y reutilización
@@ -235,7 +236,7 @@ export const DeactivateUserBodySchema = z.object({
 
 class ValidationFactory {
   static createQueryValidator<T extends z.ZodSchema>(schema: T) {
-    return (req: any, res: any, next: any) => {
+    return (req: Request, res: Response, next: NextFunction) => {
       try {
         req.query = schema.parse(req.query);
         next();
@@ -251,13 +252,13 @@ class ValidationFactory {
             })),
           });
         }
-        next(error);
+        return next(error);
       }
     };
   }
 
   static createParamsValidator<T extends z.ZodSchema>(schema: T) {
-    return (req: any, res: any, next: any) => {
+    return (req: Request, res: Response, next: NextFunction) => {
       try {
         req.params = schema.parse(req.params);
         next();
@@ -273,13 +274,13 @@ class ValidationFactory {
             })),
           });
         }
-        next(error);
+        return next(error);
       }
     };
   }
 
   static createBodyValidator<T extends z.ZodSchema>(schema: T) {
-    return (req: any, res: any, next: any) => {
+    return (req: Request, res: Response, next: NextFunction) => {
       try {
         req.body = schema.parse(req.body);
         next();
@@ -295,7 +296,7 @@ class ValidationFactory {
             })),
           });
         }
-        next(error);
+        return next(error);
       }
     };
   }

@@ -249,7 +249,7 @@ export class UserService implements IUserService {
       }
 
       // Actualizar en la base de datos
-      const updatedUserData = await this.userRepository.update(id, data);
+      await this.userRepository.update(id, data);
 
       // Convertir a entidad User (necesitamos obtener con password)
       const userWithPassword =
@@ -290,7 +290,7 @@ export class UserService implements IUserService {
       }
 
       // Actualizar en la base de datos
-      const updatedUserData = await this.userRepository.update(id, data);
+      await this.userRepository.update(id, data);
 
       // Convertir a entidad User (necesitamos obtener con password)
       const userWithPassword =
@@ -614,13 +614,13 @@ export class UserService implements IUserService {
   /**
    * Verificar email con token
    */
-  async verifyEmail(userId: string, token: string): Promise<void> {
+  async verifyEmail(userId: string, _token: string): Promise<void> {
     try {
       logger.info({ userId }, 'Verifying user email with token');
 
       // TODO: Implementar validación de token cuando esté disponible
 
-      const updatedUser = await this.update(userId, { isVerified: true });
+      await this.update(userId, { isVerified: true });
 
       logger.info({ userId }, 'User email verified successfully');
     } catch (error) {

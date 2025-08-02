@@ -1,6 +1,5 @@
 // src/presentation/middlewares/validation.middleware.ts
 import { Request, Response, NextFunction } from 'express';
-import { AuthenticatedRequest } from '@/typeExpress/express';
 import { z } from 'zod';
 import { logger } from '@/utils/logger';
 import {
@@ -10,7 +9,6 @@ import {
   DEFAULT_VALUES,
   VALIDATION_PATTERNS,
 } from '@/utils/constants';
-import { AppError } from './error.middleware';
 
 interface ValidationRequest extends Request {
   correlationId?: string;
@@ -101,7 +99,7 @@ export class ValidationMiddleware {
         const validatedData = schema.parse(dataToValidate);
 
         // Reemplazar los datos originales con los validados y transformados
-        (req as any)[target] = validatedData;
+        (req as unknown as Record<string, unknown>)[target] = validatedData;
 
         logger.debug('Validación exitosa', {
           correlationId,
@@ -257,7 +255,9 @@ export class ValidationMiddleware {
 
       // Sanitizar query parameters
       if (req.query && typeof req.query === 'object') {
-        req.query = ValidationMiddleware.sanitizeObject(req.query);
+        req.query = ValidationMiddleware.sanitizeObject(
+          req.query,
+        ) as typeof req.query;
       }
 
       logger.debug('Sanitización completada', {
@@ -308,7 +308,7 @@ export class ValidationMiddleware {
   /**
    * Sanitiza recursivamente un objeto
    */
-  private static sanitizeObject(obj: any): any {
+  private static sanitizeObject(obj: unknown): unknown {
     if (obj === null || obj === undefined) {
       return obj;
     }
@@ -325,10 +325,11 @@ export class ValidationMiddleware {
     }
 
     if (typeof obj === 'object') {
-      const sanitized: any = {};
-      for (const key in obj) {
-        if (obj(key)) {
-          sanitized[key] = ValidationMiddleware.sanitizeObject(obj[key]);
+      const sanitized: Record<string, unknown> = {};
+      const anyObj = obj as Record<string, unknown>;
+      for (const key in anyObj) {
+        if (Object.prototype.hasOwnProperty.call(anyObj, key)) {
+          sanitized[key] = ValidationMiddleware.sanitizeObject(anyObj[key]);
         }
       }
       return sanitized;
@@ -410,7 +411,9 @@ export class AdvancedValidationUtils {
    * Combina múltiples validadores en uno solo
    */
   static combineValidators(
-    ...validators: Array<(req: any, res: any, next: any) => void>
+    ...validators: Array<
+      (req: Request, res: Response, next: NextFunction) => void
+    >
   ) {
     return (
       req: ValidationRequest,
@@ -419,7 +422,7 @@ export class AdvancedValidationUtils {
     ): void => {
       let currentIndex = 0;
 
-      const runNext = (error?: any) => {
+      const runNext = (error?: NextFunction) => {
         if (error) return next(error);
 
         if (currentIndex >= validators.length) {
@@ -427,7 +430,7 @@ export class AdvancedValidationUtils {
         }
 
         const validator = validators[currentIndex++];
-        validator(req, res, runNext);
+        validator(req, res, next);
       };
 
       runNext();
@@ -599,23 +602,6 @@ export const sanitizeInput = ValidationMiddleware.sanitizeInput;
 export const validateEmail = ValidationMiddleware.validateEmail;
 export const validateUsername = ValidationMiddleware.validateUsername;
 export const requireContentType = ValidationMiddleware.requireContentType;
-
-// Legacy exports para compatibilidad
-export const handleValidationErrors = (
-  req: ValidationRequest,
-  res: Response,
-  next: NextFunction,
-) => {
-  // Esta función ya no es necesaria con Zod, pero se mantiene para compatibilidad
-  logger.warn('handleValidationErrors is deprecated with Zod implementation');
-  next();
-};
-
-export const validate = (validations: any[]) => {
-  // Esta función es reemplazada por createValidator
-  logger.warn('validate function is deprecated, use createValidator instead');
-  return (req: ValidationRequest, res: Response, next: NextFunction) => next();
-};
 
 // Export default para compatibilidad
 export default {

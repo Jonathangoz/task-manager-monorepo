@@ -18,7 +18,7 @@ import {
   verifyPassword,
   validatePasswordStrength,
 } from '@/utils/crypto';
-import { logger, authLogger } from '@/utils/logger';
+import { authLogger } from '@/utils/logger';
 import {
   ERROR_CODES,
   ERROR_MESSAGES,
@@ -507,7 +507,11 @@ export class AuthService implements IAuthService {
     excludeSessionId?: string,
   ): Promise<void> {
     try {
-      const whereCondition: any = { userId, isActive: true };
+      const whereCondition: {
+        userId: string;
+        isActive: boolean;
+        sessionId?: { not: string };
+      } = { userId, isActive: true };
 
       // Si se proporciona excludeSessionId, excluir esa sesión
       if (excludeSessionId) {

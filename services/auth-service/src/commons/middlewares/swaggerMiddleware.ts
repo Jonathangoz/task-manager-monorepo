@@ -1,6 +1,5 @@
 // src/commons/middleware/swagger.ts - Middleware para servir docs
 import { Request, Response, NextFunction, RequestHandler } from 'express';
-import { AuthenticatedRequest } from '@/typeExpress/express';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec, swaggerUiOptions } from '@/utils/swagger';
 import { environment } from '@/config/environment';

@@ -1,10 +1,10 @@
-// src/commons/routes/health.routes.ts - OPTIMIZADO PARA RENDER.COM
+// src/commons/routes/health.routes.ts - ACTUALIZADO CON NUEVOS ENDPOINTS
 import { Router, Request, Response, NextFunction } from 'express';
 import { HealthController } from '@/commons/controllers/HealthController';
 import { asyncHandler } from '@/commons/middlewares/error.middleware';
 import { environment } from '@/config/environment';
 
-// ✅ FIX: Definir interfaces para los parámetros del middleware
+// ✅ Interfaces para los parámetros del middleware
 interface HealthCheckRequest extends Request {
   isHealthCheck?: boolean;
   skipTimeout?: boolean;
@@ -32,10 +32,12 @@ export class HealthRoutes {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
+      res.setHeader('X-Health-Check', 'true');
       next();
     };
 
-    // === HEALTH CHECKS BÁSICOS - OPTIMIZADOS PARA RENDER
+    // === HEALTH CHECKS BÁSICOS - OPTIMIZADOS PARA RENDER ===
+
     /**
      * GET /health
      * Health check básico - ULTRA RÁPIDO para Render health checks
@@ -56,6 +58,18 @@ export class HealthRoutes {
       healthCheckMiddleware,
       asyncHandler(healthController.basicHealthCheck.bind(healthController)),
     );
+
+    /**
+     * GET /healthz
+     * Kubernetes-style health check (común en cloud platforms)
+     */
+    router.get(
+      '/healthz',
+      healthCheckMiddleware,
+      asyncHandler(healthController.basicHealthCheck.bind(healthController)),
+    );
+
+    // === KUBERNETES-STYLE PROBES ===
 
     /**
      * GET /health/ready
@@ -79,32 +93,16 @@ export class HealthRoutes {
       asyncHandler(healthController.livenessCheck.bind(healthController)),
     );
 
-    // ✅ ENDPOINTS ALTERNATIVOS PARA DIFERENTES CONFIGURACIONES DE RENDER
-    /**
-     * GET /healthz
-     * Kubernetes-style health check (común en cloud platforms)
-     */
-    router.get(
-      '/healthz',
-      healthCheckMiddleware,
-      asyncHandler(healthController.basicHealthCheck.bind(healthController)),
-    );
+    // === ENDPOINTS SÚPER SIMPLES PARA RENDER ===
 
     /**
      * GET /ping
-     * Endpoint super simple para verificaciones rápidas
+     * Endpoint súper simple para verificaciones rápidas
      */
     router.get(
       '/ping',
       healthCheckMiddleware,
-      (req: Request, res: Response) => {
-        res.status(200).json({
-          success: true,
-          status: 'pong',
-          timestamp: new Date().toISOString(),
-          uptime: Math.floor(process.uptime()),
-        });
-      },
+      asyncHandler(healthController.ping.bind(healthController)),
     );
 
     /**
@@ -114,22 +112,7 @@ export class HealthRoutes {
     router.get(
       '/status',
       healthCheckMiddleware,
-      (req: Request, res: Response) => {
-        const memUsage = process.memoryUsage();
-        res.status(200).json({
-          success: true,
-          status: 'ok',
-          service: 'auth-service',
-          version: environment.app.apiVersion || '1.0.0',
-          environment: environment.app.env,
-          uptime: Math.floor(process.uptime()),
-          memory: {
-            used: Math.round(memUsage.heapUsed / 1024 / 1024),
-            total: Math.round(memUsage.heapTotal / 1024 / 1024),
-          },
-          timestamp: new Date().toISOString(),
-        });
-      },
+      asyncHandler(healthController.status.bind(healthController)),
     );
 
     // === HEALTH CHECKS DETALLADOS (solo en desarrollo/staging) ===
@@ -189,6 +172,102 @@ export class HealthRoutes {
         healthCheckMiddleware,
         asyncHandler(healthController.getMetrics.bind(healthController)),
       );
+
+      /**
+       * POST /health/cache/clear
+       * Limpiar cache de health checks (solo desarrollo)
+       */
+      router.post(
+        '/cache/clear',
+        healthCheckMiddleware,
+        asyncHandler(healthController.clearCache.bind(healthController)),
+      );
+
+      /**
+       * GET /health/cache/info
+       * Información del cache de health checks (solo desarrollo)
+       */
+      router.get(
+        '/cache/info',
+        healthCheckMiddleware,
+        asyncHandler(healthController.getCacheInfo.bind(healthController)),
+      );
+    }
+
+    // === ENDPOINTS ADICIONALES PARA DIFERENTES CONFIGURACIONES DE RENDER ===
+
+    /**
+     * GET /health-check (alternative naming)
+     * Algunos servicios pueden usar este formato
+     */
+    router.get(
+      '/health-check',
+      healthCheckMiddleware,
+      asyncHandler(healthController.basicHealthCheck.bind(healthController)),
+    );
+
+    /**
+     * GET /health/check (alternative naming)
+     */
+    router.get(
+      '/check',
+      healthCheckMiddleware,
+      asyncHandler(healthController.basicHealthCheck.bind(healthController)),
+    );
+
+    /**
+     * GET /health/alive (alternative to /live)
+     */
+    router.get(
+      '/alive',
+      healthCheckMiddleware,
+      asyncHandler(healthController.livenessCheck.bind(healthController)),
+    );
+
+    // === ENDPOINTS PARA MONITOREO EXTERNO ===
+    if (!environment.app.isProduction) {
+      /**
+       * GET /health/uptime
+       * Simple uptime check
+       */
+      router.get(
+        '/uptime',
+        healthCheckMiddleware,
+        (req: Request, res: Response) => {
+          const uptimeSeconds = Math.floor(process.uptime());
+          const uptimeFormatted = `${Math.floor(uptimeSeconds / 3600)}h ${Math.floor((uptimeSeconds % 3600) / 60)}m ${uptimeSeconds % 60}s`;
+          res.status(200).json({
+            success: true,
+            uptime: {
+              seconds: uptimeSeconds,
+              formatted: uptimeFormatted,
+            },
+            timestamp: new Date().toISOString(),
+            service: 'auth-service',
+          });
+        },
+      );
+
+      /**
+       * GET /health/version
+       * Version information
+       */
+      router.get(
+        '/version',
+        healthCheckMiddleware,
+        (req: Request, res: Response) => {
+          res.status(200).json({
+            success: true,
+            version: environment.app.apiVersion || '1.0.0',
+            service: 'auth-service',
+            environment: environment.app.env,
+            nodeVersion: process.version,
+            platform: process.platform,
+            arch: process.arch,
+            timestamp: new Date().toISOString(),
+          });
+        },
+      );
     }
 
     // ✅ HANDLER DE ERRORES ESPECÍFICO PARA HEALTH CHECKS
@@ -202,19 +281,104 @@ export class HealthRoutes {
         // Si es un health check, responder rápido sin logs detallados
         if (req.isHealthCheck) {
           const statusCode = error.statusCode || 503;
-          res.status(statusCode).json({
+          const response = {
             success: false,
             status: 'unhealthy',
+            service: 'auth-service',
             error: error.message || 'Service temporarily unavailable',
             timestamp: new Date().toISOString(),
             uptime: Math.floor(process.uptime()),
-          });
+            path: req.path,
+          };
+          res.status(statusCode).json(response);
           return;
         }
         next(error);
       },
     );
 
+    // ✅ CATCH-ALL PARA HEALTH ROUTES NO ENCONTRADAS
+    router.use('*', (req: Request, res: Response) => {
+      res.status(404).json({
+        success: false,
+        status: 'not_found',
+        message: `Health endpoint ${req.originalUrl} not found`,
+        availableEndpoints: environment.app.isProduction
+          ? [
+              '/health',
+              '/health/ready',
+              '/health/live',
+              '/ping',
+              '/status',
+              '/healthz',
+            ]
+          : [
+              '/health',
+              '/health/ready',
+              '/health/live',
+              '/health/detailed',
+              '/health/database',
+              '/health/redis',
+              '/health/dependencies',
+              '/health/metrics',
+              '/ping',
+              '/status',
+              '/healthz',
+              '/uptime',
+              '/version',
+            ],
+        timestamp: new Date().toISOString(),
+      });
+    });
+
     return router;
   }
 }
+
+// ✅ FUNCIÓN HELPER PARA OBTENER INFORMACIÓN DE ENDPOINTS DISPONIBLES
+export const getAvailableHealthEndpoints = () => {
+  const baseEndpoints = [
+    '/health',
+    '/health/ready',
+    '/health/live',
+    '/ping',
+    '/status',
+    '/healthz',
+    '/health-check',
+    '/health/check',
+    '/health/alive',
+  ];
+
+  const developmentEndpoints = [
+    '/health/detailed',
+    '/health/database',
+    '/health/redis',
+    '/health/dependencies',
+    '/health/metrics',
+    '/health/cache/clear',
+    '/health/cache/info',
+    '/health/uptime',
+    '/health/version',
+  ];
+
+  return environment.app.isProduction
+    ? baseEndpoints
+    : [...baseEndpoints, ...developmentEndpoints];
+};
+
+// ✅ FUNCIÓN HELPER PARA CONFIGURACIÓN DE RENDER
+export const getRenderHealthConfig = () => ({
+  // Configuración recomendada para render.yaml
+  healthCheckPath: '/health', // ✅ Endpoint principal
+  alternatives: [
+    '/health/ready', // Readiness probe
+    '/health/live', // Liveness probe
+    '/ping', // Súper simple
+    '/status', // Status básico
+  ],
+  timeout: 10, // 10 segundos timeout en Render
+  interval: 30, // Check cada 30 segundos
+  retries: 3, // 3 reintentos antes de marcar como unhealthy
+});
+
+export default HealthRoutes;
