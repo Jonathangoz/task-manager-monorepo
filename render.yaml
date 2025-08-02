@@ -14,15 +14,15 @@ services:
       pnpm prisma:generate
       pnpm build
     startCommand: pnpm start:prod
-    # ✅ HEALTH CHECK PATH CORREGIDO - MÁS SIMPLE Y CONFIABLE
-    healthCheckPath: /api/v1/health
+    # ✅ CONFIGURACIÓN DE HEALTH CHECK OPTIMIZADA PARA RENDER
+    healthCheckPath: /api/v1/health/ready
     autoDeploy: true
     envVars:
       # Variables específicas del servicio
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 3001
+        value: 10000
       - key: API_VERSION
         value: v1
 

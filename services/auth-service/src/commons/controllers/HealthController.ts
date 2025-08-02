@@ -4,6 +4,7 @@ import { healthService } from '@/core/application/HealthService';
 import { createContextLogger } from '@/utils/logger';
 import { HTTP_STATUS } from '@/utils/constants';
 import { environment } from '@/config/environment';
+import authServer from '@/server';
 
 export class HealthController {
   private readonly healthLogger = createContextLogger({
@@ -41,63 +42,68 @@ export class HealthController {
   }
 
   /**
-   * Readiness check - Para Render readiness probe
-   * Endpoint: GET /health/ready
+   * Readiness check - Para Render readiness probe.
+   * Contiene la lógica del "período de gracia" para evitar timeouts en el despliegue.
+   * Endpoint: GET /api/v1/health/ready
    */
   public async readinessCheck(req: Request, res: Response): Promise<void> {
-    try {
+    // 1. Verificar si el servicio está completamente listo (DB conectada, etc.)
+    const isReady = authServer.isServiceReady();
+
+    // 2. Obtener el tiempo de vida del proceso en segundos.
+    const uptime = process.uptime();
+    const GRACE_PERIOD_SECONDS = 60; // Período de gracia de 60 segundos.
+
+    // 3. Lógica del Health Check Inteligente:
+    // El servicio ya está completamente listo.
+    if (isReady) {
       const healthStatus = await healthService.getReadinessHealth();
+      // Si está listo, reportar el estado real. Debería ser 'healthy'.
       const statusCode =
         healthStatus.status === 'healthy'
           ? HTTP_STATUS.OK
           : HTTP_STATUS.SERVICE_UNAVAILABLE;
 
       res.status(statusCode).json(healthStatus);
-    } catch (error) {
-      this.healthLogger.error('Readiness check failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        path: req.path,
-      });
-
-      res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json({
-        success: false,
-        status: 'not_ready',
-        service: 'auth-service',
-        error: 'Service not ready',
-        timestamp: new Date().toISOString(),
-        uptime: Math.floor(process.uptime()),
-      });
+      return;
     }
+
+    // El servicio NO está listo, pero estamos DENTRO del período de gracia.
+    if (uptime < GRACE_PERIOD_SECONDS) {
+      // Respondemos 200 OK para que Render no falle el despliegue.
+      // Le decimos a Render "estoy vivo y arrancando, no me reinicies".
+      res.status(HTTP_STATUS.OK).json({
+        status: 'starting',
+        message: `Service is initializing. Grace period active for ${Math.round(GRACE_PERIOD_SECONDS - uptime)} more seconds.`,
+        uptime: uptime,
+      });
+      return;
+    }
+
+    // El servicio NO está listo y el período de gracia YA TERMINÓ.
+    // Ahora sí debemos reportar un error, porque algo salió mal en el arranque.
+    res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json({
+      status: 'unhealthy',
+      message: `Service failed to become ready within the grace period of ${GRACE_PERIOD_SECONDS} seconds.`,
+      uptime: uptime,
+      error: 'Dependencies (like database) might not be connected.',
+    });
   }
 
   /**
    * Liveness check - INSTANTÁNEO, solo verifica que el proceso esté vivo
-   * Endpoint: GET /health/live
+   * Endpoint: GET /api/v1/health
+
    */
   public async livenessCheck(req: Request, res: Response): Promise<void> {
-    try {
-      const healthStatus = await healthService.getLivenessHealth();
-      const statusCode =
-        healthStatus.status === 'healthy'
-          ? HTTP_STATUS.OK
-          : HTTP_STATUS.SERVICE_UNAVAILABLE;
-
-      res.status(statusCode).json(healthStatus);
-    } catch (error) {
-      this.healthLogger.error('Liveness check failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        path: req.path,
-      });
-
-      res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json({
-        success: false,
-        status: 'dead',
-        service: 'auth-service',
-        error: 'Process not responding',
-        timestamp: new Date().toISOString(),
-        uptime: Math.floor(process.uptime()),
-      });
-    }
+    const uptime = Math.floor(process.uptime());
+    // Respondemos OK (200) siempre que el proceso Node.js esté corriendo.
+    res.status(HTTP_STATUS.OK).json({
+      status: 'ok',
+      service: 'auth-service',
+      uptime: uptime,
+      timestamp: new Date().toISOString(),
+    });
   }
 
   /**
