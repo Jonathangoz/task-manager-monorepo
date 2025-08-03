@@ -49,6 +49,11 @@ const envSchema = z.object({
     .transform((val) => val === 'true')
     .default('true'),
 
+  // API_KEY
+  AUTH_SERVICE_API_KEY: z
+    .string()
+    .min(1, 'La API Key del servicio es requerida'),
+
   // RATE LIMITING CONFIGURATION
   RATE_LIMIT_WINDOW_MS: z
     .string()
@@ -192,6 +197,7 @@ export const environment = {
   // Configuración de seguridad
   security: {
     helmetEnabled: env.HELMET_ENABLED,
+    apiKey: env.AUTH_SERVICE_API_KEY,
     maxLoginAttempts: env.MAX_LOGIN_ATTEMPTS,
     accountLockTime: env.ACCOUNT_LOCK_TIME,
     passwordResetTokenExpires: env.PASSWORD_RESET_TOKEN_EXPIRES,
