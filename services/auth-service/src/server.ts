@@ -4,7 +4,6 @@ import { Socket } from 'net';
 import App from './app';
 import { environment } from '@/config/environment';
 import {
-  logger,
   dbLogger,
   redisLogger,
   startup,
@@ -19,8 +18,42 @@ import {
 } from '@/config/database';
 import { redisConnection } from '@/config/redis';
 
+// ✅ CONFIGURAR MANEJO DE ERRORES GLOBAL ANTES DE CUALQUIER OTRA COSA
+process.on('uncaughtException', (error: Error) => {
+  console.error('💥 UNCAUGHT EXCEPTION - Server startup failed:', {
+    message: error.message,
+    stack: error.stack,
+    name: error.name,
+    timestamp: new Date().toISOString(),
+  });
+
+  // En Render, es mejor salir inmediatamente para que reinicie el contenedor
+  process.exit(1);
+});
+
+process.on(
+  'unhandledRejection',
+  (reason: unknown, promise: Promise<unknown>) => {
+    console.error('💥 UNHANDLED REJECTION - Server startup failed:', {
+      reason:
+        reason instanceof Error
+          ? {
+              message: reason.message,
+              stack: reason.stack,
+              name: reason.name,
+            }
+          : reason,
+      promise: promise.toString(),
+      timestamp: new Date().toISOString(),
+    });
+
+    // En Render, salir inmediatamente para reinicio
+    process.exit(1);
+  },
+);
+
 class AuthServer {
-  private app: App;
+  private app: App | null = null;
   private server: Server | null = null;
   private cleanupIntervals: NodeJS.Timeout[] = [];
   private isShuttingDown = false;
@@ -30,48 +63,41 @@ class AuthServer {
   public isReady = false;
 
   constructor() {
-    this.app = new App();
+    // No inicializar App en el constructor para evitar errores tempranos
   }
 
-  // ✅ INICIO DEL SERVIDOR OPTIMIZADO
+  // ✅ INICIO DEL SERVIDOR CON MEJOR MANEJO DE ERRORES
   public async start(): Promise<void> {
     try {
-      startup.serviceStarted(environment.app.port, environment.app.env);
+      this.serverLogger.info('🚀 Starting Auth Service...', {
+        nodeVersion: process.version,
+        environment: environment.app.env,
+        port: environment.app.port,
+        platform: process.platform,
+        arch: process.arch,
+        pid: process.pid,
+      });
 
-      // Iniciar el servidor HTTP INMEDIATAMENTE.
+      // ✅ PASO 1: Verificar configuración crítica ANTES de inicializar
+      await this.validateCriticalConfig();
+
+      // ✅ PASO 2: Inicializar App con manejo de errores
+      this.serverLogger.info('📦 Initializing Express application...');
+      this.app = new App();
+
+      // ✅ PASO 3: Iniciar servidor HTTP INMEDIATAMENTE (para health checks de Render)
       await this.startHttpServer();
 
-      // Inicializar dependencias en segundo plano. No bloquea el loop de eventos.
-      this.initializeDependencies()
-        .then(() => {
-          this.isReady = true; // Marcar como listo cuando todo esté conectado
-          this.serverLogger.info(
-            'All dependencies are initialized. Service is fully ready.',
-          );
-          // Configurar trabajos de limpieza DESPUÉS de que todo esté listo.
-          this.setupCleanupJobs();
-        })
-        .catch((error) => {
-          this.serverLogger.fatal(
-            'Failed to initialize dependencies in background. Shutting down.',
-            { error },
-          );
-          this.shutdown(1);
-        });
+      // ✅ PASO 4: Inicializar dependencias en background
+      this.initializeDependenciesInBackground();
 
-      // ✅ PASO 4: Configurar el apagado graceful.
+      // ✅ PASO 5: Configurar shutdown graceful
       this.setupGracefulShutdown();
 
       this.isInitialized = true;
-      this.serverLogger.info(
-        'Auth Service HTTP server started. Initializing dependencies in background...',
-        {
-          port: environment.app.port,
-          env: environment.app.env,
-        },
-      );
+      startup.serviceStarted(environment.app.port, environment.app.env);
     } catch (error) {
-      this.serverLogger.fatal('Failed to start Auth Service', {
+      this.serverLogger.fatal('❌ Failed to start Auth Service', {
         error:
           error instanceof Error
             ? {
@@ -81,230 +107,263 @@ class AuthServer {
               }
             : error,
       });
-      await this.shutdown(1);
+
+      // En caso de error durante startup, salir inmediatamente
+      process.exit(1);
     }
   }
 
-  // ✅ INICIALIZACIÓN DE DEPENDENCIAS CON MEJOR MANEJO DE ERRORES
-  private async initializeDependencies(): Promise<void> {
-    // Inicializar base de datos
-    await this.initializeDatabase();
+  // ✅ VALIDACIÓN DE CONFIGURACIÓN CRÍTICA
+  private async validateCriticalConfig(): Promise<void> {
+    this.serverLogger.info('🔍 Validating critical configuration...');
 
-    // Inicializar Redis (no crítico - puede fallar)
-    await this.initializeRedis();
-    this.isReady = true;
-  }
+    const criticalVars = [
+      'NODE_ENV',
+      'PORT',
+      'DATABASE_URL',
+      'JWT_SECRET',
+      'REFRESH_TOKEN_SECRET',
+      'JWE_SECRET',
+      'AUTH_SERVICE_API_KEY',
+    ];
 
-  // Método para que el exterior pueda consultar el estado
-  public isServiceReady(): boolean {
-    return this.isReady;
-  }
+    const missingVars: string[] = [];
 
-  private async initializeDatabase(): Promise<void> {
-    try {
-      startup.dependencyConnected('PostgreSQL Database');
-
-      // ✅ Intentar conectar con reintentos
-      let retries = 3;
-      while (retries > 0) {
-        try {
-          await connectDatabase();
-
-          // ✅ Verificar conexión con timeout
-          await Promise.race([
-            db.$queryRaw`SELECT 1`,
-            new Promise((_, reject) =>
-              setTimeout(
-                () => reject(new Error('Database connection timeout')),
-                10000,
-              ),
-            ),
-          ]);
-
-          dbLogger.info('Database initialized successfully', {
-            url: environment.database.url.replace(/\/\/.*@/, '//***@'),
-            retries: 3 - retries,
-          });
-          return;
-        } catch (error) {
-          retries--;
-          if (retries === 0) throw error;
-
-          dbLogger.warn(
-            `Database connection failed, retrying... (${retries} attempts left)`,
-            {
-              error: error instanceof Error ? error.message : String(error),
-            },
-          );
-
-          // Esperar antes del siguiente intento
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-        }
+    for (const varName of criticalVars) {
+      if (!process.env[varName]) {
+        missingVars.push(varName);
       }
-    } catch (error) {
-      dbLogger.error('Database initialization failed after all retries', {
-        error: error instanceof Error ? error.message : String(error),
+    }
+
+    if (missingVars.length > 0) {
+      const error = new Error(
+        `❌ Missing critical environment variables: ${missingVars.join(', ')}`,
+      );
+      this.serverLogger.fatal('Configuration validation failed', {
+        missingVariables: missingVars,
+        availableVariables: Object.keys(process.env).filter(
+          (key) =>
+            key.startsWith('DATABASE_') ||
+            key.startsWith('JWT_') ||
+            key.startsWith('REDIS_') ||
+            key.includes('SECRET'),
+        ),
       });
       throw error;
     }
+
+    // Validar formato de secrets
+    try {
+      if (environment.jwt.secret.length < 32) {
+        throw new Error('JWT_SECRET is too short');
+      }
+      if (environment.refreshToken.secret.length < 32) {
+        throw new Error('REFRESH_TOKEN_SECRET is too short');
+      }
+    } catch (error) {
+      this.serverLogger.fatal('Secret validation failed', { error });
+      throw error;
+    }
+
+    this.serverLogger.info('✅ Critical configuration validated successfully');
   }
 
+  // ✅ INICIALIZACIÓN DE DEPENDENCIAS EN BACKGROUND
+  private initializeDependenciesInBackground(): void {
+    // No usar async/await aquí - usar Promises para no bloquear
+    this.initializeDependencies()
+      .then(() => {
+        this.isReady = true;
+        this.serverLogger.info(
+          '✅ All dependencies initialized. Service is fully ready.',
+        );
+        this.setupCleanupJobs();
+      })
+      .catch((error) => {
+        this.serverLogger.error(
+          '⚠️ Failed to initialize some dependencies, but server will continue running',
+          {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        );
+
+        // Marcar como parcialmente listo para que los health checks básicos funcionen
+        this.isReady = true;
+      });
+  }
+
+  // ✅ INICIALIZACIÓN DE DEPENDENCIAS CON MEJOR TOLERANCIA A FALLOS
+  private async initializeDependencies(): Promise<void> {
+    const results = await Promise.allSettled([
+      this.initializeDatabase(),
+      this.initializeRedis(),
+    ]);
+
+    let hasErrors = false;
+    results.forEach((result, index) => {
+      const depName = index === 0 ? 'Database' : 'Redis';
+
+      if (result.status === 'rejected') {
+        hasErrors = true;
+        this.serverLogger.warn(`${depName} initialization failed`, {
+          error:
+            result.reason instanceof Error
+              ? result.reason.message
+              : String(result.reason),
+        });
+      } else {
+        this.serverLogger.info(`${depName} initialized successfully`);
+      }
+    });
+
+    if (hasErrors) {
+      this.serverLogger.warn(
+        'Some dependencies failed to initialize, but service will continue',
+      );
+    }
+  }
+
+  // ✅ INICIALIZACIÓN DE BASE DE DATOS MÁS ROBUSTA
+  private async initializeDatabase(): Promise<void> {
+    const maxRetries = 5;
+    const baseDelay = 2000;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        this.serverLogger.info(
+          `🗄️ Connecting to database (attempt ${attempt}/${maxRetries})...`,
+        );
+
+        // Timeout más generoso para Render
+        const dbTimeout = new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error('Database connection timeout')),
+            20000,
+          ),
+        );
+
+        await Promise.race([connectDatabase(), dbTimeout]);
+
+        // Verificar que la conexión funciona
+        await Promise.race([
+          db.$queryRaw`SELECT 1`,
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error('Database query timeout')),
+              10000,
+            ),
+          ),
+        ]);
+
+        startup.dependencyConnected('PostgreSQL Database');
+        dbLogger.info('✅ Database connected successfully', {
+          attempt,
+          url: environment.database.url.replace(/\/\/.*@/, '//***@'),
+        });
+        return;
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+
+        if (attempt === maxRetries) {
+          dbLogger.error('❌ Database connection failed after all retries', {
+            attempts: maxRetries,
+            lastError: errorMessage,
+          });
+          throw new Error(`Database connection failed: ${errorMessage}`);
+        }
+
+        // Delay exponencial con jitter
+        const delay =
+          baseDelay * Math.pow(2, attempt - 1) + Math.random() * 1000;
+
+        dbLogger.warn(
+          `⏳ Database connection failed, retrying in ${Math.round(delay)}ms...`,
+          {
+            attempt,
+            maxRetries,
+            error: errorMessage,
+          },
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  // ✅ INICIALIZACIÓN DE REDIS MÁS TOLERANTE
   private async initializeRedis(): Promise<void> {
     try {
-      startup.dependencyConnected('Redis Cache');
+      this.serverLogger.info('🔄 Connecting to Redis...');
 
-      // ✅ Redis es opcional - no debe fallar el startup
       const redisTimeout = new Promise((_, reject) =>
-        setTimeout(
-          () => reject(new Error('Redis initialization timeout')),
-          8000,
-        ),
+        setTimeout(() => reject(new Error('Redis connection timeout')), 10000),
       );
 
       await Promise.race([redisConnection.connect(), redisTimeout]);
 
-      redisLogger.info('Redis initialized successfully', {
+      startup.dependencyConnected('Redis Cache');
+      redisLogger.info('✅ Redis connected successfully', {
         url: environment.redis.url.replace(/\/\/.*@/, '//***@'),
         prefix: environment.redis.prefix,
       });
     } catch (error) {
-      // ✅ Redis es opcional - log warning pero no fallar
+      // Redis es opcional - no debe fallar el startup completo
       redisLogger.warn(
-        'Redis initialization failed - continuing without cache',
+        '⚠️ Redis initialization failed - continuing without cache',
         {
           error: error instanceof Error ? error.message : String(error),
         },
       );
+
+      // No lanzar error - Redis es opcional
     }
   }
 
-  // ✅ CONFIGURACIÓN DE TRABAJOS DE LIMPIEZA OPTIMIZADA
-  private setupCleanupJobs(): void {
-    this.serverLogger.info('Setting up cleanup jobs...');
-
-    // ✅ Solo configurar si las dependencias están disponibles
-    if (this.isDatabaseAvailable()) {
-      // Cleanup de tokens expirados - cada 2 horas (menos frecuente)
-      const tokenCleanupInterval = setInterval(
-        async () => {
-          if (this.isShuttingDown) return;
-
-          try {
-            this.serverLogger.debug('Running token cleanup job...');
-            await cleanupExpiredTokens();
-          } catch (error) {
-            this.serverLogger.warn('Token cleanup job failed', {
-              error: error instanceof Error ? error.message : String(error),
-            });
-          }
-        },
-        2 * 60 * 60 * 1000,
-      ); // 2 horas
-
-      // Cleanup de sesiones expiradas - cada hora
-      const sessionCleanupInterval = setInterval(
-        async () => {
-          if (this.isShuttingDown) return;
-
-          try {
-            this.serverLogger.debug('Running session cleanup job...');
-            await cleanupExpiredSessions();
-          } catch (error) {
-            this.serverLogger.warn('Session cleanup job failed', {
-              error: error instanceof Error ? error.message : String(error),
-            });
-          }
-        },
-        60 * 60 * 1000,
-      ); // 1 hora
-
-      this.cleanupIntervals.push(tokenCleanupInterval, sessionCleanupInterval);
-
-      this.serverLogger.info('Cleanup jobs scheduled successfully', {
-        tokenCleanupInterval: '2 hours',
-        sessionCleanupInterval: '1 hour',
-      });
-    } else {
-      this.serverLogger.warn(
-        'Cleanup jobs not scheduled - database not available',
-      );
-    }
-  }
-
-  // ✅ INICIO DEL SERVIDOR HTTP OPTIMIZADO PARA RENDER
+  // ✅ INICIO DEL SERVIDOR HTTP MEJORADO PARA RENDER
   private async startHttpServer(): Promise<void> {
     return new Promise((resolve, reject) => {
+      if (!this.app) {
+        return reject(new Error('App not initialized'));
+      }
+
       try {
-        this.server = this.app
-          .getApp()
-          .listen(environment.app.port, '0.0.0.0', () => {
-            this.serverLogger.info('HTTP server listening', {
-              port: environment.app.port,
-              host: '0.0.0.0',
-              environment: environment.app.env,
-            });
-            resolve();
+        const port = environment.app.port;
+        const host = '0.0.0.0'; // Importante para Render
+
+        this.server = this.app.getApp().listen(port, host, () => {
+          this.serverLogger.info('✅ HTTP server started successfully', {
+            port,
+            host,
+            environment: environment.app.env,
+            processId: process.pid,
           });
+          resolve();
+        });
 
         if (!this.server) {
-          const error = new Error('Server object failed to initialize.');
-          this.serverLogger.error('Failed to start HTTP server', { error });
+          const error = new Error('Server failed to initialize');
+          this.serverLogger.error('❌ Server initialization failed', { error });
           return reject(error);
         }
 
-        // ✅ TIMEOUTS OPTIMIZADOS PARA RENDER.COM
-        this.server.timeout = 120000; // 2 minutos (más generoso)
-        this.server.keepAliveTimeout = 65000; // 65s (dentro del límite de Render)
-        this.server.headersTimeout = 66000; // 66s (1s más que keepAlive)
-        this.server.requestTimeout = 60000; // 60s para requests individuales
-        this.server.maxHeadersCount = 100; // Reducido para mejor performance
+        // ✅ CONFIGURACIÓN DE TIMEOUTS PARA RENDER
+        this.server.timeout = 120000; // 2 minutos
+        this.server.keepAliveTimeout = 65000; // 65s
+        this.server.headersTimeout = 66000; // 66s
+        this.server.requestTimeout = 60000; // 60s
+        this.server.maxHeadersCount = 100;
+        this.server.maxConnections = 1000;
 
-        // ✅ Configurar límites de conexión más conservadores
-        this.server.maxConnections = 500; // Reducido de 1000
-
-        // ✅ MANEJO DE CONEXIONES OPTIMIZADO
-        this.server.on('connection', (socket: Socket) => {
-          // Timeouts más generosos para cloud
-          socket.setTimeout(90000); // 90 segundos
-          socket.setKeepAlive(true, 45000); // Keep alive cada 45 segundos
-
-          socket.on('timeout', () => {
-            this.serverLogger.debug(
-              'Socket timeout (normal for health checks)',
-              {
-                remoteAddress: socket.remoteAddress || 'unknown',
-              },
-            );
-            socket.destroy();
-          });
-
-          socket.on('error', (error) => {
-            // Solo log errores que no sean de health checks
-            if (
-              !error.message.includes('ECONNRESET') &&
-              !error.message.includes('EPIPE') &&
-              !error.message.includes('ENOTFOUND')
-            ) {
-              this.serverLogger.debug('Socket error', {
-                error: error.message,
-                remoteAddress: socket.remoteAddress || 'unknown',
-              });
-            }
-          });
-        });
-
-        // ✅ MANEJO DE ERRORES DEL SERVIDOR MEJORADO
+        // ✅ MANEJO DE ERRORES DEL SERVIDOR
         this.server.on('error', (error: NodeJS.ErrnoException) => {
           if (error.code === 'EADDRINUSE') {
-            this.serverLogger.error(
-              `Port ${environment.app.port} is already in use`,
-              {
-                port: environment.app.port,
-                code: error.code,
-              },
-            );
+            this.serverLogger.fatal(`❌ Port ${port} is already in use`, {
+              port,
+              code: error.code,
+            });
           } else {
-            this.serverLogger.error('Server error', {
+            this.serverLogger.fatal('❌ Server error during startup', {
               error: {
                 message: error.message,
                 code: error.code,
@@ -315,9 +374,36 @@ class AuthServer {
           reject(error);
         });
 
-        // ✅ MANEJO DE ERRORES DE CLIENTE MÁS SILENCIOSO
+        // ✅ MANEJO DE CONEXIONES OPTIMIZADO
+        this.server.on('connection', (socket: Socket) => {
+          socket.setTimeout(90000);
+          socket.setKeepAlive(true, 45000);
+
+          socket.on('timeout', () => {
+            this.serverLogger.debug('Socket timeout (normal)', {
+              remoteAddress: socket.remoteAddress || 'unknown',
+            });
+            socket.destroy();
+          });
+
+          socket.on('error', (socketError) => {
+            // Solo log errores importantes
+            const ignoredErrors = ['ECONNRESET', 'EPIPE', 'ETIMEDOUT'];
+            if (
+              !ignoredErrors.some((ignored) =>
+                socketError.message.includes(ignored),
+              )
+            ) {
+              this.serverLogger.debug('Socket error', {
+                error: socketError.message,
+                remoteAddress: socket.remoteAddress || 'unknown',
+              });
+            }
+          });
+        });
+
+        // ✅ MANEJO SILENCIOSO DE ERRORES DE CLIENTE (health checks)
         this.server.on('clientError', (error, socket: Socket) => {
-          // Filtrar errores comunes de health checks y load balancers
           const commonErrors = [
             'ECONNRESET',
             'EPIPE',
@@ -332,6 +418,7 @@ class AuthServer {
             error.message.includes(commonError),
           );
 
+          // Solo log errores no comunes
           if (!isCommonError) {
             this.serverLogger.debug('Client error', {
               error: error.message,
@@ -339,7 +426,6 @@ class AuthServer {
             });
           }
 
-          // Responder y cerrar conexión de forma segura
           if (socket.writable && !socket.destroyed) {
             try {
               socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
@@ -348,27 +434,70 @@ class AuthServer {
             }
           }
         });
-
-        // ✅ Evento de servidor listo
-        this.server.on('listening', () => {
-          const timeouts = {
-            server: this.server?.timeout,
-            keepAlive: this.server?.keepAliveTimeout,
-            headers: this.server?.headersTimeout,
-            request: this.server?.requestTimeout,
-          };
-
-          this.serverLogger.info('Server is ready to accept connections', {
-            port: environment.app.port,
-            timeouts,
-            maxConnections: this.server?.maxConnections,
-          });
-        });
       } catch (error) {
-        this.serverLogger.error('Failed to start HTTP server', { error });
+        this.serverLogger.fatal('❌ Failed to start HTTP server', { error });
         reject(error);
       }
     });
+  }
+
+  // ✅ CONFIGURACIÓN DE TRABAJOS DE LIMPIEZA MÁS SEGURA
+  private setupCleanupJobs(): void {
+    try {
+      this.serverLogger.info('🧹 Setting up cleanup jobs...');
+
+      if (!this.isDatabaseAvailable()) {
+        this.serverLogger.warn(
+          '⚠️ Database not available - skipping cleanup jobs',
+        );
+        return;
+      }
+
+      // Token cleanup - cada 4 horas (menos frecuente)
+      const tokenCleanupInterval = setInterval(
+        async () => {
+          if (this.isShuttingDown || !this.isDatabaseAvailable()) return;
+
+          try {
+            await cleanupExpiredTokens();
+            this.serverLogger.debug('✅ Token cleanup completed');
+          } catch (error) {
+            this.serverLogger.warn('⚠️ Token cleanup failed', {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        },
+        4 * 60 * 60 * 1000,
+      ); // 4 horas
+
+      // Session cleanup - cada 2 horas
+      const sessionCleanupInterval = setInterval(
+        async () => {
+          if (this.isShuttingDown || !this.isDatabaseAvailable()) return;
+
+          try {
+            await cleanupExpiredSessions();
+            this.serverLogger.debug('✅ Session cleanup completed');
+          } catch (error) {
+            this.serverLogger.warn('⚠️ Session cleanup failed', {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        },
+        2 * 60 * 60 * 1000,
+      ); // 2 horas
+
+      this.cleanupIntervals.push(tokenCleanupInterval, sessionCleanupInterval);
+
+      this.serverLogger.info('✅ Cleanup jobs scheduled', {
+        tokenCleanup: '4 hours',
+        sessionCleanup: '2 hours',
+      });
+    } catch (error) {
+      this.serverLogger.warn('⚠️ Failed to setup cleanup jobs', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   // ✅ CONFIGURACIÓN DE SHUTDOWN GRACEFUL MEJORADA
@@ -377,55 +506,21 @@ class AuthServer {
 
     signals.forEach((signal) => {
       process.on(signal, async () => {
+        this.serverLogger.info(`📨 Received ${signal} signal`);
         startup.gracefulShutdown(signal);
         await this.shutdown(0);
       });
     });
 
-    // ✅ Manejo mejorado de excepciones
-    process.on('uncaughtException', async (error) => {
-      this.serverLogger.fatal('Uncaught exception', {
-        error: {
-          message: error.message,
-          stack: error.stack,
-          name: error.name,
-        },
-        isInitialized: this.isInitialized,
-      });
-      await this.shutdown(1);
-    });
-
-    process.on('unhandledRejection', async (reason, promise) => {
-      this.serverLogger.fatal('Unhandled promise rejection', {
-        reason:
-          reason instanceof Error
-            ? {
-                message: reason.message,
-                stack: reason.stack,
-                name: reason.name,
-              }
-            : reason,
-        promise: promise.toString(),
-        isInitialized: this.isInitialized,
-      });
-      await this.shutdown(1);
-    });
-
-    process.on('exit', (code) => {
-      this.serverLogger.info('Process exiting', {
-        exitCode: code,
-        isInitialized: this.isInitialized,
-      });
-    });
-
-    // ✅ Manejo de warnings de Node.js
+    // ✅ Manejo de warnings menos verboso
     process.on('warning', (warning) => {
-      // Solo log warnings importantes
+      // Solo log warnings críticos
       if (
         warning.name !== 'ExperimentalWarning' &&
-        warning.name !== 'DeprecationWarning'
+        warning.name !== 'DeprecationWarning' &&
+        warning.name !== 'MaxListenersExceededWarning'
       ) {
-        this.serverLogger.warn('Process warning', {
+        this.serverLogger.warn('⚠️ Process warning', {
           name: warning.name,
           message: warning.message,
         });
@@ -433,98 +528,127 @@ class AuthServer {
     });
   }
 
-  // ✅ SHUTDOWN GRACEFUL OPTIMIZADO
+  // ✅ SHUTDOWN GRACEFUL OPTIMIZADO PARA RENDER
   public async shutdown(exitCode: number = 0): Promise<void> {
     if (this.isShuttingDown) {
-      this.serverLogger.warn('Shutdown already in progress');
+      this.serverLogger.warn('⚠️ Shutdown already in progress');
       return;
     }
 
     this.isShuttingDown = true;
-    this.serverLogger.info('Starting graceful shutdown...', {
+    this.serverLogger.info('🛑 Starting graceful shutdown...', {
       exitCode,
       isInitialized: this.isInitialized,
+      uptime: Math.round(process.uptime()),
     });
 
-    // ✅ Timeout más generoso para shutdown
+    // ✅ Timeout de shutdown más generoso para Render
     const shutdownTimeout = setTimeout(() => {
-      this.serverLogger.error('Shutdown timeout reached, forcing exit');
+      this.serverLogger.error('⏰ Shutdown timeout - forcing exit');
       process.exit(1);
-    }, 45000); // 45 segundos
+    }, 30000); // 30 segundos
 
     try {
-      // ✅ Detener servidor HTTP primero
+      // ✅ PASO 1: Detener servidor HTTP
       if (this.server && this.server.listening) {
-        this.serverLogger.info('Closing HTTP server...');
-        await new Promise<void>((resolve, reject) => {
-          this.server!.close((error) => {
-            if (error) {
-              this.serverLogger.error('Error closing HTTP server', { error });
-              reject(error);
-            } else {
-              this.serverLogger.info('HTTP server closed successfully');
-              resolve();
-            }
-          });
-        });
+        this.serverLogger.info('🚪 Closing HTTP server...');
+        await this.closeHttpServer();
       }
 
-      // ✅ Detener trabajos de limpieza
-      if (this.cleanupIntervals.length > 0) {
-        this.serverLogger.info('Stopping cleanup jobs...');
-        this.cleanupIntervals.forEach((interval) => clearInterval(interval));
-        this.cleanupIntervals = [];
+      // ✅ PASO 2: Detener trabajos de limpieza
+      this.stopCleanupJobs();
+
+      // ✅ PASO 3: Cerrar conexiones (con timeouts)
+      await Promise.allSettled([this.closeRedis(), this.closeDatabase()]);
+
+      clearTimeout(shutdownTimeout);
+      this.serverLogger.info('✅ Graceful shutdown completed');
+    } catch (error) {
+      this.serverLogger.error('❌ Error during shutdown', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      exitCode = 1;
+    } finally {
+      // Pequeño delay antes de salir
+      setTimeout(() => {
+        process.exit(exitCode);
+      }, 100);
+    }
+  }
+
+  private async closeHttpServer(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      if (!this.server) {
+        resolve();
+        return;
       }
 
-      // ✅ Cerrar Redis (no crítico si falla)
-      try {
-        if (redisConnection.isHealthy()) {
-          redisLogger.info('Closing Redis connection...');
-          await Promise.race([
-            redisConnection.disconnect(),
-            new Promise((_, reject) =>
-              setTimeout(
-                () => reject(new Error('Redis disconnect timeout')),
-                5000,
-              ),
-            ),
-          ]);
+      const timeout = setTimeout(() => {
+        reject(new Error('HTTP server close timeout'));
+      }, 10000);
+
+      this.server.close((error) => {
+        clearTimeout(timeout);
+        if (error) {
+          this.serverLogger.error('❌ Error closing HTTP server', { error });
+          reject(error);
+        } else {
+          this.serverLogger.info('✅ HTTP server closed successfully');
+          resolve();
         }
-      } catch (_error) {
-        // ✅ Usar _error para indicar que es intencionalmente ignorado
-        redisLogger.warn('Error closing Redis connection', {
-          error: _error instanceof Error ? _error.message : String(_error),
-        });
-      }
+      });
+    });
+  }
 
-      // ✅ Cerrar base de datos
-      try {
-        dbLogger.info('Closing database connection...');
+  private stopCleanupJobs(): void {
+    if (this.cleanupIntervals.length > 0) {
+      this.serverLogger.info('🧹 Stopping cleanup jobs...');
+      this.cleanupIntervals.forEach((interval) => clearInterval(interval));
+      this.cleanupIntervals = [];
+    }
+  }
+
+  private async closeRedis(): Promise<void> {
+    try {
+      if (redisConnection.isHealthy()) {
+        redisLogger.info('🔄 Closing Redis connection...');
+        await Promise.race([
+          redisConnection.disconnect(),
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error('Redis disconnect timeout')),
+              5000,
+            ),
+          ),
+        ]);
+        redisLogger.info('✅ Redis connection closed');
+      }
+    } catch (error) {
+      redisLogger.warn('⚠️ Redis close error (non-critical)', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private async closeDatabase(): Promise<void> {
+    try {
+      if (this.isDatabaseAvailable()) {
+        dbLogger.info('🗄️ Closing database connection...');
         await Promise.race([
           disconnectDatabase(),
           new Promise((_, reject) =>
             setTimeout(
               () => reject(new Error('Database disconnect timeout')),
-              10000,
+              15000,
             ),
           ),
         ]);
-      } catch (error) {
-        dbLogger.warn('Error closing database connection', {
-          error: error instanceof Error ? error.message : String(error),
-        });
+        dbLogger.info('✅ Database connection closed');
       }
-
-      clearTimeout(shutdownTimeout);
-      this.serverLogger.info('Graceful shutdown completed successfully');
     } catch (error) {
-      this.serverLogger.error('Error during shutdown', {
+      dbLogger.warn('⚠️ Database close error', {
         error: error instanceof Error ? error.message : String(error),
       });
-      exitCode = 1;
-    } finally {
-      // ✅ Salida controlada
-      setTimeout(() => process.exit(exitCode), 100);
     }
   }
 
@@ -545,31 +669,40 @@ class AuthServer {
       total: number;
       rss: number;
     };
+    ready: boolean;
   }> {
     const services = {
       database: false,
       redis: false,
-      // El servidor está "vivo" si está escuchando, pero "saludable" solo si está listo.
-      server:
-        this.server !== null && this.server.listening && !this.isShuttingDown,
+      server: this.isServerListening(),
     };
 
     try {
-      // ✅ Verificar servidor
-      services.server =
-        this.server !== null &&
-        this.server.listening &&
-        !this.isShuttingDown &&
-        this.isInitialized;
+      // ✅ Verificar base de datos con timeout corto
+      if (this.isDatabaseAvailable()) {
+        try {
+          await Promise.race([
+            db.$queryRaw`SELECT 1`,
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('DB timeout')), 3000),
+            ),
+          ]);
+          services.database = true;
+          this.consecutiveHealthCheckFailures = 0;
+        } catch {
+          services.database = false;
+          this.consecutiveHealthCheckFailures++;
+        }
+      }
 
-      // ✅ Verificar Redis con timeout corto (no crítico)
+      // ✅ Verificar Redis (no crítico)
       try {
         if (redisConnection.isHealthy()) {
-          const redisClient = redisConnection.getClient();
+          const client = redisConnection.getClient();
           await Promise.race([
-            redisClient.ping(),
+            client.ping(),
             new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('Redis timeout')), 2000),
+              setTimeout(() => reject(new Error('Redis timeout')), 1500),
             ),
           ]);
           services.redis = true;
@@ -578,33 +711,8 @@ class AuthServer {
         services.redis = false;
       }
 
-      // ✅ Verificar base de datos con timeout generoso
-      try {
-        await Promise.race([
-          db.$queryRaw`SELECT 1`,
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Database timeout')), 8000),
-          ),
-        ]);
-        services.database = true;
-        this.consecutiveHealthCheckFailures = 0;
-      } catch (error) {
-        services.database = false;
-        this.consecutiveHealthCheckFailures++;
-
-        // Solo log errores persistentes
-        if (this.consecutiveHealthCheckFailures > 5) {
-          const errorMessage =
-            error instanceof Error ? error.message : 'Unknown error';
-          this.serverLogger.warn('Persistent database health check failure', {
-            error: errorMessage,
-            failures: this.consecutiveHealthCheckFailures,
-          });
-        }
-      }
-
-      // ✅ Considerar saludable si servidor
-      const isHealthy = services.server && this.isReady;
+      // ✅ Estado saludable si el servidor está funcionando
+      const isHealthy = services.server && this.isInitialized;
       const memUsage = process.memoryUsage();
 
       return {
@@ -614,21 +722,15 @@ class AuthServer {
         timestamp: new Date().toISOString(),
         version: process.env.npm_package_version || '1.0.0',
         environment: environment.app.env,
+        ready: this.isReady,
         memory: {
           used: Math.round(memUsage.heapUsed / 1024 / 1024),
           total: Math.round(memUsage.heapTotal / 1024 / 1024),
           rss: Math.round(memUsage.rss / 1024 / 1024),
         },
       };
-    } catch (error) {
+    } catch {
       this.consecutiveHealthCheckFailures++;
-
-      if (this.consecutiveHealthCheckFailures > 10) {
-        this.serverLogger.error('Critical health check failure', {
-          error: error instanceof Error ? error.message : String(error),
-          failures: this.consecutiveHealthCheckFailures,
-        });
-      }
 
       return {
         status: 'unhealthy',
@@ -637,16 +739,17 @@ class AuthServer {
         timestamp: new Date().toISOString(),
         version: process.env.npm_package_version || '1.0.0',
         environment: environment.app.env,
-        memory: {
-          used: 0,
-          total: 0,
-          rss: 0,
-        },
+        ready: false,
+        memory: { used: 0, total: 0, rss: 0 },
       };
     }
   }
 
-  // Método para que los health checks de liveness funcionen
+  // ✅ UTILIDADES
+  public isServiceReady(): boolean {
+    return this.isReady && this.isInitialized && !this.isShuttingDown;
+  }
+
   public isServerListening(): boolean {
     return (
       this.isInitialized &&
@@ -656,38 +759,16 @@ class AuthServer {
     );
   }
 
-  // ✅ UTILIDADES PRIVADAS
   private isDatabaseAvailable(): boolean {
     try {
-      return !!db;
+      return !!db && typeof db.$queryRaw === 'function';
     } catch {
       return false;
     }
   }
 
-  private getMemoryUsage() {
-    const memUsage = process.memoryUsage();
-    return {
-      rss: Math.round(memUsage.rss / 1024 / 1024),
-      heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
-      heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
-      external: Math.round(memUsage.external / 1024 / 1024),
-    };
-  }
-
   // ✅ GETTERS PÚBLICOS
-  public getServerStats(): {
-    memory: NodeJS.MemoryUsage;
-    uptime: number;
-    version: string;
-    environment: string;
-    pid: number;
-    nodeVersion: string;
-    platform: string;
-    arch: string;
-    isInitialized: boolean;
-    consecutiveFailures: number;
-  } {
+  public getServerStats() {
     return {
       memory: process.memoryUsage(),
       uptime: process.uptime(),
@@ -698,21 +779,18 @@ class AuthServer {
       platform: process.platform,
       arch: process.arch,
       isInitialized: this.isInitialized,
+      isReady: this.isReady,
       consecutiveFailures: this.consecutiveHealthCheckFailures,
+      serverListening: this.isServerListening(),
     };
   }
 
-  public getApp(): App {
+  public getApp(): App | null {
     return this.app;
   }
 
   public isRunning(): boolean {
-    return (
-      this.server !== null &&
-      this.server.listening &&
-      !this.isShuttingDown &&
-      this.isInitialized
-    );
+    return this.isServerListening() && this.isInitialized;
   }
 
   public getServer(): Server | null {
@@ -720,13 +798,16 @@ class AuthServer {
   }
 }
 
-// ✅ INSTANCIA DEL SERVIDOR
-const authServer = new AuthServer();
+// ✅ FUNCIÓN PRINCIPAL DE STARTUP CON MANEJO DE ERRORES ROBUSTO
+async function startServer(): Promise<void> {
+  const authServer = new AuthServer();
 
-// ✅ Iniciar el servidor solo si es el módulo principal
-if (require.main === module) {
-  authServer.start().catch((error) => {
-    logger.fatal('Failed to start server', {
+  try {
+    console.warn('🚀 Starting Auth Service...');
+    await authServer.start();
+    console.info('✅ Auth Service started successfully');
+  } catch (error) {
+    console.error('💥 Failed to start Auth Service:', {
       error:
         error instanceof Error
           ? {
@@ -735,11 +816,25 @@ if (require.main === module) {
               name: error.name,
             }
           : error,
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'unknown',
+      nodeVersion: process.version,
     });
+    // Salir inmediatamente en caso de error
+    process.exit(1);
+  }
+}
+
+// ✅ INSTANCIA GLOBAL DEL SERVIDOR
+const authServer = new AuthServer();
+
+// ✅ Iniciar servidor solo si es el módulo principal
+if (require.main === module) {
+  startServer().catch((error) => {
+    console.error('💥 Startup failed:', error);
     process.exit(1);
   });
 }
 
-//const authServer = new AuthServer();
 export default authServer;
 export { AuthServer };
