@@ -119,30 +119,43 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     environment:
-      name: Task-manager # ¡CAMBIADO! Ahora usa tu entorno 'Task-manager'
+      name: task-manager
+      url: ${{ vars.AUTH_SERVICE_PRODUCTION_URL }}
 
     steps:
       - name: 📥 Checkout Code
         uses: actions/checkout@v4
 
-      - name: 🌟 Deploy to Render Production
+      - name: 🚀 Trigger Render Deployment
+        id: deploy
         uses: johnbeynon/render-deploy-action@v0.0.8
         with:
+          # ✅ Opciones correctas: solo service-id y api-key
           service-id: ${{ secrets.RENDER_AUTH_SERVICE_PRODUCTION_ID }}
           api-key: ${{ secrets.RENDER_API_KEY }}
 
-      - name: 🔍 Health Check Production
+      - name: 🩺 Health Check Production (con reintentos)
         run: |
-          echo "🏥 Waiting for production service to be ready..."
-          sleep 60
-          curl -f ${{ vars.AUTH_SERVICE_PRODUCTION_URL }}/api/v1/health || exit 1
-          echo "✅ Production deployment successful!"
+          echo "🚀 Deploy triggered on Render. Waiting for the new version to go live..."
+          # Una espera inicial de 60 segundos para darle tiempo a Render a iniciar el proceso
+          sleep 60 
 
-      - name: 🧪 Smoke Tests on Production
-        run: |
-          echo "🧪 Running smoke tests on production..."
-          curl -f ${{ vars.AUTH_SERVICE_PRODUCTION_URL }}/api/v1/health
-          echo "✅ Smoke tests passed!"
+          # Bucle de reintentos por hasta 5 minutos (20 intentos * 15s = 300s)
+          for i in {1..20}; do
+            # ✅ Usamos el endpoint '/ready' porque es el que asegura que las dependencias están listas
+            response_code=$(curl -o /dev/null -s -w "%{http_code}" "${{ vars.AUTH_SERVICE_PRODUCTION_URL }}/api/v1/health/ready")
+            
+            if [ "$response_code" -eq 200 ]; then
+              echo "✅ Health check passed with status 200 on attempt $i."
+              exit 0
+            fi
+            
+            echo "Attempt $i: Health check failed with status $response_code. Retrying in 15 seconds..."
+            sleep 15
+          done
+          
+          echo "❌ Health check failed after multiple attempts."
+          exit 1
 
       - name: 📢 Notify Deployment Success
         if: success()

@@ -14,7 +14,7 @@ services:
       pnpm prisma:generate
       pnpm build
     startCommand: pnpm start:prod
-    # ✅ CONFIGURACIÓN DE HEALTH CHECK OPTIMIZADA PARA RENDER
+    # CONFIGURACIÓN DE HEALTH CHECK OPTIMIZADA PARA RENDER
     healthCheckPath: /api/v1/health/ready
     autoDeploy: true
     envVars:
