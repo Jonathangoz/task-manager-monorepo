@@ -19,6 +19,13 @@ import { AppRequest } from '../types/express';
 // Configuration
 import { environment } from '@/config/environment';
 
+import { db } from '@/config/database';
+import { RedisCache } from '@/core/cache/RedisCache';
+import { UserRepository } from '@/core/repositories/UserRepository';
+import { AuthService } from '@/core/application/AuthService';
+import { TokenService } from '@/core/application/TokenService';
+import { UserService } from '@/core/application/UserService';
+
 // Utils
 import {
   httpLogger,
@@ -178,10 +185,9 @@ class App {
     this.app = express();
     this.securityConfig = this.buildSecurityConfig();
     this.services = {} as ServiceDependencies;
-    this.initializeApp();
   }
 
-  private async initializeApp(): Promise<void> {
+  public async initializeApp(): Promise<void> {
     try {
       this.appLogger.info('Initializing Auth Service application...', {
         nodeVersion: process.version,
@@ -198,7 +204,7 @@ class App {
       await this.initializeSecurityMiddlewares();
 
       //  await this.validateConfiguration();
-      //  await this.initializeServices();
+      await this.initializeServices();
       await this.initializeCoreMiddlewares();
       await this.initializeValidationMiddlewares();
       await this.initializeRoutes();
@@ -212,7 +218,7 @@ class App {
     }
   }
 
-  /*  private async initializeServices(): Promise<void> {
+  private async initializeServices(): Promise<void> {
     this.appLogger.info('Initializing services and dependencies...');
 
     try {
@@ -247,7 +253,7 @@ class App {
     }
   }
 
-  private async validateConfiguration(): Promise<void> {
+  /*private async validateConfiguration(): Promise<void> {
     this.appLogger.info('Validating application configuration...');
 
     try {
@@ -280,7 +286,7 @@ class App {
       this.appLogger.error('Configuration validation failed', { error });
       throw error;
     }
-  } */
+  }*/
 
   private buildSecurityConfig(): SecurityConfig {
     // Fix: Definir helmetOptions como HelmetOptions en lugar de usar typeof

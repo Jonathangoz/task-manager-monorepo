@@ -78,20 +78,26 @@ class AuthServer {
         pid: process.pid,
       });
 
-      // ✅ PASO 1: Verificar configuración crítica ANTES de inicializar
+      // Verificar configuración crítica ANTES de inicializar
       await this.validateCriticalConfig();
 
-      // ✅ PASO 2: Inicializar App con manejo de errores
-      this.serverLogger.info('📦 Initializing Express application...');
+      // Inicializar App con manejo de errores
+      this.serverLogger.info('📦 Creating Express application instance...');
       this.app = new App();
 
-      // ✅ PASO 3: Iniciar servidor HTTP INMEDIATAMENTE (para health checks de Render)
+      // LLAMAR EXPLÍCITAMENTE A LA INICIALIZACIÓN DE LA APP
+      this.serverLogger.info(
+        '⚙️ Initializing application logic (middlewares, routes)...',
+      );
+      await this.app.initializeApp();
+
+      // Iniciar servidor HTTP INMEDIATAMENTE (para health checks de Render)
       await this.startHttpServer();
 
-      // ✅ PASO 4: Inicializar dependencias en background
+      // Inicializar dependencias (DB, Redis) en background
       this.initializeDependenciesInBackground();
 
-      // ✅ PASO 5: Configurar shutdown graceful
+      // Configurar shutdown graceful
       this.setupGracefulShutdown();
 
       this.isInitialized = true;
@@ -803,7 +809,7 @@ async function startServer(): Promise<void> {
   const authServer = new AuthServer();
 
   try {
-    console.warn('🚀 Starting Auth Service...');
+    console.log('🚀 Starting Auth Service...');
     await authServer.start();
     console.info('✅ Auth Service started successfully');
   } catch (error) {
