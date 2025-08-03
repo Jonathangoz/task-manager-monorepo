@@ -81,6 +81,27 @@ services:
       - key: SWAGGER_ENABLED
         value: 'false' # ✅ Deshabilitado en producción
 
+      - key: MAX_LOGIN_ATTEMPTS
+        value: '5'
+      - key: ACCOUNT_LOCK_TIME
+        value: '1800000' # 30 minutos
+      - key: PASSWORD_RESET_TOKEN_EXPIRES
+        value: '3600000' # 1 hora
+      - key: EMAIL_VERIFICATION_ENABLED
+        value: 'false'
+
+      # TTLs de CACHE (en segundos)
+      - key: CACHE_TTL_USER_SESSIONS
+        value: '900' # 15 minutos
+      - key: CACHE_TTL_USER_DATA
+        value: '300' # 5 minutos
+      - key: CACHE_TTL_BLACKLIST
+        value: '86400' # 24 horas
+
+      # 🔧 Logging y configuración - OPTIMIZADO PARA RENDER
+      - key: LOG_LEVEL
+        value: 'warn' # Reducir logs para mejor performance
+
       # ✅ TIMEOUTS CRÍTICOS PARA RENDER - MÁS GENEROSOS
       - key: HTTP_REQUEST_TIMEOUT
         value: '180000' # 3 minutos (más generoso)

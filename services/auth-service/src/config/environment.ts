@@ -12,11 +12,7 @@ const envSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'production', 'test'])
     .default('development'),
-  PORT: z
-    .string()
-    .transform((val) => parseInt(val, 10))
-    .pipe(z.number().positive())
-    .default('process.env.PORT'),
+  PORT: z.coerce.number().positive().default(3001),
   API_VERSION: z.string().default('v1'),
 
   // DATABASE CONFIGURATION
