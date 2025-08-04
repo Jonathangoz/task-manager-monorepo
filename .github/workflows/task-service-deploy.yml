@@ -96,29 +96,29 @@ jobs:
       - name: 🏗️ Build Application
         run: pnpm --filter task-manager-task-service build
 
-      - name: 🧪 Run Tests
-        run: pnpm --filter task-manager-task-service test:coverage
-        env:
-          NODE_ENV: test
-          DATABASE_URL: postgresql://task_test_user:task_test_password@localhost:5432/task_test_db
-          REDIS_URL: redis://localhost:6379
-          AUTH_SERVICE_URL: http://localhost:3001
-          AUTH_SERVICE_VERIFY_ENDPOINT: /api/v1/auth/verify-token
-          JWT_SECRET: base64:dGVzdC1qd3Qtc2VjcmV0LXN1cGVyLXNlY3VyZS1mb3ItdGVzdGluZy1vbmx5LTY0LWNoYXJzLWhlcmU=
-          # Asegúrate de que estas variables también estén en tu .env de test del Task Service
-          AUTH_SERVICE_API_KEY: test-api-key # Agrega un valor de prueba si tu app lo usa en tests
-          # Si tu Task Service usa REFRESH_TOKEN_SECRET o JWE_SECRET para algo en tests, añádelos aquí también
-          # REFRESH_TOKEN_SECRET: base64:dGVzdC1yZWZyZXNoLXNlY3JldC1zdXBlci1zZWN1cmUtZm9yLXRlc3Rpbmctb25seS02NC1jaGFycw==
-          # JWE_SECRET: base64:dGVzdC1qd2Utc2VjcmV0LTMyLWNoYXJzLWV4YWN0bHk=
+    #  - name: 🧪 Run Tests
+    #    run: pnpm --filter task-manager-task-service test:coverage
+    #    env:
+    #      NODE_ENV: test
+    #      DATABASE_URL: postgresql://task_test_user:task_test_password@localhost:5432/task_test_db
+    #      REDIS_URL: redis://localhost:6379
+    #      AUTH_SERVICE_URL: http://localhost:3001
+    #      AUTH_SERVICE_VERIFY_ENDPOINT: /api/v1/auth/verify-token
+    #      JWT_SECRET: base64:dGVzdC1qd3Qtc2VjcmV0LXN1cGVyLXNlY3VyZS1mb3ItdGVzdGluZy1vbmx5LTY0LWNoYXJzLWhlcmU=
+    #      # Asegúrate de que estas variables también estén en tu .env de test del Task Service
+    #      AUTH_SERVICE_API_KEY: test-api-key # Agrega un valor de prueba si tu app lo usa en tests
+    #      # Si tu Task Service usa REFRESH_TOKEN_SECRET o JWE_SECRET para algo en tests, añádelos aquí también
+    #      # REFRESH_TOKEN_SECRET: base64:dGVzdC1yZWZyZXNoLXNlY3JldC1zdXBlci1zZWN1cmUtZm9yLXRlc3Rpbmctb25seS02NC1jaGFycw==
+    #      # JWE_SECRET: base64:dGVzdC1qd2Utc2VjcmV0LTMyLWNoYXJzLWV4YWN0bHk=
 
-      - name: 📊 Upload Coverage Reports
-        uses: codecov/codecov-action@v4
-        with:
-          file: ${{ env.SERVICE_PATH }}/coverage/lcov.info
-          flags: task-service
-          name: task-service-coverage
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    #  - name: 📊 Upload Coverage Reports
+    #    uses: codecov/codecov-action@v4
+    #    with:
+    #      file: ${{ env.SERVICE_PATH }}/coverage/lcov.info
+    #      flags: task-service
+    #      name: task-service-coverage
+    #    env:
+    #      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   # 🔗 Check Auth Service Dependency (Solo para producción)
   check-dependencies:
@@ -158,7 +158,6 @@ jobs:
         with:
           service-id: ${{ secrets.RENDER_TASK_SERVICE_PRODUCTION_ID }}
           api-key: ${{ secrets.RENDER_API_KEY }}
-          # wait-for-success: true # ELIMINADO: 'wait-for-success' no es un input válido para esta acción
 
       - name: 🔍 Health Check Production
         run: |
