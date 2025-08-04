@@ -1,15 +1,17 @@
 // src/commons/controllers/CategoryController.ts
 
 import { Request, Response, NextFunction } from 'express';
+import { ParsedQs } from 'qs';
 import { ICategoryService } from '@/core/domain/interfaces/ICategoryService';
 import {
   HTTP_STATUS,
   SUCCESS_MESSAGES,
   ERROR_CODES,
   ApiResponse,
+  PaginationMeta,
 } from '@/utils/constants';
 import { logger } from '@/utils/logger';
-import { extractPaginationParams, PaginationParams } from '@/utils/pagination';
+import { extractPaginationParams } from '@/utils/pagination';
 import {
   CreateCategoryData,
   UpdateCategoryData,
@@ -27,7 +29,7 @@ class ValidationError extends Error {
   }
 }
 
-// Interface para request autenticado - CORREGIDO: firstName (no firtName)
+// Interface para request autenticado
 interface AuthenticatedRequest extends Request {
   user: {
     id: string;
@@ -38,24 +40,15 @@ interface AuthenticatedRequest extends Request {
   };
 }
 
-// Interfaces for request validation
-interface CreateCategoryRequest {
-  name: string;
-  description?: string;
-  color?: string;
-  icon?: string;
-}
-
-interface UpdateCategoryRequest {
-  name?: string;
-  description?: string;
-  color?: string;
-  icon?: string;
-  isActive?: boolean;
-}
-
 interface BulkDeleteRequest {
   categoryIds: string[];
+}
+
+// 💡 EXPLICACIÓN: Se define una interfaz para los resultados paginados del servicio
+// que será usada consistentemente.
+interface PaginatedServiceResult<T> {
+  data: T[];
+  meta: PaginationMeta;
 }
 
 interface SearchCategoriesRequest {
@@ -294,6 +287,7 @@ export class CategoryController {
         'Fetching category tasks',
       );
 
+      // 💡 EXPLICACIÓN: Se asume que getCategoryTasks devuelve un objeto con { data, meta }
       const result = await this.categoryService.getCategoryTasks(
         categoryId,
         userId,
@@ -315,7 +309,7 @@ export class CategoryController {
           userId,
           page: paginationParams.page,
           limit: paginationParams.limit,
-          total: result.total || result.meta?.total || 0,
+          total: result.meta.total,
         },
         'Category tasks retrieved successfully',
       );
@@ -418,9 +412,17 @@ export class CategoryController {
         'Searching categories',
       );
 
-      // Asumiendo que el servicio tiene un método getUserCategories
-      const result = await this.categoryService.getUserCategories(userId);
+      // ✅ CORRECCIÓN (TS2739): Se llama al nuevo método `searchUserCategories` que está
+      // diseñado para la búsqueda y paginación. Ahora los argumentos coinciden y el
+      // tipo de retorno (PaginatedCategoriesResult) es el esperado.
+      const result = await this.categoryService.searchUserCategories(
+        userId,
+        searchParams,
+        paginationParams,
+      );
 
+      // 💡 EXPLICACIÓN: Asumimos que createPaginatedResponse está preparado para
+      // recibir el objeto `result` que ahora contiene `data` y `meta`.
       const response = this.createPaginatedResponse(
         'Categories search completed successfully',
         result,
@@ -433,6 +435,7 @@ export class CategoryController {
         {
           userId,
           query: searchParams.query,
+          resultsCount: result.meta.total,
         },
         'Categories search completed successfully',
       );
@@ -581,7 +584,7 @@ export class CategoryController {
   /**
    * Parse includeTaskCount parameter
    */
-  private parseIncludeTaskCountParam(param: any): boolean {
+  private parseIncludeTaskCountParam(param: unknown): boolean {
     return param === 'true' || param === true;
   }
 
@@ -589,9 +592,14 @@ export class CategoryController {
    * Validate create category request data
    */
   private validateCreateCategoryData(
-    body: any,
+    body: unknown,
   ): Omit<CreateCategoryData, 'userId'> {
-    const { name, description, color, icon } = body;
+    if (!body || typeof body !== 'object') {
+      throw new ValidationError('Invalid request body: must be an object.');
+    }
+    const bodyRecord = body as Record<string, unknown>;
+
+    const { name, description, color, icon } = bodyRecord;
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       throw new ValidationError(
@@ -599,26 +607,24 @@ export class CategoryController {
       );
     }
 
-    // Additional validations could be added here
-    const trimmedName = name.trim();
-    if (trimmedName.length > 100) {
-      // Based on CATEGORY_CONFIG.MAX_NAME_LENGTH
-      throw new ValidationError('Category name cannot exceed 100 characters');
-    }
-
     return {
-      name: trimmedName,
-      description: description?.trim() || undefined,
-      color: color?.trim() || undefined,
-      icon: icon?.trim() || undefined,
+      name: name.trim(),
+      description:
+        typeof description === 'string' ? description.trim() : undefined,
+      color: typeof color === 'string' ? color.trim() : undefined,
+      icon: typeof icon === 'string' ? icon.trim() : undefined,
     };
   }
 
   /**
    * Validate update category request data
    */
-  private validateUpdateCategoryData(body: any): UpdateCategoryData {
-    const { name, description, color, icon, isActive } = body;
+  private validateUpdateCategoryData(body: unknown): UpdateCategoryData {
+    if (!body || typeof body !== 'object') {
+      throw new ValidationError('Invalid request body: must be an object.');
+    }
+    const bodyRecord = body as Record<string, unknown>;
+    const { name, description, color, icon, isActive } = bodyRecord;
     const updateData: UpdateCategoryData = {};
 
     // Validate name if provided
@@ -635,13 +641,14 @@ export class CategoryController {
 
     // Validate other fields
     if (description !== undefined) {
-      updateData.description = description?.trim() || null;
+      updateData.description =
+        typeof description === 'string' ? description.trim() : undefined;
     }
     if (color !== undefined) {
-      updateData.color = color?.trim() || null;
+      updateData.color = typeof color === 'string' ? color.trim() : undefined;
     }
     if (icon !== undefined) {
-      updateData.icon = icon?.trim() || null;
+      updateData.icon = typeof icon === 'string' ? icon.trim() : undefined;
     }
     if (isActive !== undefined) {
       updateData.isActive = Boolean(isActive);
@@ -658,8 +665,8 @@ export class CategoryController {
   /**
    * Validate bulk delete request data
    */
-  private validateBulkDeleteData(body: any): BulkDeleteRequest {
-    const { categoryIds } = body;
+  private validateBulkDeleteData(body: unknown): BulkDeleteRequest {
+    const { categoryIds } = body as { categoryIds: unknown };
 
     if (!Array.isArray(categoryIds) || categoryIds.length === 0) {
       throw new ValidationError(
@@ -667,7 +674,9 @@ export class CategoryController {
       );
     }
 
-    if (categoryIds.some((id) => typeof id !== 'string' || !id.trim())) {
+    if (
+      categoryIds.some((id: unknown) => typeof id !== 'string' || !id.trim())
+    ) {
       throw new ValidationError(
         'All category IDs must be valid non-empty strings',
       );
@@ -679,54 +688,44 @@ export class CategoryController {
   /**
    * Validate search categories request data - MÉTODO AGREGADO
    */
-  private validateSearchCategoriesData(query: any): SearchCategoriesRequest {
+  private validateSearchCategoriesData(
+    query: ParsedQs,
+  ): SearchCategoriesRequest {
     const { query: searchQuery, includeInactive, sortBy, sortOrder } = query;
-
     const searchParams: SearchCategoriesRequest = {};
 
-    // Validate query
-    if (searchQuery !== undefined) {
-      if (typeof searchQuery !== 'string') {
-        throw new ValidationError('Search query must be a string');
-      }
-      const trimmedQuery = searchQuery.trim();
-      if (trimmedQuery.length < 1) {
-        throw new ValidationError(
-          'Search query must be at least 1 character long',
-        );
-      }
-      if (trimmedQuery.length > 100) {
-        throw new ValidationError('Search query cannot exceed 100 characters');
-      }
-      searchParams.query = trimmedQuery;
+    if (searchQuery && typeof searchQuery === 'string') {
+      searchParams.query = searchQuery;
     }
 
-    // Validate includeInactive
     if (includeInactive !== undefined) {
-      searchParams.includeInactive =
-        includeInactive === 'true' || includeInactive === true;
+      searchParams.includeInactive = includeInactive === 'true';
     }
 
-    // Validate sortBy
     if (sortBy !== undefined) {
+      if (typeof sortBy !== 'string') {
+        throw new ValidationError('sortBy must be a string.');
+      }
       const validSortFields = ['name', 'createdAt', 'updatedAt'];
       if (!validSortFields.includes(sortBy)) {
         throw new ValidationError(
           `Invalid sortBy field. Must be one of: ${validSortFields.join(', ')}`,
         );
       }
-      searchParams.sortBy = sortBy;
+      searchParams.sortBy = sortBy as 'name' | 'createdAt' | 'updatedAt';
     }
 
-    // Validate sortOrder
     if (sortOrder !== undefined) {
+      if (typeof sortOrder !== 'string') {
+        throw new ValidationError('sortOrder must be a string.');
+      }
       const validSortOrders = ['asc', 'desc'];
       if (!validSortOrders.includes(sortOrder)) {
         throw new ValidationError(
           `Invalid sortOrder. Must be one of: ${validSortOrders.join(', ')}`,
         );
       }
-      searchParams.sortOrder = sortOrder;
+      searchParams.sortOrder = sortOrder as 'asc' | 'desc';
     }
 
     return searchParams;
@@ -756,31 +755,19 @@ export class CategoryController {
   /**
    * Create paginated response
    */
-  private createPaginatedResponse(
+  private createPaginatedResponse<T>(
     message: string,
-    result: any,
+    result: PaginatedServiceResult<T>,
     req: AuthenticatedRequest,
-  ): ApiResponse {
-    // Handle different result formats from service
-    const data = result.data || result.tasks || result.categories || [];
-    const pagination = result.meta ||
-      result.pagination || {
-        page: 1,
-        limit: 20,
-        total: result.total || 0,
-        pages: Math.ceil((result.total || 0) / 20),
-        hasNext: false,
-        hasPrev: false,
-      };
-
+  ): ApiResponse<T[]> {
     return {
       success: true,
       message,
-      data,
+      data: result.data,
       meta: {
         timestamp: new Date().toISOString(),
         requestId: req.headers['x-request-id'] as string,
-        pagination,
+        pagination: result.meta,
       },
     };
   }

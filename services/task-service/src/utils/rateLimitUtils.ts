@@ -9,12 +9,10 @@ import { config } from '@/config/environment';
 import { logger } from '@/utils/logger';
 import {
   RATE_LIMIT_CONFIG,
-  RATE_LIMIT_CACHE_KEYS,
   RATE_LIMIT_EXEMPTIONS,
   EVENT_TYPES,
   isWhitelistedIP,
   isExemptedRoute,
-  generateRateLimitMessage,
 } from '@/utils/constants';
 
 // ==============================================
@@ -118,7 +116,7 @@ export class RateLimitUtils {
   /**
    * Obtiene métricas agregadas de rate limiting
    */
-  async getMetrics(timeRangeMs: number = 3600000): Promise<RateLimitMetrics> {
+  async getMetrics(_timeRangeMs: number = 3600000): Promise<RateLimitMetrics> {
     try {
       const pattern = `${this.keyPrefix}*`;
       const keys = await this.redis.keys(pattern);
@@ -538,7 +536,7 @@ export const generateRateLimitIdentifier = (
   type: 'ip' | 'user' | 'combined' = 'combined',
 ): string => {
   const ip = req.ip || 'unknown';
-  const userId = (req as any).userId;
+  const userId = (req as Request & { userId?: string }).userId;
 
   switch (type) {
     case 'ip':

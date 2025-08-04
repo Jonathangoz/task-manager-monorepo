@@ -3,24 +3,23 @@ import { Request, Response } from 'express';
 import { Prisma } from '@prisma/client'; // ✅ Added missing import
 import { taskDatabase } from '@/config/database';
 import { taskRedisConnection } from '@/config/redis';
-import { logger, healthCheck, logError } from '@/utils/logger';
+import { healthCheck, logError } from '@/utils/logger';
 import {
   HTTP_STATUS,
   ERROR_CODES,
   ERROR_MESSAGES,
   SERVICE_NAMES,
-  EVENT_TYPES,
   ApiResponse,
 } from '@/utils/constants';
 import { config } from '@/config/environment';
-import axios from 'axios';
+import axios, { AxiosResponse } from 'axios';
 
 // Interfaz para el resultado de health checks
 interface HealthCheckResult {
   status: boolean;
   responseTime: number;
   error?: string;
-  details?: any;
+  details?: Record<string, unknown>;
 }
 
 // Interfaz para métricas del sistema
@@ -195,7 +194,6 @@ export class HealthController {
 
     try {
       const memUsage = process.memoryUsage();
-      const isAlive = process.uptime() > 0 && memUsage.heapUsed > 0;
       const responseTime = Date.now() - startTime;
 
       const response: ApiResponse = {
@@ -691,7 +689,7 @@ export class HealthController {
     const startTime = Date.now();
     try {
       const authServiceUrl = config.authService.url;
-      const response = await Promise.race([
+      const response: AxiosResponse | unknown = await Promise.race([
         axios.get(`${authServiceUrl}/api/v1/health`, {
           timeout: 5000,
           headers: { Accept: 'application/json' },
@@ -704,7 +702,7 @@ export class HealthController {
       return {
         status: true,
         responseTime: Date.now() - startTime,
-        details: (response as any)?.data || { connected: true },
+        details: (response as AxiosResponse)?.data || { connected: true },
       };
     } catch (error) {
       const errorMessage =

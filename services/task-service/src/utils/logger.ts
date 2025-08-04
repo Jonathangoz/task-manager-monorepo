@@ -1,46 +1,16 @@
-// ==============================================
 // src/utils/logger.ts - Task Service Logger
 // Sistema de logging con Pino, timezone Bogotá y rotación de archivos
 // Específico para operaciones de tareas y categorías
-// ==============================================
 
 import pino from 'pino';
 import path from 'path';
 import { mkdirSync, existsSync } from 'fs';
+import { AppConfig } from '@/config/environment';
 
-// ==============================================
 // CONFIGURACIÓN DE TIMEZONE BOGOTÁ
-// ==============================================
 const BOGOTA_TIMEZONE = 'America/Bogota';
 
-// Función para formatear timestamp con timezone Bogotá
-const formatTimestamp = () => {
-  const now = new Date();
-  const bogotaTime = new Intl.DateTimeFormat('es-CO', {
-    timeZone: BOGOTA_TIMEZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  }).formatToParts(now);
-
-  const parts = bogotaTime.reduce(
-    (acc, part) => {
-      acc[part.type] = part.value;
-      return acc;
-    },
-    {} as Record<string, string>,
-  );
-
-  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
-};
-
-// ==============================================
 // CONFIGURACIÓN TEMPORAL HASTA QUE SE CARGUE ENVIRONMENT
-// ==============================================
 const getLogLevel = (): pino.LevelWithSilent => {
   const level = process.env.LOG_LEVEL as pino.LevelWithSilent;
   return ['trace', 'debug', 'info', 'warn', 'error', 'fatal'].includes(level)
@@ -57,9 +27,7 @@ const getLogPretty = (): boolean => {
 const isDevelopment = process.env.NODE_ENV === 'development';
 const isProduction = process.env.NODE_ENV === 'production';
 
-// ==============================================
 // CONFIGURACIÓN DE DIRECTORIOS DE LOGS
-// ==============================================
 const LOG_DIR = path.join(process.cwd(), 'logs');
 
 // Crear directorio de logs si no existe
@@ -67,9 +35,13 @@ if (!existsSync(LOG_DIR)) {
   mkdirSync(LOG_DIR, { recursive: true });
 }
 
-// ==============================================
+// Interfaz para el objeto de log con un error
+interface LogObjectWithError {
+  err?: Error & { code?: string; statusCode?: number };
+  [key: string]: unknown;
+}
+
 // CONFIGURACIÓN BASE DEL LOGGER
-// ==============================================
 const baseLoggerConfig: pino.LoggerOptions = {
   level: getLogLevel(),
   base: {
@@ -81,27 +53,25 @@ const baseLoggerConfig: pino.LoggerOptions = {
   formatters: {
     level: (label) => ({ level: label }),
     log: (object) => {
-      if (object.err) {
-        const err = object.err as any;
-        return {
-          ...object,
-          error: {
-            type: err.constructor.name,
-            message: err.message,
-            stack: isDevelopment ? err.stack : undefined,
-            code: err.code,
-            statusCode: err.statusCode,
-          },
+      const logObject = object as LogObjectWithError;
+      if (logObject.err) {
+        const err = logObject.err;
+        const errorDetails = {
+          type: err.constructor.name,
+          message: err.message,
+          stack: isDevelopment ? err.stack : undefined,
+          code: err.code,
+          statusCode: err.statusCode,
         };
+        const { err: _err, ...rest } = logObject;
+        return { ...rest, error: errorDetails };
       }
       return object;
     },
   },
 };
 
-// ==============================================
 // CONFIGURACIÓN PARA DESARROLLO
-// ==============================================
 const createDevelopmentLogger = (): pino.Logger => {
   const devConfig = { ...baseLoggerConfig };
 
@@ -121,9 +91,7 @@ const createDevelopmentLogger = (): pino.Logger => {
   return pino(devConfig);
 };
 
-// ==============================================
 // CONFIGURACIÓN PARA PRODUCCIÓN
-// ==============================================
 const createProductionLogger = (): pino.Logger => {
   const productionConfig: pino.LoggerOptions = {
     level: getLogLevel(),
@@ -174,16 +142,12 @@ const createProductionLogger = (): pino.Logger => {
   return pino(productionConfig);
 };
 
-// ==============================================
 // CREAR INSTANCIA DEL LOGGER
-// ==============================================
 export const logger = isDevelopment
   ? createDevelopmentLogger()
   : createProductionLogger();
 
-// ==============================================
 // LOGGERS ESPECIALIZADOS POR COMPONENTE
-// ==============================================
 export const httpLogger = logger.child({
   component: 'http',
   domain: 'web',
@@ -219,30 +183,30 @@ export const securityLogger = logger.child({
   domain: 'security',
 });
 
-// ==============================================
 // LOGGER CON CONTEXTO DE REQUEST
-// ==============================================
 export const createRequestLogger = (requestId?: string, userId?: string) => {
-  const context: Record<string, any> = { context: 'request' };
+  const context: Record<string, string | undefined> = {
+    context: 'request',
+    requestId,
+    userId,
+  };
 
-  if (requestId) context.requestId = requestId;
-  if (userId) context.userId = userId;
+  // Filtrar propiedades indefinidas para un log más limpio
+  Object.keys(context).forEach((key) =>
+    context[key] === undefined ? delete context[key] : {},
+  );
 
   return logger.child(context);
 };
 
 // Función helper para crear child loggers con contexto
-export const createContextLogger = (context: Record<string, any>) => {
+export const createContextLogger = (context: Record<string, unknown>) => {
   return logger.child(context);
 };
 
-// ==============================================
 // LOGGERS ESTRUCTURADOS POR DOMINIO DE TASK SERVICE
-// ==============================================
 export const loggers = {
-  // ==============================================
   // EVENTOS DE TAREAS
-  // ==============================================
   taskCreated: (
     taskId: string,
     title: string,
@@ -380,9 +344,7 @@ export const loggers = {
       `📦 Operación en lote: ${operation} aplicada a ${affectedCount} tareas`,
     ),
 
-  // ==============================================
   // EVENTOS DE CATEGORÍAS
-  // ==============================================
   categoryCreated: (
     categoryId: string,
     name: string,
@@ -491,9 +453,7 @@ export const loggers = {
       `⚠️ Usuario ${userId} alcanzó límite de categorías: ${currentCount}/${maxCount}`,
     ),
 
-  // ==============================================
   // EVENTOS DE AUTENTICACIÓN Y AUTORIZACIÓN
-  // ==============================================
   tokenValidated: (userId: string, ip?: string, userAgent?: string) =>
     authLogger.info(
       {
@@ -554,9 +514,7 @@ export const loggers = {
       `🔒 Acceso prohibido: usuario ${userId} intentó ${action} en ${resource}`,
     ),
 
-  // ==============================================
   // EVENTOS DE SEGURIDAD
-  // ==============================================
   suspiciousActivity: (
     ip: string,
     activity: string,
@@ -595,9 +553,7 @@ export const loggers = {
       `🚫 Rate limit excedido: ${ip} en ${endpoint} (${limit}/${windowMs}ms)`,
     ),
 
-  // ==============================================
   // EVENTOS DE BASE DE DATOS
-  // ==============================================
   dbQuery: (
     operation: string,
     table: string,
@@ -661,9 +617,7 @@ export const loggers = {
       `🐌 Query lenta: ${operation} en ${table} (${duration}ms > ${threshold}ms)`,
     ),
 
-  // ==============================================
   // EVENTOS DE CACHE (REDIS)
-  // ==============================================
   cacheHit: (key: string, ttl?: number, userId?: string) =>
     redisLogger.debug(
       {
@@ -729,9 +683,7 @@ export const loggers = {
       `🧹 Cache invalidado: ${count} claves con patrón "${pattern}" - ${reason}`,
     ),
 
-  // ==============================================
   // EVENTOS DE BÚSQUEDA Y FILTRADO
-  // ==============================================
   searchPerformed: (
     userId: string,
     query: string,
@@ -762,9 +714,7 @@ export const loggers = {
       `🔧 Filtros aplicados - ${resultsCount} resultados`,
     ),
 
-  // ==============================================
   // EVENTOS DE ESTADÍSTICAS
-  // ==============================================
   statsUpdated: (userId: string, statsData: object, duration: number) =>
     taskLogger.info(
       {
@@ -789,9 +739,7 @@ export const loggers = {
       `📈 Estadísticas generadas: período ${period}, ${metricsCount} métricas`,
     ),
 
-  // ==============================================
   // MONITOREO DE RENDIMIENTO
-  // ==============================================
   requestCompleted: (
     method: string,
     path: string,
@@ -834,9 +782,7 @@ export const loggers = {
       `⚡ Alto uso de CPU: ${usage}% > ${threshold}%`,
     ),
 
-  // ==============================================
   // EVENTOS DE INTEGRACIÓN CON AUTH SERVICE
-  // ==============================================
   authServiceCalled: (endpoint: string, duration: number, statusCode: number) =>
     authLogger.debug(
       {
@@ -873,9 +819,7 @@ export const loggers = {
     ),
 };
 
-// ==============================================
 // MANEJO DE ERRORES POR SEVERIDAD
-// ==============================================
 export const logError = {
   critical: (error: Error, context?: object, userId?: string) => {
     logger.fatal(
@@ -928,9 +872,7 @@ export const logError = {
     ),
 };
 
-// ==============================================
 // HEALTH CHECKS Y MONITOREO
-// ==============================================
 export const healthCheck = {
   passed: (service: string, duration: number, details?: object) =>
     logger.info(
@@ -972,9 +914,7 @@ export const healthCheck = {
     ),
 };
 
-// ==============================================
 // UTILIDADES DE STARTUP
-// ==============================================
 export const startup = {
   serviceStarted: (port: number, env: string) =>
     logger.info(
@@ -1019,48 +959,44 @@ export const startup = {
     ),
 };
 
-// ==============================================
 // FUNCIÓN PARA RECONFIGURAR EL LOGGER DESPUÉS DE CARGAR ENVIRONMENT
-// ==============================================
 let reconfiguredLogger: pino.Logger | null = null;
 
-export const reconfigureLogger = (envConfig: any) => {
+export const reconfigureLogger = (envConfig: AppConfig) => {
   if (reconfiguredLogger) return reconfiguredLogger;
 
-  const logLevel = envConfig.logging?.level || envConfig.LOG_LEVEL || 'info';
-  const logPretty = envConfig.logging?.pretty ?? envConfig.LOG_PRETTY ?? true;
-  const isDev =
-    envConfig.app?.isDevelopment ?? envConfig.NODE_ENV === 'development';
-  const isProd =
-    envConfig.app?.isProduction ?? envConfig.NODE_ENV === 'production';
+  const logLevel = envConfig.logging.level;
+  const logPretty = envConfig.logging.pretty;
+  const isDev = envConfig.app.isDevelopment;
+  const isProd = envConfig.app.isProduction;
 
   const reconfiguredConfig: pino.LoggerOptions = {
     level: logLevel,
     base: {
       service: 'task-service',
       version: process.env.npm_package_version || '1.0.0',
-      env: envConfig.app?.env || envConfig.NODE_ENV || 'development',
+      env: envConfig.app.env,
       timezone: BOGOTA_TIMEZONE,
     },
   };
 
-  // Solo agregar formatters si NO estás en producción con transport.targets
+  // Se reutiliza la lógica de formateo para consistencia.
   if (isDev) {
     reconfiguredConfig.formatters = {
       level: (label) => ({ level: label }),
       log: (object) => {
-        if (object.err) {
-          const err = object.err as any;
-          return {
-            ...object,
-            error: {
-              type: err.constructor.name,
-              message: err.message,
-              stack: isDev ? err.stack : undefined,
-              code: err.code,
-              statusCode: err.statusCode,
-            },
+        const logObject = object as LogObjectWithError;
+        if (logObject.err) {
+          const err = logObject.err;
+          const errorDetails = {
+            type: err.constructor.name,
+            message: err.message,
+            stack: isDev ? err.stack : undefined,
+            code: err.code,
+            statusCode: err.statusCode,
           };
+          const { err: _err, ...rest } = logObject;
+          return { ...rest, error: errorDetails };
         }
         return object;
       },

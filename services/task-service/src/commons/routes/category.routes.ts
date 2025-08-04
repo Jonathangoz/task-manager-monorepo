@@ -19,7 +19,7 @@ import {
   createRateLimiter,
   bulkOperationsRateLimit,
 } from '@/commons/middlewares/rateLimit.middleware';
-import { logger, httpLogger, createRequestLogger } from '@/utils/logger';
+import { logger, createRequestLogger } from '@/utils/logger';
 
 // ==============================================
 // INTERFACES Y TIPOS
@@ -192,25 +192,6 @@ const CACHE_TTL = {
   CATEGORY_TASKS: 180, // 3 minutos
   CATEGORY_STATS: 600, // 10 minutos
   ACTIVE_CATEGORIES: 900, // 15 minutos
-} as const;
-
-/**
- * Mensajes de respuesta estandarizados
- */
-const RESPONSE_MESSAGES = {
-  CATEGORIES_RETRIEVED: 'Categories retrieved successfully',
-  CATEGORY_RETRIEVED: 'Category retrieved successfully',
-  CATEGORY_CREATED: 'Category created successfully',
-  CATEGORY_UPDATED: 'Category updated successfully',
-  CATEGORY_DELETED: 'Category deleted successfully',
-  CATEGORY_TASKS_RETRIEVED: 'Category tasks retrieved successfully',
-  CATEGORY_STATS_RETRIEVED: 'Category statistics retrieved successfully',
-  ACTIVE_CATEGORIES_RETRIEVED: 'Active categories retrieved successfully',
-  CATEGORIES_SEARCHED: 'Categories search completed successfully',
-  BULK_DELETE_COMPLETED: 'categories deleted successfully',
-  OWNERSHIP_VALIDATED: 'Category ownership validation completed',
-  LIMIT_CHECKED: 'Category limit check completed',
-  CATEGORIES_EXPORTED: 'Categories exported successfully',
 } as const;
 
 // ==============================================

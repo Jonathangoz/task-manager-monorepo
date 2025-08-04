@@ -4,6 +4,9 @@ import {
   CategoryWithTaskCount,
   CreateCategoryData,
   UpdateCategoryData,
+  PaginatedCategoriesResult,
+  SearchParams,
+  PaginationParams,
 } from './ICategoryRepository';
 
 export interface CategoryStatsResponse {
@@ -34,6 +37,12 @@ export interface ICategoryService {
     includeTaskCount?: boolean,
   ): Promise<CategoryWithTaskCount[]>;
 
+  searchUserCategories(
+    userId: string,
+    searchParams: SearchParams,
+    paginationParams: PaginationParams,
+  ): Promise<PaginatedCategoriesResult>;
+
   updateCategory(
     categoryId: string,
     userId: string,
@@ -47,7 +56,7 @@ export interface ICategoryService {
     userId: string,
     page?: number,
     limit?: number,
-  ): Promise<any>; // TaskListResponse from ITaskService
+  ): Promise<any>;
 
   getCategoryStats(userId: string): Promise<CategoryStatsResponse>;
 

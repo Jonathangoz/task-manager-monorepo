@@ -704,13 +704,13 @@ export const AUTH_SERVICE_CONFIG = {
 } as const;
 
 // API Response Types
-export type ApiResponse<T = any> = {
+export type ApiResponse<T = unknown> = {
   success: boolean;
   message: string;
   data?: T;
   error?: {
     code: string;
-    details?: any;
+    details?: unknown;
   };
   meta?: {
     timestamp: string;
@@ -731,8 +731,8 @@ export type PaginationMeta = {
 
 // Filter Options Type
 export type TaskFilters = {
-  status?: string | string[];
-  priority?: string | string[];
+  status?: TaskStatus | TaskStatus[];
+  priority?: TaskPriority | TaskPriority[];
   categoryId?: string;
   dueDateFrom?: string;
   dueDateTo?: string;

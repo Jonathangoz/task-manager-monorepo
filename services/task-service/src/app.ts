@@ -2,7 +2,7 @@
 // Aplicación Express con arquitectura modular, principios SOLID y logging estructurado
 import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
-import helmet from 'helmet';
+import helmet, { HelmetOptions } from 'helmet';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import morgan from 'morgan';
@@ -21,7 +21,6 @@ import {
 import {
   generalRateLimit,
   rateLimitLogger,
-  createRateLimiter,
 } from '@/commons/middlewares/rateLimit.middleware';
 
 // Servicios y dependencias
@@ -38,12 +37,7 @@ import {
   createRequestLogger,
 } from '@/utils/logger';
 import { config } from '@/config/environment';
-import {
-  HTTP_STATUS,
-  ERROR_CODES,
-  ERROR_MESSAGES,
-  REQUEST_HEADERS,
-} from '@/utils/constants';
+import { HTTP_STATUS, ERROR_CODES, REQUEST_HEADERS } from '@/utils/constants';
 
 // INTERFACES Y TIPOS
 interface AppDependencies {
@@ -255,7 +249,8 @@ export class TaskServiceApp {
 
     // Helmet para headers de seguridad
     if (this.middlewareConfig.security.helmet) {
-      const helmetConfig: any = {
+      // CORRECCIÓN: Se tipa la configuración de Helmet
+      const helmetConfig: HelmetOptions = {
         contentSecurityPolicy: false, // Deshabilitado por defecto para APIs
         crossOriginEmbedderPolicy: false,
         crossOriginResourcePolicy: { policy: 'cross-origin' },
@@ -461,7 +456,8 @@ export class TaskServiceApp {
 
       // Capturar respuesta para logging
       const originalSend = res.send;
-      res.send = function (this: Response, body: any) {
+
+      res.send = function (this: Response, body: unknown) {
         const duration = Date.now() - startTime;
 
         requestLogger.info(
@@ -470,11 +466,16 @@ export class TaskServiceApp {
             url: req.url,
             statusCode: res.statusCode,
             duration,
-            responseSize: Buffer.byteLength(body || ''),
+            // 💡 EXPLICACIÓN: Se convierte 'body' a string para Buffer.byteLength
+            // si no es un Buffer, lo que es un comportamiento seguro con 'unknown'.
+            responseSize: Buffer.byteLength(
+              body instanceof Buffer ? body : String(body || ''),
+            ),
           },
           `✅ Request completado: ${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`,
         );
 
+        // Se usa `call` para mantener el contexto correcto de `res.send`.
         return originalSend.call(this, body);
       };
 
@@ -678,21 +679,25 @@ export class TaskServiceApp {
    */
   private setupUncaughtExceptionHandlers(): void {
     // Unhandled promise rejections
-    process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
-      this.appLogger.error(
-        {
-          reason: reason instanceof Error ? reason.message : String(reason),
-          promise: promise.toString(),
-          event: 'unhandled_promise_rejection',
-        },
-        '💥 Unhandled promise rejection detected',
-      );
+    // CORRECCIÓN: Se reemplaza 'any' por 'unknown'
+    process.on(
+      'unhandledRejection',
+      (reason: unknown, promise: Promise<unknown>) => {
+        this.appLogger.error(
+          {
+            reason: reason instanceof Error ? reason.message : String(reason),
+            promise: promise.toString(),
+            event: 'unhandled_promise_rejection',
+          },
+          '💥 Unhandled promise rejection detected',
+        );
 
-      // En producción, cerrar gracefully
-      if (config.app.isProduction) {
-        this.gracefulShutdown('unhandledRejection');
-      }
-    });
+        // En producción, cerrar gracefully
+        if (config.app.isProduction) {
+          this.gracefulShutdown('unhandledRejection');
+        }
+      },
+    );
 
     // Uncaught exceptions
     process.on('uncaughtException', (error: Error) => {

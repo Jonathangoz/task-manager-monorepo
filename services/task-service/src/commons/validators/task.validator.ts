@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { Request, Response, NextFunction } from 'express';
 import {
   TASK_CONFIG,
-  CATEGORY_CONFIG,
   TASK_STATUSES,
   TASK_PRIORITIES,
   SORT_FIELDS,
@@ -108,7 +107,7 @@ const tagsSchema = z
         `Each tag must be at most ${TASK_CONFIG.MAX_TAG_LENGTH} characters`,
       )
       .regex(
-        /^[\w\s\-]+$/,
+        /^[\w\s-]+$/,
         'Tags can only contain letters, numbers, spaces, hyphens, and underscores',
       ),
   )

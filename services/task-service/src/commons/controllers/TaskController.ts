@@ -1,6 +1,6 @@
 // src/presentation/controllers/TaskController.ts
 import { Request, Response, NextFunction } from 'express';
-import { AuthenticatedRequest } from '@/commons/middlewares/auth.middleware';
+import { ParsedQs } from 'qs';
 import { ITaskService } from '@/core/domain/interfaces/ITaskService';
 import {
   HTTP_STATUS,
@@ -503,30 +503,34 @@ export class TaskController {
   };
 
   // ===== PRIVATE METHODS =====
-  private buildTaskFilters(query: any): TaskFilters {
+  private buildTaskFilters(query: ParsedQs): TaskFilters {
     const filters: TaskFilters = {};
-    if (query.status) filters.status = query.status;
-    if (query.priority) filters.priority = query.priority;
-    if (query.categoryId) filters.categoryId = query.categoryId;
+    if (query.status) filters.status = query.status as string | string[];
+    if (query.priority) filters.priority = query.priority as string | string[];
+    if (query.categoryId) filters.categoryId = query.categoryId as string;
     // ... more filters
     return filters;
   }
 
   private extractServiceCreateTaskData(
-    body: any,
+    body: unknown,
   ): Partial<ServiceCreateTaskData> {
     const data: Partial<ServiceCreateTaskData> = {};
-    if (body.title !== undefined) data.title = body.title;
-    if (body.description !== undefined) data.description = body.description;
+    const bodyRecord = body as Record<string, unknown>;
+    if (bodyRecord.title !== undefined) data.title = bodyRecord.title as string;
+    if (bodyRecord.description !== undefined)
+      data.description = bodyRecord.description as string;
     // ... more fields
     return data;
   }
 
-  private extractUpdateTaskData(body: any): UpdateTaskData {
+  private extractUpdateTaskData(body: unknown): UpdateTaskData {
     const updateData: UpdateTaskData = {};
-    if (body.title !== undefined) updateData.title = body.title;
-    if (body.description !== undefined)
-      updateData.description = body.description;
+    const bodyRecord = body as Record<string, unknown>;
+    if (bodyRecord.title !== undefined)
+      updateData.title = bodyRecord.title as string;
+    if (bodyRecord.description !== undefined)
+      updateData.description = bodyRecord.description as string;
     // ... more fields
     return updateData;
   }
@@ -567,12 +571,12 @@ export class TaskController {
     );
   }
 
-  private createSuccessResponse(
+  private createSuccessResponse<T>(
     message: string,
-    data?: any,
+    data?: T,
     req?: Request,
-    additionalMeta?: any,
-  ): ApiResponse {
+    additionalMeta?: Record<string, unknown>,
+  ): ApiResponse<T> {
     return {
       success: true,
       message,
@@ -612,7 +616,7 @@ export class TaskController {
     });
   }
 
-  private logSuccess(message: string, context: Record<string, any>): void {
+  private logSuccess(message: string, context: Record<string, unknown>): void {
     logger.info(context, message);
   }
 }

@@ -1,8 +1,10 @@
-// src/config/redis.ts - Configuración Redis para Task Service
+// src/config/redis.ts
+
 import Redis, { RedisOptions } from 'ioredis';
 import { logger } from '@/utils/logger';
 import { config } from './environment';
-import { ERROR_CODES, ERROR_MESSAGES, EVENT_TYPES } from '@/utils/constants';
+// Corregido: Se elimina ERROR_CODES porque no se usa.
+import { ERROR_MESSAGES, EVENT_TYPES } from '@/utils/constants';
 
 // Configuración optimizada para producción
 const getRedisConfig = (): RedisOptions => {
@@ -178,7 +180,8 @@ class TaskRedisConnection {
   public async healthCheck(): Promise<{
     status: 'healthy' | 'unhealthy';
     latency: number;
-    memory: any;
+    // Corregido: Se usa un tipo específico en lugar de unknown.
+    memory: Record<string, string>;
     connections: number;
   }> {
     try {
@@ -187,14 +190,15 @@ class TaskRedisConnection {
       const latency = Date.now() - start;
 
       const info = await this.client.info('memory');
-      const connections = await this.client.info('clients');
+      const connectionsInfo = await this.client.info('clients');
 
       return {
         status: pong === 'PONG' ? 'healthy' : 'unhealthy',
         latency,
         memory: this.parseInfoString(info),
         connections: parseInt(
-          connections.split('\r\n')[1]?.split(':')[1] || '0',
+          connectionsInfo.match(/connected_clients:(\d+)/)?.[1] || '0',
+          10,
         ),
       };
     } catch (error) {
@@ -212,8 +216,10 @@ class TaskRedisConnection {
     const result: Record<string, string> = {};
     info.split('\r\n').forEach((line) => {
       if (line.includes(':')) {
-        const [key, value] = line.split(':');
-        result[key] = value;
+        const [key, value] = line.split(':', 2);
+        if (key && value) {
+          result[key] = value.trim();
+        }
       }
     });
     return result;

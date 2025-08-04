@@ -153,7 +153,7 @@ jobs:
             echo "Attempt $i: Health check failed with status $response_code. Retrying in 15 seconds..."
             sleep 15
           done
-          
+
           echo "❌ Health check failed after multiple attempts."
           exit 1
 
