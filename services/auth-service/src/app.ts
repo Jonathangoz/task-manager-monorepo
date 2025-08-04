@@ -186,20 +186,12 @@ class App {
   constructor() {
     this.express = express();
     this.healthController = new HealthController();
-    this.initializeMiddlewares();
-    this.initializeRoutes();
-    this.initializeErrorHandling();
+    // CORRECCIÓN: No llamar a inicializadores que dependen de servicios aquí
     this.securityConfig = this.buildSecurityConfig();
     this.services = {} as ServiceDependencies;
   }
 
-  private initializeMiddlewares(): void {
-    this.express.use(helmet());
-    this.express.use(cors({ origin: process.env.CORS_ORIGIN }));
-    this.express.use(express.json());
-    this.express.use(express.urlencoded({ extended: true }));
-  }
-
+  // CORRECCIÓN: Cambiado a público para ser llamado desde server.ts
   public async initializeApp(): Promise<void> {
     try {
       this.appLogger.info('Initializing Auth Service application...', {
@@ -216,18 +208,23 @@ class App {
       // Registrar los middlewares de seguridad pesados
       await this.initializeSecurityMiddlewares();
 
-      //  await this.validateConfiguration();
+      // Inicializar servicios ANTES que las rutas que los usan
       await this.initializeServices();
       await this.initializeCoreMiddlewares();
       await this.initializeValidationMiddlewares();
+
+      // Inicializar rutas DESPUÉS de los servicios
       await this.initializeRoutes();
       this.initializeSwagger();
+
+      // Manejo de errores al final
       this.initializeErrorHandling();
 
-      this.appLogger.info('Auth Service aplicacion iniciada exitosamente');
+      this.appLogger.info('Auth Service application initialized successfully');
     } catch (error) {
-      this.appLogger.fatal('Fallo al iniciar la aplicación', { error });
-      process.exit(1);
+      this.appLogger.fatal('Failed to initialize the application', { error });
+      // Propagar el error para que el servidor principal lo maneje
+      throw error;
     }
   }
 
@@ -264,6 +261,12 @@ class App {
       this.appLogger.error('Failed to initialize services', { error });
       throw error;
     }
+  }
+  private initializeMiddlewares(): void {
+    this.express.use(helmet());
+    this.express.use(cors({ origin: process.env.CORS_ORIGIN }));
+    this.express.use(express.json());
+    this.express.use(express.urlencoded({ extended: true }));
   }
 
   /*private async validateConfiguration(): Promise<void> {
@@ -836,6 +839,11 @@ class App {
     );
 
     try {
+      // CORRECCIÓN: Asegurarse que this.services está inicializado
+      if (!this.services.authService) {
+        throw new Error('AuthService not initialized before routes');
+      }
+
       const authRoutes = AuthRoutes.create({
         authService: this.services.authService,
         userService: this.services.userService,
@@ -1214,7 +1222,5 @@ export const APP_CONSTANTS = {
   SKIP_RATE_LIMIT_PATHS: ['/health'],
 } as const;
 
-const appInstance = new App();
-// Inicializa la app antes de exportarla
-appInstance.initializeApp();
-export default appInstance.getApp(); // Exporta la INSTANCIA de Express
+// CORRECCIÓN: Exportar la clase App, no una instancia. La instancia se creará en server.ts
+export { App };
