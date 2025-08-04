@@ -30,6 +30,7 @@ import {
   validateSearchQuery,
 } from '@/core/domain/interfaces/ITaskService';
 
+// ... (interfaz TaskControllerDependencies sin cambios) ...
 interface TaskControllerDependencies {
   taskService: ITaskService;
 }
@@ -54,6 +55,7 @@ export class TaskController {
       );
       if (!paginationParams) return;
 
+      // ✅ Usamos el método de construcción de filtros corregido
       const filters = this.buildTaskFilters(req.query);
 
       const result = await this.taskService.getUserTasks(
@@ -84,6 +86,7 @@ export class TaskController {
     }
   };
 
+  // ... (resto de los métodos del controlador sin cambios significativos) ...
   getTaskById = async (
     req: Request,
     res: Response,
@@ -502,16 +505,65 @@ export class TaskController {
     }
   };
 
-  // ===== PRIVATE METHODS =====
+  // ✅ MÉTODO CORREGIDO Y MEJORADO
   private buildTaskFilters(query: ParsedQs): TaskFilters {
     const filters: TaskFilters = {};
-    if (query.status) filters.status = query.status as string | string[];
-    if (query.priority) filters.priority = query.priority as string | string[];
-    if (query.categoryId) filters.categoryId = query.categoryId as string;
-    // ... more filters
+
+    // Helper para procesar y validar un campo que puede ser string o array
+    const processFilter = <T extends string>(
+      value: unknown,
+      validator: (val: string) => val is T,
+    ): T | T[] | undefined => {
+      if (Array.isArray(value)) {
+        return value.filter(
+          (v): v is T => typeof v === 'string' && validator(v),
+        );
+      }
+      if (typeof value === 'string' && validator(value)) {
+        return value;
+      }
+      return undefined;
+    };
+
+    // Validar y asignar 'status'
+    if (query.status) {
+      filters.status = processFilter(query.status, isValidTaskStatus);
+    }
+
+    // Validar y asignar 'priority'
+    if (query.priority) {
+      filters.priority = processFilter(query.priority, isValidTaskPriority);
+    }
+
+    // Asignar otros filtros
+    if (typeof query.categoryId === 'string') {
+      filters.categoryId = query.categoryId;
+    }
+    if (typeof query.dueDateFrom === 'string') {
+      filters.dueDateFrom = query.dueDateFrom;
+    }
+    if (typeof query.dueDateTo === 'string') {
+      filters.dueDateTo = query.dueDateTo;
+    }
+    if (query.isOverdue !== undefined) {
+      filters.isOverdue = query.isOverdue === 'true';
+    }
+    if (query.hasDueDate !== undefined) {
+      filters.hasDueDate = query.hasDueDate === 'true';
+    }
+    if (query.tags) {
+      filters.tags = Array.isArray(query.tags)
+        ? query.tags.map(String)
+        : String(query.tags);
+    }
+    if (typeof query.search === 'string') {
+      filters.search = query.search;
+    }
+
     return filters;
   }
 
+  // ... (resto de los métodos privados sin cambios) ...
   private extractServiceCreateTaskData(
     body: unknown,
   ): Partial<ServiceCreateTaskData> {
@@ -520,7 +572,6 @@ export class TaskController {
     if (bodyRecord.title !== undefined) data.title = bodyRecord.title as string;
     if (bodyRecord.description !== undefined)
       data.description = bodyRecord.description as string;
-    // ... more fields
     return data;
   }
 
@@ -531,7 +582,6 @@ export class TaskController {
       updateData.title = bodyRecord.title as string;
     if (bodyRecord.description !== undefined)
       updateData.description = bodyRecord.description as string;
-    // ... more fields
     return updateData;
   }
 

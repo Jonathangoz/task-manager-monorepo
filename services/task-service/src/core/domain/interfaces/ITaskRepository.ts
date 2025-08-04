@@ -2,8 +2,8 @@
 // Interface del repositorio de tareas
 
 import { z } from 'zod';
+import { URL } from 'url';
 import {
-  DomainTask,
   TaskWithCategory,
   CreateTaskData,
   UpdateTaskData,
@@ -12,14 +12,10 @@ import {
   TaskPriority,
   TaskStatusValues,
   TaskPriorityValues,
-  isValidTaskStatus,
-  isValidTaskPriority,
-  validateTaskData,
 } from '@/core/types/TaskDomain';
 import {
   TaskFilters,
   SortOptions,
-  PaginationMeta,
   TASK_CONFIG,
   PAGINATION_CONFIG,
 } from '@/utils/constants';

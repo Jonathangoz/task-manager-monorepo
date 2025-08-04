@@ -274,7 +274,7 @@ export class CategoryRoutes {
 
       // Override del método end para capturar la respuesta
       const originalEnd = res.end;
-      res.end = function (this: Response, ...args: any[]) {
+      res.end = function (this: Response, ..._args: unknown[]) {
         const duration = Date.now() - startTime;
 
         requestLogger.info(

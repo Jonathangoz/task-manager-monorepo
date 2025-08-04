@@ -10,8 +10,6 @@ import {
   PaginationMeta,
   TaskStatus,
   TaskPriority,
-  DEFAULT_VALUES,
-  PAGINATION_CONFIG,
   TASK_CONFIG,
 } from '@/utils/constants';
 

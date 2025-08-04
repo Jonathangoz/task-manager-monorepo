@@ -1,6 +1,4 @@
 // src/core/application/CategoryService.ts
-// ==============================================
-
 import { Category } from '@prisma/client';
 import {
   ICategoryService,
@@ -11,9 +9,12 @@ import {
   CategoryWithTaskCount,
   CreateCategoryData as RepositoryCreateCategoryData,
   UpdateCategoryData as RepositoryUpdateCategoryData,
+  PaginatedCategoriesResult,
+  SearchParams,
+  PaginationParams,
 } from '@/core/domain/interfaces/ICategoryRepository';
-import { ITaskRepository } from '@/core/domain/interfaces/ITaskRepository';
-import { ICacheService } from '@/core/domain/interfaces/ICacheService';
+import { ITaskRepository } from '@/core/interfaces/ITaskRepository';
+import { ICacheService } from '@/core/interfaces/ICacheService';
 import { logger } from '@/utils/logger';
 import {
   ERROR_MESSAGES,
@@ -26,8 +27,8 @@ import {
   PAGINATION_CONFIG,
   DEFAULT_VALUES,
 } from '@/utils/constants';
+import { TaskListResponse } from '@/core/domain/interfaces/ITaskService';
 
-// Application DTOs - diferentes de las del repository
 export interface CreateCategoryData {
   name: string;
   description?: string;
@@ -43,7 +44,6 @@ export interface UpdateCategoryData {
   isActive?: boolean;
 }
 
-// Custom error class para mejor manejo de errores
 class CategoryError extends Error {
   constructor(
     message: string,
@@ -55,6 +55,13 @@ class CategoryError extends Error {
   }
 }
 
+// ✅ Type guard para validar que el objeto de caché de stats es correcto
+function isCachedStats(
+  obj: object,
+): obj is { categoryStats: CategoryStatsResponse } {
+  return obj && typeof obj === 'object' && 'categoryStats' in obj;
+}
+
 export class CategoryService implements ICategoryService {
   constructor(
     private readonly categoryRepository: ICategoryRepository,
@@ -62,6 +69,7 @@ export class CategoryService implements ICategoryService {
     private readonly cacheService: ICacheService,
   ) {}
 
+  // ... (createCategory, getCategoryById sin cambios) ...
   async createCategory(
     userId: string,
     data: CreateCategoryData,
@@ -69,12 +77,10 @@ export class CategoryService implements ICategoryService {
     try {
       logger.info({ userId, name: data.name }, 'Creating new category');
 
-      // Validaciones de negocio
       this.validateCategoryData(data);
       await this.checkUserCategoryLimits(userId);
       await this.checkCategoryNameUnique(userId, data.name);
 
-      // Mapear a formato del repository
       const repositoryData: RepositoryCreateCategoryData = {
         ...data,
         userId,
@@ -84,7 +90,6 @@ export class CategoryService implements ICategoryService {
 
       const category = await this.categoryRepository.create(repositoryData);
 
-      // Invalidar cache del usuario
       await this.invalidateUserCaches(userId);
 
       logger.info(
@@ -111,10 +116,9 @@ export class CategoryService implements ICategoryService {
     try {
       logger.debug({ userId, categoryId }, 'Getting category by ID');
 
-      // Intentar obtener del cache primero
       const cacheKey = CACHE_KEYS.CATEGORY_DETAIL(categoryId);
       const cached =
-        await this.cacheService.getJson<CategoryWithTaskCount>(cacheKey);
+        await this.cacheService.get<CategoryWithTaskCount>(cacheKey);
 
       if (cached && cached.userId === userId) {
         logger.debug(
@@ -124,7 +128,6 @@ export class CategoryService implements ICategoryService {
         return cached;
       }
 
-      // Si no está en cache, obtener de la base de datos
       const category = await this.categoryRepository.findById(categoryId);
 
       if (!category) {
@@ -135,17 +138,15 @@ export class CategoryService implements ICategoryService {
         );
       }
 
-      // Verificar ownership
       if (category.userId !== userId) {
         throw new CategoryError(
-          ERROR_MESSAGES.CATEGORY_NOT_FOUND, // No revelar que existe
+          ERROR_MESSAGES.CATEGORY_NOT_FOUND,
           ERROR_CODES.CATEGORY_ACCESS_DENIED,
           403,
         );
       }
 
-      // Guardar en cache
-      await this.cacheService.setJson(
+      await this.cacheService.set(
         cacheKey,
         category,
         CACHE_TTL.CATEGORY_DETAIL,
@@ -172,10 +173,11 @@ export class CategoryService implements ICategoryService {
     try {
       logger.debug({ userId, includeTaskCount }, 'Getting user categories');
 
-      // Para consistency, solo cacheamos la versión simple
       if (!includeTaskCount) {
         const cached = await this.cacheService.getCachedUserCategories(userId);
-        if (cached) {
+
+        // ✅ CORRECCIÓN: Se añade una guarda de tipo para validar la caché.
+        if (cached && Array.isArray(cached)) {
           logger.debug(
             { userId, event: EVENT_TYPES.CACHE_HIT },
             'User categories retrieved from cache',
@@ -184,13 +186,11 @@ export class CategoryService implements ICategoryService {
         }
       }
 
-      // Obtener de la base de datos
       const categories = await this.categoryRepository.findByUserId(
         userId,
         includeTaskCount,
       );
 
-      // Cachear solo la versión simple
       if (!includeTaskCount) {
         await this.cacheService.cacheUserCategories(
           userId,
@@ -218,6 +218,42 @@ export class CategoryService implements ICategoryService {
     }
   }
 
+  async searchUserCategories(
+    userId: string,
+    searchParams: SearchParams,
+    paginationParams: PaginationParams,
+  ): Promise<PaginatedCategoriesResult> {
+    try {
+      logger.debug(
+        { userId, searchParams, paginationParams },
+        'Searching user categories',
+      );
+
+      const results = await this.categoryRepository.search(
+        userId,
+        searchParams,
+        paginationParams,
+      );
+
+      logger.info(
+        {
+          userId,
+          query: searchParams.query,
+          totalResults: results.meta.total,
+        },
+        'Category search completed successfully',
+      );
+
+      return results;
+    } catch (error) {
+      logger.error(
+        { error, userId, searchParams },
+        'Failed to search user categories',
+      );
+      this.handleError(error);
+    }
+  }
+
   async updateCategory(
     categoryId: string,
     userId: string,
@@ -226,25 +262,20 @@ export class CategoryService implements ICategoryService {
     try {
       logger.info({ userId, categoryId }, 'Updating category');
 
-      // Verificar ownership primero
       await this.validateCategoryOwnership(categoryId, userId);
 
-      // Validaciones de negocio
       this.validateCategoryData(data);
 
-      // Si está cambiando el nombre, verificar unicidad
       if (data.name) {
         await this.checkCategoryNameUnique(userId, data.name, categoryId);
       }
 
-      // Mapear a formato del repository
       const repositoryData: RepositoryUpdateCategoryData = { ...data };
       const updatedCategory = await this.categoryRepository.update(
         categoryId,
         repositoryData,
       );
 
-      // Invalidar caches
       await this.invalidateUserCaches(userId);
       await this.cacheService.invalidateCategoryCache(categoryId);
 
@@ -272,10 +303,8 @@ export class CategoryService implements ICategoryService {
     try {
       logger.info({ userId, categoryId }, 'Deleting category');
 
-      // Verificar ownership
       await this.validateCategoryOwnership(categoryId, userId);
 
-      // Verificar si tiene tareas asociadas
       const hasActiveTasks =
         await this.categoryRepository.hasActiveTasks(categoryId);
 
@@ -287,10 +316,8 @@ export class CategoryService implements ICategoryService {
         );
       }
 
-      // Eliminar la categoría
       await this.categoryRepository.delete(categoryId);
 
-      // Invalidar caches
       await this.invalidateUserCaches(userId);
       await this.cacheService.invalidateCategoryCache(categoryId);
 
@@ -308,22 +335,21 @@ export class CategoryService implements ICategoryService {
     }
   }
 
+  // ✅ CORRECCIÓN: Se ajusta el método para que devuelva el tipo correcto.
   async getCategoryTasks(
     categoryId: string,
     userId: string,
     page = PAGINATION_CONFIG.DEFAULT_PAGE,
     limit = PAGINATION_CONFIG.DEFAULT_LIMIT,
-  ): Promise<any> {
+  ): Promise<TaskListResponse> {
     try {
       logger.debug(
         { userId, categoryId, page, limit },
         'Getting category tasks',
       );
 
-      // Verificar ownership de la categoría
       await this.validateCategoryOwnership(categoryId, userId);
 
-      // Obtener tareas de la categoría
       const result = await this.taskRepository.findByCategoryId(
         categoryId,
         userId,
@@ -340,7 +366,7 @@ export class CategoryService implements ICategoryService {
         'Category tasks retrieved',
       );
 
-      return result;
+      return result; // El repositorio ya devuelve el formato correcto
     } catch (error) {
       logger.error(
         { error, userId, categoryId, page, limit },
@@ -354,9 +380,10 @@ export class CategoryService implements ICategoryService {
     try {
       logger.debug({ userId }, 'Getting category statistics');
 
-      // Intentar obtener del cache
       const cached = await this.cacheService.getCachedUserStats(userId);
-      if (cached?.categoryStats) {
+
+      // ✅ CORRECCIÓN: Se añade una guarda de tipo para validar la caché.
+      if (cached && isCachedStats(cached)) {
         logger.debug(
           { userId, event: EVENT_TYPES.CACHE_HIT },
           'Category stats retrieved from cache',
@@ -364,7 +391,6 @@ export class CategoryService implements ICategoryService {
         return cached.categoryStats;
       }
 
-      // Obtener categorías con conteo de tareas
       const categories = await this.categoryRepository.findByUserId(
         userId,
         true,
@@ -383,7 +409,6 @@ export class CategoryService implements ICategoryService {
             : 0,
       };
 
-      // Encontrar la categoría más usada
       const mostUsed = categories
         .filter((c) => c._count && c._count.tasks > 0)
         .sort((a, b) => (b._count?.tasks || 0) - (a._count?.tasks || 0))[0];
@@ -396,7 +421,7 @@ export class CategoryService implements ICategoryService {
         };
       }
 
-      // Cachear las estadísticas
+      // ✅ CORRECCIÓN: Se asegura que el objeto guardado en caché tenga la estructura correcta.
       await this.cacheService.cacheUserStats(
         userId,
         { categoryStats: stats },
@@ -411,6 +436,7 @@ export class CategoryService implements ICategoryService {
     }
   }
 
+  // ... (resto de los métodos sin cambios) ...
   async validateCategoryOwnership(
     categoryId: string,
     userId: string,
@@ -456,11 +482,9 @@ export class CategoryService implements ICategoryService {
     try {
       logger.info({ userId, categoryIds }, 'Bulk deleting categories');
 
-      // Validar ownership de todas las categorías
       for (const categoryId of categoryIds) {
         await this.validateCategoryOwnership(categoryId, userId);
 
-        // Verificar que no tengan tareas
         const hasActiveTasks =
           await this.categoryRepository.hasActiveTasks(categoryId);
         if (hasActiveTasks) {
@@ -472,10 +496,8 @@ export class CategoryService implements ICategoryService {
         }
       }
 
-      // Eliminar todas las categorías
       await this.categoryRepository.bulkDelete(categoryIds);
 
-      // Invalidar caches
       await this.invalidateUserCaches(userId);
       for (const categoryId of categoryIds) {
         await this.cacheService.invalidateCategoryCache(categoryId);
@@ -497,8 +519,6 @@ export class CategoryService implements ICategoryService {
       this.handleError(error);
     }
   }
-
-  // Métodos privados
 
   private validateCategoryData(
     data: CreateCategoryData | UpdateCategoryData,
@@ -590,12 +610,10 @@ export class CategoryService implements ICategoryService {
       throw error;
     }
 
-    // Re-throw other known errors
     if (error instanceof Error) {
       throw error;
     }
 
-    // Unknown error
     throw new CategoryError(
       ERROR_MESSAGES.INTERNAL_ERROR,
       ERROR_CODES.INTERNAL_ERROR,

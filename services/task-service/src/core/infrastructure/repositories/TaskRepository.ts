@@ -1,5 +1,5 @@
 // src/core/infrastructure/repositories/TaskRepository.ts
-import { PrismaClient, Task, TaskStatus, Priority } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { ITaskRepository } from '@/core/domain/interfaces/ITaskRepository';
 import {
   CreateTaskData,
@@ -17,7 +17,6 @@ import {
   DEFAULT_VALUES,
   SORT_FIELDS,
   SORT_ORDERS,
-  ERROR_CODES,
 } from '@/utils/constants';
 import { logger, loggers, logError } from '@/utils/logger';
 import { db } from '@/config/database';

@@ -109,7 +109,7 @@ const isActiveSchema = z
 
 // SHARED VALIDATION COMPONENTS
 // Pagination schema with category-specific defaults
-const categoryPaginationSchema = z
+const _categoryPaginationSchema = z
   .object({
     page: z
       .string()
@@ -141,7 +141,7 @@ const categoryPaginationSchema = z
   .describe('Pagination parameters for category queries');
 
 // Sorting schema with category-specific fields
-const categorySortingSchema = z
+const _categorySortingSchema = z
   .object({
     sortBy: z
       .enum(
@@ -782,8 +782,8 @@ export const validateCategorySchema = <T extends z.ZodSchema>(schema: T) => {
  */
 export const validateCategoryNameUniqueness = (
   name: string,
-  userId: string,
-  excludeId?: string,
+  _userId: string,
+  _excludeId?: string,
 ) => {
   // This would typically be implemented in the service layer
   // returning a Promise<boolean> after checking the database

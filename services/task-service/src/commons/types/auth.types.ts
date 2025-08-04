@@ -137,7 +137,7 @@ export class AuthError extends Error {
     message: string,
     public readonly code: AuthErrorCode,
     public readonly statusCode: number = 401,
-    public readonly context?: Record<string, any>,
+    public readonly context?: Record<string, unknown>,
   ) {
     super(message);
     this.name = 'AuthError';
@@ -351,7 +351,7 @@ export interface ExtendedAuthUser extends AuthUser {
   updatedAt: Date;
   lastLoginAt?: Date;
   profileImage?: string;
-  preferences?: Record<string, any>;
+  preferences?: Record<string, unknown>;
 }
 
 // ==============================================

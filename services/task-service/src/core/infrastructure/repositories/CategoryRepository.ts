@@ -1,34 +1,27 @@
 // src/core/infrastructure/repositories/CategoryRepository.ts
-import { PrismaClient, Category } from '@prisma/client';
+import { PrismaClient, Category, Prisma } from '@prisma/client';
 import {
   ICategoryRepository,
   CreateCategoryData,
   UpdateCategoryData,
   CategoryWithTaskCount,
+  PaginatedCategoriesResult,
+  SearchParams,
+  PaginationParams,
 } from '@/core/domain/interfaces/ICategoryRepository';
 import { logger } from '@/utils/logger';
 import { db } from '@/config/database';
 import { ERROR_CODES, CATEGORY_CONFIG } from '@/utils/constants';
 
-/**
- * Implementación del repositorio de categorías usando Prisma ORM
- * Maneja la persistencia de categorías con validaciones de negocio
- * y operaciones optimizadas para producción
- */
 export class CategoryRepository implements ICategoryRepository {
   constructor(private readonly prisma: PrismaClient = db) {}
 
-  /**
-   * Crea una nueva categoría
-   * @param data - Datos de la categoría a crear
-   * @returns Promise<Category> - Categoría creada
-   * @throws Error si hay problemas de validación o persistencia
-   */
+  // ... (métodos create, findById, etc. sin cambios) ...
+
   async create(data: CreateCategoryData): Promise<Category> {
     const startTime = Date.now();
 
     try {
-      // Validar límite de categorías por usuario antes de crear
       const userCategoryCount = await this.countByUserId(data.userId);
       if (userCategoryCount >= CATEGORY_CONFIG.MAX_CATEGORIES_PER_USER) {
         throw new Error(
@@ -36,7 +29,6 @@ export class CategoryRepository implements ICategoryRepository {
         );
       }
 
-      // Verificar que no exista una categoría con el mismo nombre para el usuario
       const existingCategory = await this.findByName(data.userId, data.name);
       if (existingCategory) {
         throw new Error(
@@ -83,11 +75,6 @@ export class CategoryRepository implements ICategoryRepository {
     }
   }
 
-  /**
-   * Busca una categoría por ID
-   * @param id - ID de la categoría
-   * @returns Promise<CategoryWithTaskCount | null> - Categoría con conteo de tareas o null
-   */
   async findById(id: string): Promise<CategoryWithTaskCount | null> {
     const startTime = Date.now();
 
@@ -128,12 +115,6 @@ export class CategoryRepository implements ICategoryRepository {
     }
   }
 
-  /**
-   * Busca categorías por ID de usuario
-   * @param userId - ID del usuario
-   * @param includeTaskCount - Si incluir el conteo de tareas
-   * @returns Promise<CategoryWithTaskCount[]> - Lista de categorías
-   */
   async findByUserId(
     userId: string,
     includeTaskCount: boolean = false,
@@ -184,12 +165,6 @@ export class CategoryRepository implements ICategoryRepository {
     }
   }
 
-  /**
-   * Busca una categoría por nombre y usuario
-   * @param userId - ID del usuario
-   * @param name - Nombre de la categoría
-   * @returns Promise<Category | null> - Categoría encontrada o null
-   */
   async findByName(userId: string, name: string): Promise<Category | null> {
     const startTime = Date.now();
 
@@ -232,18 +207,10 @@ export class CategoryRepository implements ICategoryRepository {
     }
   }
 
-  /**
-   * Actualiza una categoría
-   * @param id - ID de la categoría
-   * @param data - Datos a actualizar
-   * @returns Promise<Category> - Categoría actualizada
-   * @throws Error si la categoría no existe o hay conflictos
-   */
   async update(id: string, data: UpdateCategoryData): Promise<Category> {
     const startTime = Date.now();
 
     try {
-      // Verificar que la categoría existe
       const existingCategory = await this.prisma.category.findUnique({
         where: { id },
       });
@@ -254,7 +221,6 @@ export class CategoryRepository implements ICategoryRepository {
         );
       }
 
-      // Si se está actualizando el nombre, verificar que no cause duplicado
       if (data.name && data.name !== existingCategory.name) {
         const duplicateCategory = await this.findByName(
           existingCategory.userId,
@@ -267,11 +233,10 @@ export class CategoryRepository implements ICategoryRepository {
         }
       }
 
-      // Preparar datos de actualización
-      const updateData: any = {};
+      const updateData: Partial<UpdateCategoryData> = {};
       if (data.name !== undefined) updateData.name = data.name.trim();
       if (data.description !== undefined)
-        updateData.description = data.description?.trim() || null;
+        updateData.description = data.description?.trim() || undefined;
       if (data.color !== undefined) updateData.color = data.color;
       if (data.icon !== undefined) updateData.icon = data.icon;
       if (data.isActive !== undefined) updateData.isActive = data.isActive;
@@ -310,17 +275,10 @@ export class CategoryRepository implements ICategoryRepository {
     }
   }
 
-  /**
-   * Elimina una categoría
-   * Si tiene tareas asociadas, se hace soft delete, de lo contrario hard delete
-   * @param id - ID de la categoría
-   * @throws Error si la categoría no existe
-   */
   async delete(id: string): Promise<void> {
     const startTime = Date.now();
 
     try {
-      // Verificar si la categoría existe
       const category = await this.prisma.category.findUnique({
         where: { id },
       });
@@ -331,11 +289,9 @@ export class CategoryRepository implements ICategoryRepository {
         );
       }
 
-      // Verificar si tiene tareas asociadas
       const hasActiveTasks = await this.hasActiveTasks(id);
 
       if (hasActiveTasks) {
-        // Soft delete: marcar como inactiva
         await this.prisma.category.update({
           where: { id },
           data: { isActive: false },
@@ -353,7 +309,6 @@ export class CategoryRepository implements ICategoryRepository {
           'Category soft deleted (has active tasks)',
         );
       } else {
-        // Hard delete: eliminar completamente
         await this.prisma.category.delete({
           where: { id },
         });
@@ -385,11 +340,6 @@ export class CategoryRepository implements ICategoryRepository {
     }
   }
 
-  /**
-   * Cuenta el número de categorías activas de un usuario
-   * @param userId - ID del usuario
-   * @returns Promise<number> - Número de categorías
-   */
   async countByUserId(userId: string): Promise<number> {
     const startTime = Date.now();
 
@@ -428,11 +378,6 @@ export class CategoryRepository implements ICategoryRepository {
     }
   }
 
-  /**
-   * Busca categorías activas de un usuario (sin conteo de tareas)
-   * @param userId - ID del usuario
-   * @returns Promise<Category[]> - Lista de categorías activas
-   */
   async findActiveByUserId(userId: string): Promise<Category[]> {
     const startTime = Date.now();
 
@@ -472,11 +417,6 @@ export class CategoryRepository implements ICategoryRepository {
     }
   }
 
-  /**
-   * Verifica si una categoría tiene tareas activas (no completadas/canceladas)
-   * @param categoryId - ID de la categoría
-   * @returns Promise<boolean> - true si tiene tareas activas
-   */
   async hasActiveTasks(categoryId: string): Promise<boolean> {
     const startTime = Date.now();
 
@@ -518,11 +458,6 @@ export class CategoryRepository implements ICategoryRepository {
     }
   }
 
-  /**
-   * Elimina múltiples categorías por IDs
-   * Aplica la misma lógica que delete individual para cada categoría
-   * @param ids - Array de IDs de categorías
-   */
   async bulkDelete(ids: string[]): Promise<void> {
     const startTime = Date.now();
 
@@ -535,10 +470,8 @@ export class CategoryRepository implements ICategoryRepository {
     }
 
     try {
-      // Usar transacción para asegurar consistencia
       await this.prisma.$transaction(async (tx) => {
         for (const id of ids) {
-          // Verificar si la categoría existe
           const category = await tx.category.findUnique({
             where: { id },
           });
@@ -554,7 +487,6 @@ export class CategoryRepository implements ICategoryRepository {
             continue;
           }
 
-          // Verificar si tiene tareas activas
           const activeTaskCount = await tx.task.count({
             where: {
               categoryId: id,
@@ -565,13 +497,11 @@ export class CategoryRepository implements ICategoryRepository {
           });
 
           if (activeTaskCount > 0) {
-            // Soft delete
             await tx.category.update({
               where: { id },
               data: { isActive: false },
             });
           } else {
-            // Hard delete
             await tx.category.delete({
               where: { id },
             });
@@ -601,5 +531,69 @@ export class CategoryRepository implements ICategoryRepository {
       );
       throw error;
     }
+  }
+
+  /**
+   * ✅ NUEVO MÉTODO IMPLEMENTADO
+   * Busca categorías con paginación, filtros y ordenamiento.
+   * @param userId - ID del usuario
+   * @param searchParams - Parámetros de búsqueda y filtro
+   * @param paginationParams - Parámetros de paginación
+   * @returns Promise<PaginatedCategoriesResult> - Resultado paginado
+   */
+  async search(
+    userId: string,
+    searchParams: SearchParams,
+    paginationParams: PaginationParams,
+  ): Promise<PaginatedCategoriesResult> {
+    const { query, includeInactive, sortBy, sortOrder } = searchParams;
+    const { page, limit } = paginationParams;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.CategoryWhereInput = {
+      userId,
+    };
+
+    if (!includeInactive) {
+      where.isActive = true;
+    }
+
+    if (query) {
+      where.OR = [
+        { name: { contains: query, mode: 'insensitive' } },
+        { description: { contains: query, mode: 'insensitive' } },
+      ];
+    }
+
+    const [categories, total] = await this.prisma.$transaction([
+      this.prisma.category.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: {
+          [sortBy || 'createdAt']: sortOrder || 'desc',
+        },
+        include: {
+          _count: {
+            select: { tasks: true },
+          },
+        },
+      }),
+      this.prisma.category.count({ where }),
+    ]);
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data: categories,
+      meta: {
+        total,
+        page,
+        limit,
+        pages: totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
+    };
   }
 }

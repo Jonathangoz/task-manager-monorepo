@@ -16,6 +16,7 @@ import {
   CreateCategoryData,
   UpdateCategoryData,
 } from '@/core/domain/interfaces/ICategoryRepository';
+import { TaskWithCategory } from '@/core/types/TaskDomain';
 
 // Validation Error for consistency
 class ValidationError extends Error {
@@ -44,7 +45,13 @@ interface BulkDeleteRequest {
   categoryIds: string[];
 }
 
-// 💡 EXPLICACIÓN: Se define una interfaz para los resultados paginados del servicio
+// interfaz específica para respuesta de tareas de categoría
+interface CategoryTasksResponse {
+  data: TaskWithCategory[];
+  meta: PaginationMeta;
+}
+
+// interfaz para los resultados paginados del servicio
 // que será usada consistentemente.
 interface PaginatedServiceResult<T> {
   data: T[];
@@ -56,6 +63,17 @@ interface SearchCategoriesRequest {
   includeInactive?: boolean;
   sortBy?: 'name' | 'createdAt' | 'updatedAt';
   sortOrder?: 'asc' | 'desc';
+}
+
+// Type guard para validar que un objeto es un resultado paginado
+function _isPaginatedResult<T>(obj: object): obj is PaginatedServiceResult<T> {
+  return (
+    obj &&
+    typeof obj === 'object' &&
+    'data' in obj &&
+    'meta' in obj &&
+    Array.isArray(obj.data)
+  );
 }
 
 export class CategoryController {
@@ -287,13 +305,25 @@ export class CategoryController {
         'Fetching category tasks',
       );
 
-      // 💡 EXPLICACIÓN: Se asume que getCategoryTasks devuelve un objeto con { data, meta }
-      const result = await this.categoryService.getCategoryTasks(
+      // Asegurar que el servicio devuelve el tipo correcto
+      const serviceResult = await this.categoryService.getCategoryTasks(
         categoryId,
         userId,
         paginationParams.page,
         paginationParams.limit,
       );
+
+      // Type assertion segura con verificación
+      if (!serviceResult || typeof serviceResult !== 'object') {
+        throw new Error('Invalid response from category service');
+      }
+
+      // Verificar que el resultado tiene la estructura esperada
+      const result = serviceResult as CategoryTasksResponse;
+
+      if (!Array.isArray(result.data) || !result.meta) {
+        throw new Error('Invalid task list response structure');
+      }
 
       const response = this.createPaginatedResponse(
         'Category tasks retrieved successfully',

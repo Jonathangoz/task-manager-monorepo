@@ -253,7 +253,7 @@ export const createRateLimiter = (
     enableRedisStore = true,
   } = options;
 
-  const store = enableRedisStore
+  const _store = enableRedisStore
     ? new TaskServiceRedisRateLimitStore(windowMs)
     : undefined;
 

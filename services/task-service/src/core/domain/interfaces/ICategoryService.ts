@@ -56,7 +56,7 @@ export interface ICategoryService {
     userId: string,
     page?: number,
     limit?: number,
-  ): Promise<any>;
+  ): Promise<unknown>;
 
   getCategoryStats(userId: string): Promise<CategoryStatsResponse>;
 

@@ -167,7 +167,7 @@ export const healthErrorHandler = (
   error: Error,
   req: Request,
   res: Response,
-  next: NextFunction,
+  _next: NextFunction,
 ): void => {
   const requestId = req.headers[REQUEST_HEADERS.X_REQUEST_ID] as string;
 

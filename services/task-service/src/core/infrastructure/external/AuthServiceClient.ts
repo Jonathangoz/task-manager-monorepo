@@ -88,14 +88,14 @@ export class AuthServiceClient {
         { token },
       );
       return response.data;
-    } catch (error: any) {
+    } catch (error) {
       logger.error(`Error verifying token: ${this.getErrorMessage(error)}`);
       // Devuelve una estructura que coincide con TokenValidationResponse para el error
       return { valid: false, error: this.getErrorMessage(error) };
     }
   }
 
-  private extractErrorDetails(error: AxiosError): any {
+  private extractErrorDetails(error: AxiosError): unknown {
     if (error.response) {
       return {
         status: error.response.status,
