@@ -983,35 +983,6 @@ class App {
   }
 
   private setupGracefulShutdown(): void {
-    process.on(
-      'unhandledRejection',
-      (reason: unknown, promise: Promise<unknown>) => {
-        this.appLogger.fatal('Unhandled Promise Rejection detected', {
-          reason:
-            reason instanceof Error
-              ? {
-                  message: reason.message,
-                  stack: reason.stack,
-                  name: reason.name,
-                }
-              : reason,
-          promise: promise.toString(),
-        });
-        setTimeout(() => process.exit(1), 1000);
-      },
-    );
-
-    process.on('uncaughtException', (error: Error) => {
-      this.appLogger.fatal('Uncaught Exception detected', {
-        error: {
-          message: error.message,
-          stack: error.stack,
-          name: error.name,
-        },
-      });
-      process.exit(1);
-    });
-
     process.on('SIGTERM', () => {
       this.appLogger.info('SIGTERM received, starting graceful shutdown...');
       this.gracefulShutdown('SIGTERM');
