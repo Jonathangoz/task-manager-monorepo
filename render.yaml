@@ -61,9 +61,9 @@ services:
       - key: AUTH_SERVICE_API_KEY
         value: 'base64:2V9JFfBSkMoLGxi514RLAqhcfm5J6c50INEKK9cPaaI='
 
-    #  🌐 CORS Configuration
-    #  - key: CORS_ORIGIN
-    #    value: 'https://your-frontend-url.onrender.com'
+      # 🌐 CORS Configuration
+      - key: CORS_ORIGIN
+        value: 'https://your-frontend-url.onrender.com'
 
       # 🔧 Logging y configuración - OPTIMIZADO PARA RENDER
       - key: LOG_LEVEL
@@ -168,8 +168,8 @@ services:
         value: 'task-manager-auth'
 
       # 🌐 CORS Configuration
-    #  - key: CORS_ORIGIN
-    #    value: 'https://your-frontend-url.onrender.com,https://task-manager-auth-service.onrender.com'
+      - key: CORS_ORIGIN
+        value: 'https://your-frontend-url.onrender.com,https://task-manager-auth-service.onrender.com'
 
       # Variables específicas de tareas
       - key: DEFAULT_PAGE_SIZE
