@@ -219,7 +219,7 @@ services:
 
 databases:
   - name: task-manager-unified-db-prod
-    databaseName: task_manager_db_prod
+    databaseName: task_manager_db_prod_bdpt
     user: task_manager_user_prod
     plan: free
     region: oregon

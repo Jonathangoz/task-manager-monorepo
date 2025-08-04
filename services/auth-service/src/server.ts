@@ -95,7 +95,17 @@ class AuthServer {
       await this.startHttpServer();
 
       // Inicializar dependencias (DB, Redis) en background
-      this.initializeDependenciesInBackground();
+      //this.initializeDependenciesInBackground();
+
+      this.serverLogger.info(
+        '⏳ Initializing dependencies (Database, Redis)... This may take a moment.',
+      );
+      await this.initializeDependencies(); // <-- Usa AWAIT aquí
+      this.isReady = true; // <-- Ahora sí está realmente listo
+      this.serverLogger.info(
+        '✅ All dependencies initialized. Service is fully ready.',
+      );
+      this.setupCleanupJobs();
 
       // Configurar shutdown graceful
       this.setupGracefulShutdown();
