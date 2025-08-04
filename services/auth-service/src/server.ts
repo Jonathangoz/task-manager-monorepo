@@ -814,6 +814,8 @@ class AuthServer {
   }
 }
 
+const authServer = new AuthServer();
+
 // ✅ FUNCIÓN PRINCIPAL DE STARTUP CON MANEJO DE ERRORES ROBUSTO
 async function startServer(): Promise<void> {
   const authServer = new AuthServer();
@@ -872,5 +874,5 @@ if (require.main === module) {
   });
 }
 
-export default AuthServer; // Exportar la instancia global
+export default authServer;
 export { AuthServer };
