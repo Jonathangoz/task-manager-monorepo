@@ -1,5 +1,4 @@
 // src/server.ts - Auth Service Server - ✅ OPTIMIZADO PARA RENDER.COM
-import 'reflect-metadata';
 import { Server } from 'http';
 import http from 'http';
 import app from './app';
