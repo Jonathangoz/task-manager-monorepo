@@ -1,13 +1,15 @@
 // src/server.ts - Auth Service Server - ✅ OPTIMIZADO PARA RENDER.COM
+import 'reflect-metadata';
 import { Server } from 'http';
-import { Socket } from 'net';
-import App from './app';
+import http from 'http';
+import app from './app';
 import { environment } from '@/config/environment';
 import {
   dbLogger,
   redisLogger,
   startup,
   createContextLogger,
+  logError,
 } from '@/utils/logger';
 import {
   connectDatabase,
@@ -20,40 +22,20 @@ import { redisConnection } from '@/config/redis';
 
 // ✅ CONFIGURAR MANEJO DE ERRORES GLOBAL ANTES DE CUALQUIER OTRA COSA
 process.on('uncaughtException', (error: Error) => {
-  console.error('💥 UNCAUGHT EXCEPTION - Server startup failed:', {
-    message: error.message,
-    stack: error.stack,
-    name: error.name,
-    timestamp: new Date().toISOString(),
-  });
-
-  // En Render, es mejor salir inmediatamente para que reinicie el contenedor
-  process.exit(1);
+  // CORRECCIÓN: Usar el logger en lugar de console.error
+  logError.critical(error, { context: 'uncaughtException' });
+  // En un caso real, podrías esperar a que el logger termine de escribir
+  setTimeout(() => process.exit(1), 1000);
 });
 
-process.on(
-  'unhandledRejection',
-  (reason: unknown, promise: Promise<unknown>) => {
-    console.error('💥 UNHANDLED REJECTION - Server startup failed:', {
-      reason:
-        reason instanceof Error
-          ? {
-              message: reason.message,
-              stack: reason.stack,
-              name: reason.name,
-            }
-          : reason,
-      promise: promise.toString(),
-      timestamp: new Date().toISOString(),
-    });
-
-    // En Render, salir inmediatamente para reinicio
-    process.exit(1);
-  },
-);
+process.on('unhandledRejection', (reason: unknown) => {
+  const error = reason instanceof Error ? reason : new Error(String(reason));
+  logError.critical(error, { context: 'unhandledRejection' });
+  setTimeout(() => process.exit(1), 1000);
+});
 
 class AuthServer {
-  private app: App | null = null;
+  private readonly app: http.Server;
   private server: Server | null = null;
   private cleanupIntervals: NodeJS.Timeout[] = [];
   private isShuttingDown = false;
@@ -63,7 +45,7 @@ class AuthServer {
   public isReady = false;
 
   constructor() {
-    // No inicializar App en el constructor para evitar errores tempranos
+    this.app = http.createServer(app);
   }
 
   // ✅ INICIO DEL SERVIDOR CON MEJOR MANEJO DE ERRORES
@@ -80,51 +62,23 @@ class AuthServer {
 
       // Verificar configuración crítica ANTES de inicializar
       await this.validateCriticalConfig();
+      //await this.initializeDatabase(); // Conectar a la BD antes de escuchar
 
-      // Inicializar App con manejo de errores
-      this.serverLogger.info('📦 Creating Express application instance...');
-      this.app = new App();
-
-      // LLAMAR EXPLÍCITAMENTE A LA INICIALIZACIÓN DE LA APP
-      this.serverLogger.info(
-        '⚙️ Initializing application logic (middlewares, routes)...',
-      );
-      await this.app.initializeApp();
-
-      // Iniciar servidor HTTP INMEDIATAMENTE (para health checks de Render)
-      await this.startHttpServer();
-
-      // Inicializar dependencias (DB, Redis) en background
-      //this.initializeDependenciesInBackground();
-
-      this.serverLogger.info(
-        '⏳ Initializing dependencies (Database, Redis)... This may take a moment.',
-      );
-      await this.initializeDependencies(); // <-- Usa AWAIT aquí
-      this.isReady = true; // <-- Ahora sí está realmente listo
-      this.serverLogger.info(
-        '✅ All dependencies initialized. Service is fully ready.',
-      );
-      this.setupCleanupJobs();
-
-      // Configurar shutdown graceful
-      this.setupGracefulShutdown();
-
-      this.isInitialized = true;
-      startup.serviceStarted(environment.app.port, environment.app.env);
-    } catch (error) {
-      this.serverLogger.fatal('❌ Failed to start Auth Service', {
-        error:
-          error instanceof Error
-            ? {
-                message: error.message,
-                stack: error.stack,
-                name: error.name,
-              }
-            : error,
+      // 2. Iniciar el servidor HTTP
+      const port = environment.app.port;
+      this.app.listen(port, () => {
+        startup.serviceStarted(port, environment.app.env);
+        this.isReady = true;
+        this.isInitialized = true;
       });
 
-      // En caso de error durante startup, salir inmediatamente
+      // Manejo de errores del servidor
+      this.app.on('error', (error: NodeJS.ErrnoException) => {
+        logError.critical(error, { context: 'httpServer' });
+        process.exit(1);
+      });
+    } catch (error) {
+      logError.critical(error as Error, { context: 'AuthServer.start' });
       process.exit(1);
     }
   }
@@ -337,7 +291,7 @@ class AuthServer {
   }
 
   // ✅ INICIO DEL SERVIDOR HTTP MEJORADO PARA RENDER
-  private async startHttpServer(): Promise<void> {
+  /*private async startHttpServer(): Promise<void> {
     return new Promise((resolve, reject) => {
       if (!this.app) {
         return reject(new Error('App not initialized'));
@@ -455,7 +409,7 @@ class AuthServer {
         reject(error);
       }
     });
-  }
+  } */
 
   // ✅ CONFIGURACIÓN DE TRABAJOS DE LIMPIEZA MÁS SEGURA
   private setupCleanupJobs(): void {
@@ -801,10 +755,6 @@ class AuthServer {
     };
   }
 
-  public getApp(): App | null {
-    return this.app;
-  }
-
   public isRunning(): boolean {
     return this.isServerListening() && this.isInitialized;
   }
@@ -818,61 +768,20 @@ const authServer = new AuthServer();
 
 // ✅ FUNCIÓN PRINCIPAL DE STARTUP CON MANEJO DE ERRORES ROBUSTO
 async function startServer(): Promise<void> {
-  const authServer = new AuthServer();
-
   try {
-    console.log('🚀 Starting Auth Service...');
     await authServer.start();
-    console.info('✅ Auth Service started successfully');
   } catch (error) {
-    console.error('💥 Failed to start Auth Service:', {
-      error:
-        error instanceof Error
-          ? {
-              message: error.message,
-              stack: error.stack,
-              name: error.name,
-            }
-          : error,
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'unknown',
-      nodeVersion: process.version,
-    });
-    // Salir inmediatamente en caso de error
-    process.exit(1);
-  }
-
-  try {
-    // Los console.log aquí ahora son opcionales, ya que el logger interno es más robusto.
-    // Puedes mantenerlos para una visualización rápida del arranque.
-    console.log('🚀 Starting Auth Service...');
-
-    await authServer.start();
-    console.info('✅ Auth Service started successfully');
-  } catch (error) {
-    // El logger interno ya habrá capturado el error fatal, pero esto es un respaldo.
-    console.error(
-      '💥 Failed to start Auth Service due to an unhandled exception in the startup sequence.',
-      {
-        error:
-          error instanceof Error
-            ? { message: error.message, stack: error.stack }
-            : error,
-        timestamp: new Date().toISOString(),
-      },
-    );
+    // El logger dentro de start() ya manejará esto, pero es una última barrera.
+    const err = error instanceof Error ? error : new Error(String(error));
+    logError.critical(err, { context: 'globalStartServer' });
     process.exit(1);
   }
 }
 
-// ✅ Iniciar servidor solo si es el módulo principal
+// Iniciar servidor solo si es el módulo principal
 if (require.main === module) {
-  startServer().catch((error) => {
-    // Este catch es para errores que puedan ocurrir en el propio `startServer`, no dentro de `authServer.start()`
-    console.error('💥 Critical startup failure:', error);
-    process.exit(1);
-  });
+  startServer();
 }
 
 export default authServer;
-export { AuthServer };
+export { AuthServer as AuthServerClass };

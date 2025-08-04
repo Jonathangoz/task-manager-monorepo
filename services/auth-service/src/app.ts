@@ -48,6 +48,7 @@ import {
 } from '@/commons/middlewares/error.middleware';
 
 // Services and Dependencies
+import { HealthController } from '@/commons/controllers/HealthController';
 import { UserController } from '@/commons/controllers/UserController';
 import { UserRoutes } from '@/commons/routes/user.routes';
 import { AuthRoutes } from '@/commons/routes/auth.routes';
@@ -176,15 +177,27 @@ const parseSize = (sizeStr: string): number => {
 
 // CLASE PRINCIPAL DE LA APLICACIÓN
 class App {
-  public app: Application;
+  public express: Application;
   private readonly appLogger = createContextLogger({ component: 'app' });
   private securityConfig: SecurityConfig;
   private services: ServiceDependencies;
+  private readonly healthController: HealthController;
 
   constructor() {
-    this.app = express();
+    this.express = express();
+    this.healthController = new HealthController();
+    this.initializeMiddlewares();
+    this.initializeRoutes();
+    this.initializeErrorHandling();
     this.securityConfig = this.buildSecurityConfig();
     this.services = {} as ServiceDependencies;
+  }
+
+  private initializeMiddlewares(): void {
+    this.express.use(helmet());
+    this.express.use(cors({ origin: process.env.CORS_ORIGIN }));
+    this.express.use(express.json());
+    this.express.use(express.urlencoded({ extended: true }));
   }
 
   public async initializeApp(): Promise<void> {
@@ -422,25 +435,25 @@ class App {
   }
 
   private initializePreSecurityMiddlewares(): void {
-    this.app.set('trust proxy', environment.app.isProduction ? 1 : 1);
-    this.app.use(this.requestContextMiddleware.bind(this));
+    this.express.set('trust proxy', environment.app.isProduction ? 1 : 1);
+    this.express.use(this.requestContextMiddleware.bind(this));
   }
 
   private initializeHealthRoutes(): void {
     this.appLogger.info('Initializing health check routes (pre-security)...');
     const apiVersion = `/api/${environment.app.apiVersion}`;
-    this.app.use(`${apiVersion}/health`, HealthRoutes.routes);
+    this.express.use(`${apiVersion}/health`, HealthRoutes.routes);
   }
 
   private async initializeSecurityMiddlewares(): Promise<void> {
     this.appLogger.info('Inicializando Middleware sw Seguridad...');
 
-    this.app.use(helmet(this.securityConfig.helmet));
-    this.app.use(cors(this.securityConfig.cors));
+    this.express.use(helmet(this.securityConfig.helmet));
+    this.express.use(cors(this.securityConfig.cors));
 
     if (!environment.app.isTest) {
-      this.app.use(this.securityConfig.slowDown);
-      this.app.use(this.securityConfig.rateLimit);
+      this.express.use(this.securityConfig.slowDown);
+      this.express.use(this.securityConfig.rateLimit);
     }
 
     this.appLogger.info('Middleware de Seguridad Iniciado Exitosamente');
@@ -450,7 +463,7 @@ class App {
     this.appLogger.info('Initializing core middlewares...');
 
     // ✅ TIMEOUT MIDDLEWARE MEJORADO - EXCLUYE HEALTH CHECKS COMPLETAMENTE
-    this.app.use((req: Request, res: Response, next: NextFunction) => {
+    this.express.use((req: Request, res: Response, next: NextFunction) => {
       // ✅ PATHS QUE NUNCA DEBEN TENER TIMEOUT (CRÍTICO PARA RENDER)
       const noTimeoutPaths = [
         '/health',
@@ -487,7 +500,7 @@ class App {
     });
 
     // ✅ Compression optimizado con exclusión de health checks
-    this.app.use(
+    this.express.use(
       compression({
         threshold: MIDDLEWARE_CONFIG?.COMPRESSION_THRESHOLD || 1024,
         level: environment.app.isProduction ? 6 : 1,
@@ -526,7 +539,7 @@ class App {
     );
 
     // ✅ JSON parser optimizado con exclusión de health checks
-    this.app.use((req: Request, res: Response, next: NextFunction) => {
+    this.express.use((req: Request, res: Response, next: NextFunction) => {
       // ✅ Health checks no necesitan parsing JSON (más rápido)
       if (
         req.path.includes('/health') ||
@@ -556,7 +569,7 @@ class App {
     });
 
     // ✅ URL encoded parser optimizado con exclusión de health checks
-    this.app.use((req: Request, res: Response, next: NextFunction) => {
+    this.express.use((req: Request, res: Response, next: NextFunction) => {
       if (
         req.path.includes('/health') ||
         req.path === '/ping' ||
@@ -573,11 +586,11 @@ class App {
       })(req, res, next);
     });
 
-    this.app.use(cookieParser(environment.jwt?.secret));
+    this.express.use(cookieParser(environment.jwt?.secret));
     this.setupMorganLogging();
-    this.app.use(jsonErrorHandler);
-    this.app.use(payloadTooLargeHandler);
-    this.app.use(this.requestLoggingMiddleware.bind(this));
+    this.express.use(jsonErrorHandler);
+    this.express.use(payloadTooLargeHandler);
+    this.express.use(this.requestLoggingMiddleware.bind(this));
 
     this.appLogger.info('Core middlewares initialized successfully');
   }
@@ -612,7 +625,7 @@ class App {
       ? productionFormat
       : developmentFormat;
 
-    this.app.use(
+    this.express.use(
       morgan(morganFormat, {
         stream: {
           write: (message: string) => {
@@ -656,7 +669,7 @@ class App {
   private async initializeValidationMiddlewares(): Promise<void> {
     this.appLogger.info('Initializing validation middlewares...');
 
-    this.app.use((req: Request, _res: Response, next: NextFunction) => {
+    this.express.use((req: Request, _res: Response, next: NextFunction) => {
       try {
         const headers = {
           'user-agent': req.get('user-agent'),
@@ -817,7 +830,10 @@ class App {
 
     const apiVersion = `/api/${environment.app.apiVersion}`;
 
-    this.app.get('/', this.createRootHandler());
+    this.express.get('/', this.createRootHandler());
+    this.express.get('/health', (req, res) =>
+      this.healthController.readinessCheck(req, res),
+    );
 
     try {
       const authRoutes = AuthRoutes.create({
@@ -825,7 +841,7 @@ class App {
         userService: this.services.userService,
         tokenService: this.services.tokenService,
       });
-      this.app.use(`${apiVersion}/auth`, authRoutes);
+      this.express.use(`${apiVersion}/auth`, authRoutes);
 
       const userController = new UserController(
         this.services.userService,
@@ -833,7 +849,7 @@ class App {
       );
 
       const userRoutesInstance = UserRoutes.create({ userController });
-      this.app.use(`${apiVersion}/users`, userRoutesInstance.routes);
+      this.express.use(`${apiVersion}/users`, userRoutesInstance.routes);
 
       this.appLogger.info('Routes initialized successfully');
     } catch (error) {
@@ -841,10 +857,10 @@ class App {
       throw error;
     }
 
-    this.app.get(`${apiVersion}`, this.createApiInfoHandler(apiVersion));
+    this.express.get(`${apiVersion}`, this.createApiInfoHandler(apiVersion));
 
     if (environment.app.isDevelopment) {
-      this.app.get(`${apiVersion}/metrics`, this.createMetricsHandler());
+      this.express.get(`${apiVersion}/metrics`, this.createMetricsHandler());
     }
   }
 
@@ -946,16 +962,19 @@ class App {
     }
 
     try {
-      this.app.use('/api-docs', swaggerUi.serve);
-      this.app.get('/api-docs', swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+      this.express.use('/api-docs', swaggerUi.serve);
+      this.express.get(
+        '/api-docs',
+        swaggerUi.setup(swaggerSpec, swaggerUiOptions),
+      );
 
-      this.app.get('/api-docs.json', (req: Request, res: Response) => {
+      this.express.get('/api-docs.json', (req: Request, res: Response) => {
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.json(swaggerSpec);
       });
 
-      this.app.get('/swagger.json', (req: Request, res: Response) => {
+      this.express.get('/swagger.json', (req: Request, res: Response) => {
         res.redirect('/api-docs.json');
       });
 
@@ -975,8 +994,8 @@ class App {
   private initializeErrorHandling(): void {
     this.appLogger.info('Initializing error handling...');
 
-    this.app.use('*', notFoundHandler);
-    this.app.use(errorHandler);
+    this.express.use('*', notFoundHandler);
+    this.express.use(errorHandler);
     this.setupGracefulShutdown();
 
     this.appLogger.info('Error handling initialized successfully');
@@ -1092,13 +1111,13 @@ class App {
   }
 
   private getRoutesCount(): number {
-    const app = this.app as ExpressAppWithRouter;
+    const app = this.express as ExpressAppWithRouter;
     const stack = app._router?.stack || [];
     return stack.filter((layer: RouterLayer) => layer.route).length;
   }
 
   public getApp(): Application {
-    return this.app;
+    return this.express;
   }
 
   public async close(): Promise<void> {
@@ -1141,8 +1160,8 @@ class App {
       this.appLogger.warn('configureForTesting called in non-test environment');
       return;
     }
-    this.app.set('trust proxy', true);
-    this.app.get('/test/info', (req: Request, res: Response) => {
+    this.express.set('trust proxy', true);
+    this.express.get('/test/info', (req: Request, res: Response) => {
       res.json(this.getAppInfo());
     });
     this.appLogger.info('Application configured for testing');
@@ -1195,4 +1214,7 @@ export const APP_CONSTANTS = {
   SKIP_RATE_LIMIT_PATHS: ['/health'],
 } as const;
 
-export default App;
+const appInstance = new App();
+// Inicializa la app antes de exportarla
+appInstance.initializeApp();
+export default appInstance.getApp(); // Exporta la INSTANCIA de Express
