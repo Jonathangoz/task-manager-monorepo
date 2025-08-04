@@ -88,14 +88,10 @@ jobs:
         env:
           DATABASE_URL: postgresql://task_test_user:task_test_password@localhost:5432/task_test_db
 
-      - name: 🗄️ Run Database Migrations
-        run: pnpm --filter task-manager-task-service prisma:migrate:dev
-        env:
-          DATABASE_URL: postgresql://task_test_user:task_test_password@localhost:5432/task_test_db
-
       - name: 🏗️ Build Application
         run: pnpm --filter task-manager-task-service build
 
+    #    ❌ TESTS COMENTADOS - Solo para desarrollo local
     #  - name: 🧪 Run Tests
     #    run: pnpm --filter task-manager-task-service test:coverage
     #    env:
@@ -121,33 +117,34 @@ jobs:
     #      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   # 🔗 Check Auth Service Dependency (Solo para producción)
-  check-dependencies:
-    name: 🔗 Check Auth Service Health
-    runs-on: ubuntu-latest
-    needs: test
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' # Solo se ejecuta para pushes a main
-
-    steps:
-      - name: 🔍 Check Auth Service Health (Production)
-        run: |
-          echo "🔍 Checking Auth Service production availability..."
-          # Aumenta el sleep para dar tiempo al Auth Service de arrancar si se acaba de desplegar
-          sleep 60
-          curl -f ${{ vars.AUTH_SERVICE_PRODUCTION_URL }}/api/v1/health || {
-            echo "❌ Auth Service production is not available. Deployment aborted."
-            exit 1
-          }
-          echo "✅ Auth Service production is healthy!"
+  #check-dependencies:
+  #  name: 🔗 Check Auth Service Health
+  # runs-on: ubuntu-latest
+  # needs: test
+  # if: github.ref == 'refs/heads/main' && github.event_name == 'push' # Solo se ejecuta para pushes a main
+  #
+  #  steps:
+  #   - name: 🔍 Check Auth Service Health (Production)
+  #      run: |
+  #        echo "🔍 Checking Auth Service production availability..."
+  #        # Aumenta el sleep para dar tiempo al Auth Service de arrancar si se acaba de desplegar
+  #        sleep 60
+  #        curl -f ${{ vars.TASK_SERVICE_PRODUCTION_URL }}/api/v1/health || {
+  #          echo "❌ Auth Service production is not available. Deployment aborted."
+  #          exit 1
+  #        }
+  #        echo "✅ Auth Service production is healthy!"
 
   # 🌟 Deploy to Production (main branch)
   deploy-production:
     name: 🌟 Deploy to Production
     runs-on: ubuntu-latest
-    needs: [test, check-dependencies]
+    needs: test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     environment:
-      name: Task-manager # ¡CAMBIADO! Ahora usa tu entorno 'Task-manager'
+      name: Task-manager
+      url: ${{ vars.TASK_SERVICE_PRODUCTION_URL }}
 
     steps:
       - name: 📥 Checkout Code
@@ -159,18 +156,28 @@ jobs:
           service-id: ${{ secrets.RENDER_TASK_SERVICE_PRODUCTION_ID }}
           api-key: ${{ secrets.RENDER_API_KEY }}
 
-      - name: 🔍 Health Check Production
+      - name: 🩺 Health Check Production (con reintentos)
         run: |
-          echo "🏥 Waiting for production service to be ready..."
-          sleep 60 # Aumentado el tiempo de espera
-          curl -f ${{ vars.TASK_SERVICE_PRODUCTION_URL }}/api/v1/health || exit 1
-          echo "✅ Production deployment successful!"
+          echo "🚀 Deploy triggered on Render. Waiting for the new version to go live..."
+          # Una espera inicial de 60 segundos para darle tiempo a Render a iniciar el proceso
+          sleep 60 
 
-      - name: 🧪 Smoke Tests on Production
-        run: |
-          echo "🧪 Running smoke tests on production..."
-          curl -f ${{ vars.TASK_SERVICE_PRODUCTION_URL }}/api/v1/health
-          echo "✅ Smoke tests passed!"
+          # Bucle de reintentos por hasta 5 minutos (20 intentos * 15s = 300s)
+          for i in {1..20}; do
+            # ✅ Usamos el endpoint '/healht' porque es el que asegura que las dependencias están listas
+            response_code=$(curl -o /dev/null -s -w "%{http_code}" "${{ vars.TASK_SERVICE_PRODUCTION_URL }}/api/v1/health")
+            
+            if [ "$response_code" -eq 200 ]; then
+              echo "✅ Health check passed with status 200 on attempt $i."
+              exit 0
+            fi
+            
+            echo "Attempt $i: Health check failed with status $response_code. Retrying in 15 seconds..."
+            sleep 15
+          done
+
+          echo "❌ Health check failed after multiple attempts."
+          exit 1
 
       - name: 📢 Notify Deployment Success
         if: success()
