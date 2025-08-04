@@ -10,7 +10,7 @@
   },
   "scripts": {
     "clean": "rimraf dist",
-    "build": "pnpm run clean && tsc",
+    "build": "pnpm run clean && tsc && tsc-alias",
     "dev:watch": "tsc-watch --onSuccess \"tsc-alias && node dist/src/server.js\"",
     "dev": "tsc --watch & tsc-alias --watch && nodemon --exec ts-node -r tsconfig-paths/register src/server.ts",
     "start": "node -r tsconfig-paths/register dist/server.js",
@@ -56,6 +56,7 @@
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "tsconfig-paths": "^4.2.0",
+    "tsc-alias": "^1.8.16",
     "zod": "^3.23.8"
   },
   "devDependencies": {
