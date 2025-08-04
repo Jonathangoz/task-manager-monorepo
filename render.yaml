@@ -13,7 +13,7 @@ services:
       cd ../.. && pnpm install --frozen-lockfile && cd ./services/auth-service
       pnpm prisma:generate
       pnpm build
-    startCommand: node -e "console.log(process.env)" ; pnpm start:prod
+    startCommand: pnpm start:prod
     # CONFIGURACIÓN DE HEALTH CHECK OPTIMIZADA PARA RENDER
     healthCheckPath: /api/v1/health/ready
     autoDeploy: true
