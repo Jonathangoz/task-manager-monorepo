@@ -1,7 +1,8 @@
 // src/server.ts - Auth Service Server - ✅ OPTIMIZADO PARA RENDER.COM
 import { Server } from 'http';
 import http from 'http';
-import app from './app';
+// CORRECCIÓN: Importar la clase App, no la instancia de express
+import { App } from './app';
 import { environment } from '@/config/environment';
 import {
   dbLogger,
@@ -34,17 +35,21 @@ process.on('unhandledRejection', (reason: unknown) => {
 });
 
 class AuthServer {
-  private readonly app: http.Server;
-  private server: Server | null = null;
+  // CORRECCIÓN: El tipo será http.Server, que es lo que devuelve http.createServer
+  private serverInstance: http.Server;
   private cleanupIntervals: NodeJS.Timeout[] = [];
   private isShuttingDown = false;
   private readonly serverLogger = createContextLogger({ component: 'server' });
   private consecutiveHealthCheckFailures = 0;
   private isInitialized = false;
   public isReady = false;
+  private readonly app: App;
 
   constructor() {
-    this.app = http.createServer(app);
+    // CORRECCIÓN: Crear la instancia de App aquí
+    this.app = new App();
+    // CORRECCIÓN: Inicializar el servidor con la instancia de express de la app
+    this.serverInstance = http.createServer(this.app.getApp());
   }
 
   // ✅ INICIO DEL SERVIDOR CON MEJOR MANEJO DE ERRORES
@@ -61,18 +66,24 @@ class AuthServer {
 
       // Verificar configuración crítica ANTES de inicializar
       await this.validateCriticalConfig();
-      //await this.initializeDatabase(); // Conectar a la BD antes de escuchar
+      await this.initializeDatabase();
+      await this.initializeRedis();
 
-      // 2. Iniciar el servidor HTTP
+      // CORRECCIÓN: Inicializar la aplicación Express (middlewares, rutas, etc.)
+      await this.app.initializeApp();
+
+      // 2. Iniciar el servidor HTTP DESPUÉS de que todo esté listo
       const port = environment.app.port;
-      this.app.listen(port, () => {
+      this.serverInstance.listen(port, () => {
         startup.serviceStarted(port, environment.app.env);
         this.isReady = true;
         this.isInitialized = true;
+        this.setupCleanupJobs();
+        this.setupGracefulShutdown();
       });
 
       // Manejo de errores del servidor
-      this.app.on('error', (error: NodeJS.ErrnoException) => {
+      this.serverInstance.on('error', (error: NodeJS.ErrnoException) => {
         logError.critical(error, { context: 'httpServer' });
         process.exit(1);
       });
@@ -519,7 +530,7 @@ class AuthServer {
 
     try {
       // ✅ PASO 1: Detener servidor HTTP
-      if (this.server && this.server.listening) {
+      if (this.serverInstance && this.serverInstance.listening) {
         this.serverLogger.info('🚪 Closing HTTP server...');
         await this.closeHttpServer();
       }
@@ -547,7 +558,7 @@ class AuthServer {
 
   private async closeHttpServer(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-      if (!this.server) {
+      if (!this.serverInstance) {
         resolve();
         return;
       }
@@ -556,7 +567,7 @@ class AuthServer {
         reject(new Error('HTTP server close timeout'));
       }, 10000);
 
-      this.server.close((error) => {
+      this.serverInstance.close((error) => {
         clearTimeout(timeout);
         if (error) {
           this.serverLogger.error('❌ Error closing HTTP server', { error });
@@ -722,8 +733,8 @@ class AuthServer {
   public isServerListening(): boolean {
     return (
       this.isInitialized &&
-      this.server !== null &&
-      this.server.listening &&
+      this.serverInstance !== null &&
+      this.serverInstance.listening &&
       !this.isShuttingDown
     );
   }
@@ -759,7 +770,7 @@ class AuthServer {
   }
 
   public getServer(): Server | null {
-    return this.server;
+    return this.serverInstance;
   }
 }
 
