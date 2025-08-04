@@ -814,6 +814,8 @@ class AuthServer {
   }
 }
 
+const authServer = new AuthServer();
+
 // ✅ FUNCIÓN PRINCIPAL DE STARTUP CON MANEJO DE ERRORES ROBUSTO
 async function startServer(): Promise<void> {
   const authServer = new AuthServer();
@@ -839,15 +841,35 @@ async function startServer(): Promise<void> {
     // Salir inmediatamente en caso de error
     process.exit(1);
   }
-}
 
-// ✅ INSTANCIA GLOBAL DEL SERVIDOR
-const authServer = new AuthServer();
+  try {
+    // Los console.log aquí ahora son opcionales, ya que el logger interno es más robusto.
+    // Puedes mantenerlos para una visualización rápida del arranque.
+    console.log('🚀 Starting Auth Service...');
+
+    await authServer.start();
+    console.info('✅ Auth Service started successfully');
+  } catch (error) {
+    // El logger interno ya habrá capturado el error fatal, pero esto es un respaldo.
+    console.error(
+      '💥 Failed to start Auth Service due to an unhandled exception in the startup sequence.',
+      {
+        error:
+          error instanceof Error
+            ? { message: error.message, stack: error.stack }
+            : error,
+        timestamp: new Date().toISOString(),
+      },
+    );
+    process.exit(1);
+  }
+}
 
 // ✅ Iniciar servidor solo si es el módulo principal
 if (require.main === module) {
   startServer().catch((error) => {
-    console.error('💥 Startup failed:', error);
+    // Este catch es para errores que puedan ocurrir en el propio `startServer`, no dentro de `authServer.start()`
+    console.error('💥 Critical startup failure:', error);
     process.exit(1);
   });
 }
