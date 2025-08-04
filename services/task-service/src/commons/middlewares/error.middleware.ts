@@ -13,12 +13,13 @@ import {
   ERROR_MESSAGES,
   RATE_LIMIT_ERROR_CODES,
   RATE_LIMIT_ERROR_MESSAGES,
+  CONTEXTUAL_RATE_LIMIT_MESSAGES, // ✅ CORRECCIÓN: Importar mensajes contextuales
   EVENT_TYPES,
   ApiResponse,
-  REQUEST_HEADERS,
   generateRateLimitMessage,
   PRISMA_ERROR_MAPPINGS,
 } from '@/utils/constants';
+import { AuthenticatedRequest } from '@/commons/middlewares/auth.middleware';
 
 // INTERFACES Y TIPOS
 
@@ -26,16 +27,16 @@ interface AppError extends Error {
   statusCode?: number;
   code?: string;
   isOperational?: boolean;
-  details?: any;
-  context?: Record<string, any>;
+  details?: unknown;
+  context?: Record<string, unknown>;
 }
 
 interface ValidationError {
   field: string;
   message: string;
   code: string;
-  received?: any;
-  expected?: any;
+  received?: unknown;
+  expected?: unknown;
 }
 
 interface ErrorContext {
@@ -45,8 +46,8 @@ interface ErrorContext {
   userAgent?: string;
   method: string;
   path: string;
-  body?: any;
-  query?: any;
+  body?: unknown;
+  query?: unknown;
   timestamp: string;
 }
 
@@ -58,15 +59,21 @@ interface PrismaErrorMapping {
   getMessage?: (error: Prisma.PrismaClientKnownRequestError) => string;
 }
 
+// ✅ CORRECCIÓN (TS2345): Se define un tipo para las llaves de mensajes contextuales
+// y una función type guard para validar que un string pertenece a este tipo.
+type ContextualRateLimitKey = keyof typeof CONTEXTUAL_RATE_LIMIT_MESSAGES;
+
+function isContextualRateLimitKey(key: string): key is ContextualRateLimitKey {
+  return key in CONTEXTUAL_RATE_LIMIT_MESSAGES;
+}
+
 // UTILIDADES DE CONTEXTO
 const extractErrorContext = (req: Request): ErrorContext => {
   return {
-    requestId:
-      (req.headers[REQUEST_HEADERS.X_REQUEST_ID] as string) ||
-      generateRequestId(),
-    userId: (req as any).userId,
-    ip: req.ip || req.connection.remoteAddress || 'unknown',
-    userAgent: req.headers[REQUEST_HEADERS.USER_AGENT] as string,
+    requestId: (req.headers['x-request-id'] as string) || `req_${Date.now()}`,
+    userId: (req as AuthenticatedRequest).user?.id,
+    ip: req.ip || req.connection?.remoteAddress || 'unknown',
+    userAgent: req.headers['user-agent'] as string,
     method: req.method,
     path: req.path,
     body: sanitizeRequestBody(req.body),
@@ -75,7 +82,7 @@ const extractErrorContext = (req: Request): ErrorContext => {
   };
 };
 
-const sanitizeRequestBody = (body: any): any => {
+const sanitizeRequestBody = (body: unknown): unknown => {
   if (!body || typeof body !== 'object') return body;
 
   const sensitiveFields = [
@@ -85,7 +92,7 @@ const sanitizeRequestBody = (body: any): any => {
     'key',
     'authorization',
   ];
-  const sanitized = { ...body };
+  const sanitized = { ...(body as Record<string, unknown>) };
 
   for (const field of sensitiveFields) {
     if (sanitized[field]) {
@@ -96,14 +103,10 @@ const sanitizeRequestBody = (body: any): any => {
   return sanitized;
 };
 
-const generateRequestId = (): string => {
-  return `req_${Date.now()}_${Math.random()}`;
-};
-
 // DETECTORES DE TIPO DE ERROR
 
 const isPrismaError = (
-  error: any,
+  error: unknown,
 ): error is
   | Prisma.PrismaClientKnownRequestError
   | Prisma.PrismaClientUnknownRequestError
@@ -119,24 +122,32 @@ const isPrismaError = (
   );
 };
 
-const isZodError = (error: any): error is ZodError => {
-  return error instanceof ZodError || error.name === 'ZodError';
+const isZodError = (error: unknown): error is ZodError => {
+  return error instanceof ZodError || (error as Error).name === 'ZodError';
 };
 
 const isRateLimitError = (error: AppError): boolean => {
-  return error.code
-    ? Object.values(RATE_LIMIT_ERROR_CODES).includes(error.code as any)
-    : false;
+  // ✅ CORRECCIÓN (ESLint): Se elimina el `as any` usando un type guard implícito.
+  const rateLimitCodes = Object.values(RATE_LIMIT_ERROR_CODES);
+  return (
+    !!error.code &&
+    rateLimitCodes.includes(error.code as (typeof rateLimitCodes)[number])
+  );
 };
 
 const isAuthError = (error: AppError): boolean => {
-  return [
+  // ✅ CORRECCIÓN (ESLint): Se elimina el `as any` usando un type guard implícito.
+  const authErrorCodes = [
     ERROR_CODES.INVALID_TOKEN,
     ERROR_CODES.TOKEN_EXPIRED,
     ERROR_CODES.TOKEN_REQUIRED,
     ERROR_CODES.UNAUTHORIZED_ACCESS,
     ERROR_CODES.USER_NOT_FOUND,
-  ].includes(error.code as any);
+  ];
+  return (
+    !!error.code &&
+    authErrorCodes.includes(error.code as (typeof authErrorCodes)[number])
+  );
 };
 
 // MANEJADORES ESPECÍFICOS DE ERROR
@@ -150,7 +161,7 @@ const handlePrismaError = (
   context: ErrorContext,
 ): ApiResponse => {
   // Log específico para errores de Prisma
-  const errorDetails: any = {
+  const errorDetails: Record<string, unknown> = {
     message: error.message,
     stack: config.app.isDevelopment ? error.stack : undefined,
   };
@@ -171,7 +182,6 @@ const handlePrismaError = (
 
   // Error conocido con mapeo específico
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code) {
-    // Corregir aquí: usar error.code como índice, no el objeto error completo
     const mapping = PRISMA_ERROR_MAPPINGS[
       error.code as keyof typeof PRISMA_ERROR_MAPPINGS
     ] as PrismaErrorMapping;
@@ -260,9 +270,8 @@ const handleZodError = (
       field: issue.path.join('.') || 'unknown',
       message: issue.message,
       code: issue.code,
-      // Conditionally include 'received' if it exists on the issue
       ...(Object.prototype.hasOwnProperty.call(issue, 'received') && {
-        received: (issue as any).received,
+        received: (issue as { received: unknown }).received,
       }),
     }),
   );
@@ -281,7 +290,7 @@ const handleZodError = (
 const handleRateLimitError = (
   error: AppError,
   context: ErrorContext,
-  res: Response,
+  _res: Response,
 ): ApiResponse => {
   // Log de error de Rate Limit
   logger.warn(
@@ -295,14 +304,22 @@ const handleRateLimitError = (
 
   // Mensaje contextual si hay información de reset time
   let message = error.message;
-  if (error.details?.resetTimeMs && error.code) {
-    const rateLimitType = error.code
+  if (
+    error.details &&
+    typeof error.details === 'object' &&
+    'resetTimeMs' in error.details &&
+    typeof (error.details as { resetTimeMs: unknown }).resetTimeMs === 'number'
+  ) {
+    const rateLimitType = (error.code ?? '')
       .replace('_RATE_LIMIT_EXCEEDED', '')
       .toLowerCase();
-    if (rateLimitType in RATE_LIMIT_ERROR_MESSAGES) {
+
+    // ✅ CORRECCIÓN (TS2345): Se usa el type guard para asegurar que `rateLimitType` es una
+    // clave válida para `CONTEXTUAL_RATE_LIMIT_MESSAGES` antes de llamar a `generateRateLimitMessage`.
+    if (isContextualRateLimitKey(rateLimitType)) {
       message = generateRateLimitMessage(
-        rateLimitType as any,
-        error.details.resetTimeMs,
+        rateLimitType,
+        (error.details as { resetTimeMs: number }).resetTimeMs,
       );
     }
   }
@@ -312,7 +329,7 @@ const handleRateLimitError = (
     message,
     error: {
       code: error.code || ERROR_CODES.RATE_LIMIT_EXCEEDED,
-      details: error.details,
+      details: error.details as Record<string, unknown> | undefined,
     },
     meta: {
       timestamp: context.timestamp,
@@ -480,9 +497,7 @@ const getStatusCodeFromErrorCode = (errorCode: string): number => {
  * Wrapper para funciones async en rutas de Express
  * Captura errores automáticamente y los pasa al error handler
  */
-export const asyncHandler = (
-  fn: (req: Request, res: Response, next: NextFunction) => Promise<any>,
-): RequestHandler => {
+export const asyncHandler = (fn: RequestHandler): RequestHandler => {
   return (req: Request, res: Response, next: NextFunction) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
@@ -512,7 +527,7 @@ export const errorHandler = (
     | ZodError,
   req: Request,
   res: Response,
-  next: NextFunction,
+  _next: NextFunction,
 ): void => {
   const context = extractErrorContext(req);
   let statusCode: number = HTTP_STATUS.INTERNAL_SERVER_ERROR;
@@ -520,7 +535,6 @@ export const errorHandler = (
 
   if (isPrismaError(err)) {
     responseBody = handlePrismaError(err, context);
-    // Corregir aquí: usar la función auxiliar para determinar el status code
     statusCode = responseBody.error?.code
       ? getStatusCodeFromErrorCode(responseBody.error.code)
       : HTTP_STATUS.INTERNAL_SERVER_ERROR;
@@ -606,8 +620,8 @@ export const createAppError = (
   message: string,
   statusCode: number,
   code: string,
-  details?: any,
-  context?: Record<string, any>,
+  details?: unknown,
+  context?: Record<string, unknown>,
 ): AppError => {
   const error = new Error(message) as AppError;
   error.statusCode = statusCode;
@@ -621,7 +635,7 @@ export const createAppError = (
 export const createValidationError = (
   message: string,
   field?: string,
-  received?: any,
+  received?: unknown,
 ): AppError => {
   return createAppError(
     message,

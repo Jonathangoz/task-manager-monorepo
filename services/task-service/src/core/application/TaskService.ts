@@ -2,7 +2,7 @@
 // ==============================================
 // Versión corregida para resolver errores de TypeScript
 
-import { Task, TaskStatus, Priority } from '@prisma/client';
+import { TaskStatus, Priority } from '@prisma/client';
 import {
   ITaskService,
   TaskListResponse,
@@ -10,14 +10,14 @@ import {
   ProductivityStats,
   BulkOperationResult,
   ServiceCreateTaskData,
-} from '@/core/domain/interfaces/ITaskService';
+} from '@/core/interfaces/ITaskService';
 import {
   ITaskRepository,
   TaskWithCategory,
   CreateTaskData as RepositoryCreateTaskData,
   UpdateTaskData as RepositoryUpdateTaskData,
-} from '@/core/domain/interfaces/ITaskRepository';
-import { ICacheService } from '@/core/domain/interfaces/ICacheService';
+} from '@/core/interfaces/ITaskRepository';
+import { ICacheService } from '@/core/interfaces/ICacheService';
 import { logger } from '@/utils/logger';
 import {
   ERROR_CODES,
@@ -880,7 +880,7 @@ export class TaskService implements ITaskService {
   }
 
   private calculateCategoryBreakdown(
-    completedTasks: TaskWithCategory[],
+    _completedTasks: TaskWithCategory[],
   ): Array<{
     categoryId: string;
     categoryName: string;
@@ -897,17 +897,17 @@ export class TaskService implements ITaskService {
     return 0;
   }
 
-  private getMostProductiveDay(completedTasks: TaskWithCategory[]): string {
+  private getMostProductiveDay(_completedTasks: TaskWithCategory[]): string {
     // ... (lógica existente)
     return 'Monday';
   }
 
-  private calculateAvgTasksPerDay(completedTasks: TaskWithCategory[]): number {
+  private calculateAvgTasksPerDay(_completedTasks: TaskWithCategory[]): number {
     // ... (lógica existente)
     return 0;
   }
 
-  private getPeakHours(completedTasks: TaskWithCategory[]): number[] {
+  private getPeakHours(_completedTasks: TaskWithCategory[]): number[] {
     // ... (lógica existente)
     return [9, 14, 16];
   }
@@ -929,49 +929,52 @@ export class TaskService implements ITaskService {
   // Métodos de ITaskService que no estaban implementados y son requeridos por la interfaz
   // Se añaden como placeholders para que el código compile.
 
-  advancedSearchTasks(userId: string, params: any): Promise<TaskListResponse> {
+  advancedSearchTasks(
+    _userId: string,
+    _params: unknown,
+  ): Promise<TaskListResponse> {
     throw new Error('Method not implemented.');
   }
   markTaskAsPending(taskId: string, userId: string): Promise<TaskWithCategory> {
     return this.updateTaskStatus(taskId, userId, TASK_STATUSES.PENDING);
   }
   bulkUpdatePriority(
-    taskIds: string[],
-    userId: string,
-    priority: Priority,
+    _taskIds: string[],
+    _userId: string,
+    _priority: Priority,
   ): Promise<BulkOperationResult> {
     throw new Error('Method not implemented.');
   }
   bulkAssignCategory(
-    taskIds: string[],
-    userId: string,
-    categoryId: string | null,
+    _taskIds: string[],
+    _userId: string,
+    _categoryId: string | null,
   ): Promise<BulkOperationResult> {
     throw new Error('Method not implemented.');
   }
   getStatsForDateRange(
-    userId: string,
-    from: Date,
-    to: Date,
+    _userId: string,
+    _from: Date,
+    _to: Date,
   ): Promise<TaskStatsResponse> {
     throw new Error('Method not implemented.');
   }
-  archiveTask(taskId: string, userId: string): Promise<TaskWithCategory> {
+  archiveTask(_taskId: string, _userId: string): Promise<TaskWithCategory> {
     throw new Error('Method not implemented.');
   }
-  restoreTask(taskId: string, userId: string): Promise<TaskWithCategory> {
+  restoreTask(_taskId: string, _userId: string): Promise<TaskWithCategory> {
     throw new Error('Method not implemented.');
   }
   getTaskSuggestions(
-    userId: string,
-    limit?: number,
+    _userId: string,
+    _limit?: number,
   ): Promise<ServiceCreateTaskData[]> {
     throw new Error('Method not implemented.');
   }
   exportUserTasks(
-    userId: string,
-    format: 'json' | 'csv' | 'xml',
-    filters?: TaskFilters,
+    _userId: string,
+    _format: 'json' | 'csv' | 'xml',
+    _filters?: TaskFilters,
   ): Promise<string> {
     throw new Error('Method not implemented.');
   }

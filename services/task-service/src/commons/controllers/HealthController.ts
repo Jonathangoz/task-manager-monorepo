@@ -1,29 +1,26 @@
 // src/commons/controllers/HealthController.ts - Task Service
 import { Request, Response } from 'express';
-import { Prisma } from '@prisma/client'; // ✅ Added missing import
+import { Prisma } from '@prisma/client';
 import { taskDatabase } from '@/config/database';
 import { taskRedisConnection } from '@/config/redis';
-import { logger, healthCheck, logError } from '@/utils/logger';
+import { healthCheck, logError } from '@/utils/logger';
 import {
   HTTP_STATUS,
   ERROR_CODES,
   ERROR_MESSAGES,
   SERVICE_NAMES,
-  EVENT_TYPES,
   ApiResponse,
 } from '@/utils/constants';
 import { config } from '@/config/environment';
-import axios from 'axios';
+import axios, { AxiosResponse } from 'axios';
 
-// Interfaz para el resultado de health checks
 interface HealthCheckResult {
   status: boolean;
   responseTime: number;
   error?: string;
-  details?: any;
+  details?: Record<string, unknown> | unknown; // Flexibilizado para aceptar cualquier dato
 }
 
-// Interfaz para métricas del sistema
 interface SystemMetrics {
   uptime: number;
   responseTime: number;
@@ -39,13 +36,30 @@ interface SystemMetrics {
   nodeVersion: string;
 }
 
+// firma de índice para hacerlo compatible con Record<string, unknown>
+interface AuthServiceHealthResponse {
+  status: string;
+  service: string;
+  timestamp?: string;
+  uptime?: number;
+  [key: string]: unknown; // Permite cualquier otra propiedad
+}
+
+// Type guard para validar respuesta del auth service
+function isValidAuthServiceResponse(
+  data: unknown,
+): data is AuthServiceHealthResponse {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'status' in data &&
+    typeof data.status === 'string'
+  );
+}
+
 export class HealthController {
   private readonly serviceName = SERVICE_NAMES.TASK_SERVICE;
 
-  /**
-   * Health check básico - ULTRA RÁPIDO para Docker health checks
-   * No verifica dependencias, solo que el servidor esté respondiendo
-   */
   public async basicHealthCheck(req: Request, res: Response): Promise<void> {
     const startTime = Date.now();
 
@@ -95,10 +109,6 @@ export class HealthController {
     }
   }
 
-  /**
-   * Readiness check - Verifica si el servicio está listo para recibir tráfico
-   * Con timeouts agresivos para evitar bloqueos
-   */
   public async readinessCheck(req: Request, res: Response): Promise<void> {
     const startTime = Date.now();
 
@@ -107,23 +117,18 @@ export class HealthController {
         database: false,
         redis: false,
         authService: false,
-        server: true, // El servidor está funcionando si llegamos aquí
+        server: true,
       };
 
-      // Check database con timeout muy corto
       const dbResult = await this.checkDatabaseConnection();
       checks.database = dbResult.status;
 
-      // Check Redis con timeout muy corto
       const redisResult = await this.checkRedisConnection();
       checks.redis = redisResult.status;
 
-      // Check Auth Service con timeout (opcional para readiness)
       const authResult = await this.checkAuthServiceConnection();
       checks.authService = authResult.status;
 
-      // Para task-service, consideramos que está listo si database y redis están OK
-      // Auth service es opcional para readiness
       const isReady = checks.database && checks.redis && checks.server;
       const responseTime = Date.now() - startTime;
 
@@ -187,15 +192,11 @@ export class HealthController {
     }
   }
 
-  /**
-   * Liveness check - Solo verifica que el proceso esté vivo
-   */
   public async livenessCheck(req: Request, res: Response): Promise<void> {
     const startTime = Date.now();
 
     try {
       const memUsage = process.memoryUsage();
-      const isAlive = process.uptime() > 0 && memUsage.heapUsed > 0;
       const responseTime = Date.now() - startTime;
 
       const response: ApiResponse = {
@@ -220,8 +221,8 @@ export class HealthController {
       };
 
       healthCheck.passed('liveness', responseTime, {
-        memory: response.data.memory,
-        pid: response.data.pid,
+        memory: response.data,
+        pid: response.data,
       });
 
       res.status(HTTP_STATUS.OK).json(response);
@@ -255,11 +256,7 @@ export class HealthController {
     }
   }
 
-  /**
-   * Health check detallado - Solo para desarrollo/debugging
-   */
   public async detailedHealthCheck(req: Request, res: Response): Promise<void> {
-    // Solo disponible en desarrollo
     if (config.app.isProduction) {
       const response: ApiResponse = {
         success: false,
@@ -274,7 +271,7 @@ export class HealthController {
       };
 
       res.status(HTTP_STATUS.NOT_FOUND).json(response);
-      return; // ✅ Added return statement
+      return;
     }
 
     const startTime = Date.now();
@@ -295,7 +292,6 @@ export class HealthController {
         server: { status: true, responseTime: 0, error: null as string | null },
       };
 
-      // Database check con métricas
       const dbResult = await this.checkDatabaseConnection();
       checks.database = {
         status: dbResult.status,
@@ -303,7 +299,6 @@ export class HealthController {
         error: dbResult.error || null,
       };
 
-      // Redis check con métricas
       const redisResult = await this.checkRedisConnection();
       checks.redis = {
         status: redisResult.status,
@@ -311,7 +306,6 @@ export class HealthController {
         error: redisResult.error || null,
       };
 
-      // Auth Service check con métricas
       const authResult = await this.checkAuthServiceConnection();
       checks.authService = {
         status: authResult.status,
@@ -387,9 +381,6 @@ export class HealthController {
     }
   }
 
-  /**
-   * Database-specific health check
-   */
   public async databaseHealthCheck(req: Request, res: Response): Promise<void> {
     const startTime = Date.now();
 
@@ -467,9 +458,6 @@ export class HealthController {
     }
   }
 
-  /**
-   * Redis-specific health check
-   */
   public async redisHealthCheck(req: Request, res: Response): Promise<void> {
     const startTime = Date.now();
 
@@ -545,9 +533,6 @@ export class HealthController {
     }
   }
 
-  /**
-   * Auth Service-specific health check
-   */
   public async authServiceHealthCheck(
     req: Request,
     res: Response,
@@ -628,14 +613,11 @@ export class HealthController {
     }
   }
 
-  // Helper methods
   private async checkDatabaseConnection(): Promise<HealthCheckResult> {
     const startTime = Date.now();
     try {
-      // ✅ FIXED: Get the Prisma client from TaskDatabase and use proper Prisma.sql
       const prismaClient = taskDatabase.getClient();
       await Promise.race([
-        // Using Prisma.sql template literal for type safety
         prismaClient.$queryRaw(
           Prisma.sql`SELECT 1 as status, version() as version, now() as timestamp`,
         ),
@@ -691,28 +673,66 @@ export class HealthController {
     const startTime = Date.now();
     try {
       const authServiceUrl = config.authService.url;
-      const response = await Promise.race([
-        axios.get(`${authServiceUrl}/api/v1/health`, {
+
+      // Usar tipo más específico para la respuesta
+      const response: AxiosResponse<unknown> = await axios.get(
+        `${authServiceUrl}/api/v1/health`,
+        {
           timeout: 5000,
           headers: { Accept: 'application/json' },
-        }),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Auth service timeout')), 5000),
-        ),
-      ]);
+        },
+      );
 
-      return {
-        status: true,
-        responseTime: Date.now() - startTime,
-        details: (response as any)?.data || { connected: true },
-      };
+      const responseData = response.data;
+
+      // ✅ CORRECCIÓN: Verificación de tipo más robusta
+      if (!isValidAuthServiceResponse(responseData)) {
+        return {
+          status: false,
+          responseTime: Date.now() - startTime,
+          error: 'Invalid response format from Auth Service',
+          details: responseData,
+        };
+      }
+
+      // TypeScript sabe que responseData es AuthServiceHealthResponse
+      if (responseData.status === 'healthy') {
+        return {
+          status: true,
+          responseTime: Date.now() - startTime,
+          details: {
+            service: responseData.service,
+            timestamp: responseData.timestamp,
+            uptime: responseData.uptime,
+          },
+        };
+      } else {
+        return {
+          status: false,
+          responseTime: Date.now() - startTime,
+          error: `Auth Service reported status: ${responseData.status}`,
+          details: responseData,
+        };
+      }
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown auth service error';
+      // Información adicional del error si está disponible
+      const errorDetails: Record<string, unknown> = {
+        originalError: errorMessage,
+      };
+
+      if (axios.isAxiosError(error)) {
+        errorDetails.statusCode = error.response?.status;
+        errorDetails.statusText = error.response?.statusText;
+        errorDetails.url = error.config?.url;
+      }
+
       return {
         status: false,
         responseTime: Date.now() - startTime,
         error: errorMessage,
+        details: config.app.isDevelopment ? errorDetails : undefined,
       };
     }
   }
@@ -721,7 +741,7 @@ export class HealthController {
     const memUsage = process.memoryUsage();
     return {
       uptime: process.uptime(),
-      responseTime: 0, // Se establecerá en el caller
+      responseTime: 0,
       memory: {
         rss: Math.round(memUsage.rss / 1024 / 1024),
         heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),

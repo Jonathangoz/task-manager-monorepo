@@ -9,7 +9,6 @@ import {
   ERROR_CODES,
   ERROR_MESSAGES,
   EVENT_TYPES,
-  CACHE_KEYS,
   ApiResponse,
 } from '@/utils/constants';
 
@@ -254,7 +253,7 @@ export const createRateLimiter = (
     enableRedisStore = true,
   } = options;
 
-  const store = enableRedisStore
+  const _store = enableRedisStore
     ? new TaskServiceRedisRateLimitStore(windowMs)
     : undefined;
 

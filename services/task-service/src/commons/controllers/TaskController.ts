@@ -1,6 +1,6 @@
 // src/presentation/controllers/TaskController.ts
 import { Request, Response, NextFunction } from 'express';
-import { AuthenticatedRequest } from '@/commons/middlewares/auth.middleware';
+import { ParsedQs } from 'qs';
 import { ITaskService } from '@/core/domain/interfaces/ITaskService';
 import {
   HTTP_STATUS,
@@ -30,6 +30,7 @@ import {
   validateSearchQuery,
 } from '@/core/domain/interfaces/ITaskService';
 
+// ... (interfaz TaskControllerDependencies sin cambios) ...
 interface TaskControllerDependencies {
   taskService: ITaskService;
 }
@@ -54,6 +55,7 @@ export class TaskController {
       );
       if (!paginationParams) return;
 
+      // ✅ Usamos el método de construcción de filtros corregido
       const filters = this.buildTaskFilters(req.query);
 
       const result = await this.taskService.getUserTasks(
@@ -84,6 +86,7 @@ export class TaskController {
     }
   };
 
+  // ... (resto de los métodos del controlador sin cambios significativos) ...
   getTaskById = async (
     req: Request,
     res: Response,
@@ -502,32 +505,83 @@ export class TaskController {
     }
   };
 
-  // ===== PRIVATE METHODS =====
-  private buildTaskFilters(query: any): TaskFilters {
+  // ✅ MÉTODO CORREGIDO Y MEJORADO
+  private buildTaskFilters(query: ParsedQs): TaskFilters {
     const filters: TaskFilters = {};
-    if (query.status) filters.status = query.status;
-    if (query.priority) filters.priority = query.priority;
-    if (query.categoryId) filters.categoryId = query.categoryId;
-    // ... more filters
+
+    // Helper para procesar y validar un campo que puede ser string o array
+    const processFilter = <T extends string>(
+      value: unknown,
+      validator: (val: string) => val is T,
+    ): T | T[] | undefined => {
+      if (Array.isArray(value)) {
+        return value.filter(
+          (v): v is T => typeof v === 'string' && validator(v),
+        );
+      }
+      if (typeof value === 'string' && validator(value)) {
+        return value;
+      }
+      return undefined;
+    };
+
+    // Validar y asignar 'status'
+    if (query.status) {
+      filters.status = processFilter(query.status, isValidTaskStatus);
+    }
+
+    // Validar y asignar 'priority'
+    if (query.priority) {
+      filters.priority = processFilter(query.priority, isValidTaskPriority);
+    }
+
+    // Asignar otros filtros
+    if (typeof query.categoryId === 'string') {
+      filters.categoryId = query.categoryId;
+    }
+    if (typeof query.dueDateFrom === 'string') {
+      filters.dueDateFrom = query.dueDateFrom;
+    }
+    if (typeof query.dueDateTo === 'string') {
+      filters.dueDateTo = query.dueDateTo;
+    }
+    if (query.isOverdue !== undefined) {
+      filters.isOverdue = query.isOverdue === 'true';
+    }
+    if (query.hasDueDate !== undefined) {
+      filters.hasDueDate = query.hasDueDate === 'true';
+    }
+    if (query.tags) {
+      filters.tags = Array.isArray(query.tags)
+        ? query.tags.map(String)
+        : String(query.tags);
+    }
+    if (typeof query.search === 'string') {
+      filters.search = query.search;
+    }
+
     return filters;
   }
 
+  // ... (resto de los métodos privados sin cambios) ...
   private extractServiceCreateTaskData(
-    body: any,
+    body: unknown,
   ): Partial<ServiceCreateTaskData> {
     const data: Partial<ServiceCreateTaskData> = {};
-    if (body.title !== undefined) data.title = body.title;
-    if (body.description !== undefined) data.description = body.description;
-    // ... more fields
+    const bodyRecord = body as Record<string, unknown>;
+    if (bodyRecord.title !== undefined) data.title = bodyRecord.title as string;
+    if (bodyRecord.description !== undefined)
+      data.description = bodyRecord.description as string;
     return data;
   }
 
-  private extractUpdateTaskData(body: any): UpdateTaskData {
+  private extractUpdateTaskData(body: unknown): UpdateTaskData {
     const updateData: UpdateTaskData = {};
-    if (body.title !== undefined) updateData.title = body.title;
-    if (body.description !== undefined)
-      updateData.description = body.description;
-    // ... more fields
+    const bodyRecord = body as Record<string, unknown>;
+    if (bodyRecord.title !== undefined)
+      updateData.title = bodyRecord.title as string;
+    if (bodyRecord.description !== undefined)
+      updateData.description = bodyRecord.description as string;
     return updateData;
   }
 
@@ -567,12 +621,12 @@ export class TaskController {
     );
   }
 
-  private createSuccessResponse(
+  private createSuccessResponse<T>(
     message: string,
-    data?: any,
+    data?: T,
     req?: Request,
-    additionalMeta?: any,
-  ): ApiResponse {
+    additionalMeta?: Record<string, unknown>,
+  ): ApiResponse<T> {
     return {
       success: true,
       message,
@@ -612,7 +666,7 @@ export class TaskController {
     });
   }
 
-  private logSuccess(message: string, context: Record<string, any>): void {
+  private logSuccess(message: string, context: Record<string, unknown>): void {
     logger.info(context, message);
   }
 }

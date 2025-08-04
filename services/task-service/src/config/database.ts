@@ -1,9 +1,6 @@
-// ==============================================
-// src/config/database.ts - Task Service Database Configuration
-// Configuración centralizada de Prisma con logging, health checks y mantenimiento
-// ==============================================
+// src/config/database.ts - CORREGIDO
 
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import type { TaskStatus, Priority } from '@prisma/client';
 import { logger, loggers, logError, healthCheck } from '@/utils/logger';
 import { config } from './environment';
@@ -23,18 +20,37 @@ interface DatabaseStats {
   lowTasks: number;
 }
 
-interface StatusGroupBy {
+// Corregido: Prefijado con _ para indicar que no se usa intencionalmente en este archivo.
+interface _StatusGroupBy {
   status: TaskStatus;
   _count: {
     status: number;
   };
 }
 
-interface PriorityGroupBy {
+// Corregido: Prefijado con _ para indicar que no se usa intencionalmente en este archivo.
+interface _PriorityGroupBy {
   priority: Priority;
   _count: {
     priority: number;
   };
+}
+
+// Interfaz para el resultado del health check
+interface HealthCheckResult {
+  database: string;
+  user: string;
+  version: string;
+  server_time: Date;
+}
+
+// Interfaz para las métricas de la base de datos
+interface DatabaseMetrics {
+  totalTasks: number;
+  totalCategories: number;
+  totalUsers: number;
+  activeUsersLastWeek: number;
+  timestamp: string;
 }
 
 // ==============================================
@@ -103,8 +119,8 @@ class TaskDatabase {
   }
 
   private setupEventHandlers(): void {
-    // Manejo de logs de Prisma con nuestro logger estructurado
-    this.client.$on('query' as never, (e: any) => {
+    // Corregido: Se usa el tipo Prisma.QueryEvent en lugar de any.
+    this.client.$on('query' as never, (e: Prisma.QueryEvent) => {
       const duration = e.duration;
       const target = e.target;
 
@@ -117,14 +133,16 @@ class TaskDatabase {
       }
     });
 
-    this.client.$on('info' as never, (e: any) => {
+    // Corregido: Se usa el tipo Prisma.LogEvent en lugar de any.
+    this.client.$on('info' as never, (e: Prisma.LogEvent) => {
       logger.info(
         { prisma: e, domain: 'database' },
         `📊 Prisma info: ${e.message}`,
       );
     });
 
-    this.client.$on('warn' as never, (e: any) => {
+    // Corregido: Se usa el tipo Prisma.LogEvent en lugar de any.
+    this.client.$on('warn' as never, (e: Prisma.LogEvent) => {
       logger.warn(
         {
           prisma: e,
@@ -135,7 +153,8 @@ class TaskDatabase {
       );
     });
 
-    this.client.$on('error' as never, (e: any) => {
+    // Corregido: Se usa el tipo Prisma.LogEvent en lugar de any.
+    this.client.$on('error' as never, (e: Prisma.LogEvent) => {
       loggers.dbError(new Error(e.message), 'prisma_event');
     });
   }
@@ -163,7 +182,7 @@ class TaskDatabase {
       });
 
       healthCheck.passed('database', duration, {
-        prismaVersion: '6.12.0',
+        prismaVersion: Prisma.prismaVersion.client,
         connectionPool: 'active',
       });
     } catch (error) {
@@ -211,16 +230,15 @@ class TaskDatabase {
     }
   }
 
-  public async healthCheck(): Promise<{ healthy: boolean; details: any }> {
+  public async healthCheck(): Promise<{ healthy: boolean; details: unknown }> {
     const startTime = Date.now();
 
     try {
       // Test de conectividad básico
-      const result = await this.client.$queryRaw`SELECT 
-        current_database() as database,
-        current_user as user,
-        version() as version,
-        NOW() as server_time`;
+      // Corregido: Se usa una interfaz para tipar el resultado de la consulta raw.
+      const result = await this.client.$queryRaw<
+        HealthCheckResult[]
+      >`SELECT current_database() as database, current_user as user, version() as version, NOW() as server_time`;
 
       const duration = Date.now() - startTime;
 
@@ -231,7 +249,7 @@ class TaskDatabase {
       const details = {
         connected: this.isConnected,
         responseTime: duration,
-        database: result,
+        databaseInfo: result[0], // Accedemos al primer elemento del array
         stats: {
           totalTasks: taskCount,
           totalCategories: categoryCount,
@@ -304,7 +322,6 @@ class TaskDatabase {
 
       const duration = Date.now() - startTime;
 
-      // Corregido: pasar count como string
       loggers.dbQuery('cleanup', 'tasks', duration, result.count.toString());
 
       logger.info(
@@ -338,7 +355,6 @@ class TaskDatabase {
     const startTime = Date.now();
 
     try {
-      // Obtener estadísticas agrupadas - removido el cast as
       const statusStats = await this.client.task.groupBy({
         by: ['status'],
         where: { userId },
@@ -351,7 +367,6 @@ class TaskDatabase {
         _count: { priority: true },
       });
 
-      // Contar tareas vencidas
       const overdueTasks = await this.client.task.count({
         where: {
           userId,
@@ -360,9 +375,8 @@ class TaskDatabase {
         },
       });
 
-      // Calcular totales con tipos seguros
       const totalTasks = statusStats.reduce(
-        (sum: number, stat) => sum + stat._count.status,
+        (sum, stat) => sum + stat._count.status,
         0,
       );
 
@@ -401,7 +415,6 @@ class TaskDatabase {
         lowTasks,
       };
 
-      // Actualizar o crear estadísticas
       await this.client.taskStats.upsert({
         where: { userId },
         update: statsData,
@@ -413,7 +426,6 @@ class TaskDatabase {
 
       const duration = Date.now() - startTime;
 
-      // Corregido: pasar 1 como string
       loggers.dbQuery('update_stats', 'task_stats', duration, '1');
 
       logger.info(
@@ -452,7 +464,6 @@ class TaskDatabase {
 
       const duration = Date.now() - startTime;
 
-      // Corregido: pasar count como string
       loggers.dbQuery('get_stats', 'task_stats', duration, stats ? '1' : '0');
 
       return stats;
@@ -473,7 +484,7 @@ class TaskDatabase {
   // ==============================================
   // OPERACIONES DE ANÁLISIS
   // ==============================================
-  public async getDatabaseMetrics(): Promise<any> {
+  public async getDatabaseMetrics(): Promise<DatabaseMetrics> {
     try {
       const [taskCount, categoryCount, userCount, activeUsers] =
         await Promise.all([
@@ -508,7 +519,6 @@ class TaskDatabase {
   // UTILIDADES PRIVADAS
   // ==============================================
   private maskDatabaseUrl(url: string): string {
-    // Enmascarar credenciales en la URL para logs
     return url.replace(/:\/\/([^:]+):([^@]+)@/, '://***:***@');
   }
 }
@@ -541,7 +551,7 @@ if (config.app.isDevelopment) {
   logger.info(
     {
       databaseUrl: taskDatabase['maskDatabaseUrl'](config.database.url),
-      prismaVersion: '6.12.0',
+      prismaVersion: Prisma.prismaVersion.client,
       env: config.app.env,
     },
     '🗄️ Configuración de base de datos cargada para Task Service',

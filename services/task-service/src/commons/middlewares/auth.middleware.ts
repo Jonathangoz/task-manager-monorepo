@@ -1,21 +1,12 @@
 // src/commons/middlewares/auth.middleware.ts
 import { Request, Response, NextFunction } from 'express';
-import {
-  AuthServiceClient,
-  AuthUser,
-} from '@/core/infrastructure/external/AuthServiceClient';
+import { AuthServiceClient } from '@/core/infrastructure/external/AuthServiceClient';
+import { RedisCache } from '@/core/infrastructure/cache/RedisCache';
+import { logger } from '@/utils/logger';
+import { HTTP_STATUS, ERROR_CODES, ERROR_MESSAGES } from '@/utils/constants';
 
 // Crear instancia del cliente de auth service
 const authServiceClient = new AuthServiceClient();
-import { RedisCache } from '@/core/infrastructure/cache/RedisCache';
-import { logger } from '@/utils/logger';
-import {
-  HTTP_STATUS,
-  ERROR_CODES,
-  ERROR_MESSAGES,
-  CACHE_KEYS,
-  CACHE_TTL,
-} from '@/utils/constants';
 
 // Token configuration constants
 const TOKEN_CONFIG = {
@@ -149,7 +140,7 @@ export const authenticateToken = async (
     }
 
     // Preparar datos del usuario para el request
-    const userData = {
+    const userData: AuthenticatedRequest['user'] = {
       id: user.id,
       email: user.email,
       username: user.username,
@@ -251,7 +242,7 @@ export const optionalAuth = async (
 /**
  * Middleware para verificar permisos específicos
  */
-export const requirePermission = (permission: string) => {
+export const requirePermission = (_permission: string) => {
   return async (
     req: Request,
     res: Response,
@@ -294,12 +285,18 @@ function extractTokenFromHeader(req: Request): string | null {
 
 /**
  * Obtiene datos del usuario desde cache
+ * ✅ CORRECCIÓN (TS2739): Se especifica el tipo de retorno `AuthenticatedRequest['user']`
+ * para que coincida con la estructura esperada por `req.user`.
  */
-async function getCachedUserData(token: string): Promise<any | null> {
+async function getCachedUserData(
+  token: string,
+): Promise<AuthenticatedRequest['user'] | null> {
   try {
     const cacheKey = ADDITIONAL_CACHE_KEYS.USER_SESSION(token);
     const redisCache = new RedisCache();
-    const cachedData = await redisCache.get(cacheKey);
+    // ✅ CORRECCIÓN: Se usa el tipo específico al leer desde la caché.
+    const cachedData =
+      await redisCache.get<AuthenticatedRequest['user']>(cacheKey);
 
     if (cachedData) {
       return cachedData;
@@ -314,8 +311,12 @@ async function getCachedUserData(token: string): Promise<any | null> {
 
 /**
  * Cachea datos del usuario
+ * ✅ CORRECCIÓN: Se usa el tipo específico `AuthenticatedRequest['user']` para asegurar la consistencia.
  */
-async function cacheUserData(token: string, userData: any): Promise<void> {
+async function cacheUserData(
+  token: string,
+  userData: AuthenticatedRequest['user'],
+): Promise<void> {
   try {
     const cacheKey = ADDITIONAL_CACHE_KEYS.USER_SESSION(token);
     const redisCache = new RedisCache();

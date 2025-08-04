@@ -1,6 +1,6 @@
 // src/core/domain/entities/Category.ts - Entidad de dominio para Category - Lógica de negocio
 
-import { CATEGORY_CONFIG, ERROR_CODES } from '@/utils/constants';
+import { CATEGORY_CONFIG } from '@/utils/constants';
 
 export interface CategoryProps {
   id?: string;

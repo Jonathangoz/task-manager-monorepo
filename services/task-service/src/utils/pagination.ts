@@ -2,6 +2,8 @@
 
 import { Request } from 'express';
 import { z } from 'zod';
+import { URLSearchParams } from 'url';
+import { Prisma } from '@prisma/client';
 import {
   PAGINATION_CONFIG,
   SORT_FIELDS,
@@ -9,10 +11,9 @@ import {
   DEFAULT_VALUES,
   PaginationMeta,
   SortOptions,
-  TASK_PRIORITIES,
-  PRIORITY_WEIGHTS,
   ERROR_CODES,
   TASK_STATUSES,
+  TaskFilters,
 } from './constants';
 
 // Zod schemas for validation
@@ -132,6 +133,13 @@ const CursorPaginationSchema = z.object({
     .pipe(SortOrderSchema),
 });
 
+interface CursorPrismaOptions {
+  take: number;
+  orderBy: Prisma.TaskOrderByWithRelationInput[];
+  cursor?: { id: string };
+  skip?: number;
+}
+
 // Pagination parameters interface
 export interface PaginationParams {
   page: number;
@@ -243,7 +251,9 @@ export const extractSortOptions = (req: Request): SortOptions => {
 /**
  * Validate pagination query parameters (legacy method for backward compatibility)
  */
-export const validatePaginationQuery = (query: any): ValidationResult => {
+export const validatePaginationQuery = (
+  query: Record<string, unknown>,
+): ValidationResult => {
   try {
     PaginationQuerySchema.parse(query);
     return { isValid: true, errors: [] };
@@ -357,67 +367,37 @@ export const buildPrismaOptions = (params: PaginationParams) => {
 /**
  * Build Prisma orderBy clause with proper enum handling for the schema
  */
-export const buildPrismaOrderBy = (sort: SortOptions) => {
-  // Priority sorting - Prisma enum values are: LOW, MEDIUM, HIGH, URGENT
+export const buildPrismaOrderBy = (
+  sort: SortOptions,
+): Prisma.TaskOrderByWithRelationInput[] => {
   if (sort.field === SORT_FIELDS.PRIORITY) {
-    // For priority, we want URGENT > HIGH > MEDIUM > LOW when DESC
-    // Prisma will sort enum values alphabetically unless we use a custom order
-    return [
-      {
-        priority: sort.order,
-      },
-      // Secondary sort by createdAt for consistent ordering
-      {
-        createdAt: SORT_ORDERS.DESC,
-      },
-    ];
+    return [{ priority: sort.order }, { createdAt: SORT_ORDERS.DESC }];
   }
 
-  // Status sorting - Prisma enum values are: PENDING, IN_PROGRESS, COMPLETED, CANCELLED, ON_HOLD
   if (sort.field === SORT_FIELDS.STATUS) {
     return [
-      {
-        status: sort.order,
-      },
-      // Secondary sort by priority and then createdAt
-      {
-        priority: SORT_ORDERS.DESC,
-      },
-      {
-        createdAt: SORT_ORDERS.DESC,
-      },
+      { status: sort.order },
+      { priority: SORT_ORDERS.DESC },
+      { createdAt: SORT_ORDERS.DESC },
     ];
   }
 
-  // Handle dueDate with null handling
   if (sort.field === SORT_FIELDS.DUE_DATE) {
     return [
-      {
-        dueDate: {
-          sort: sort.order,
-          nulls: 'last', // Put null values at the end
-        },
-      },
-      {
-        createdAt: SORT_ORDERS.DESC,
-      },
+      { dueDate: { sort: sort.order, nulls: 'last' } },
+      { createdAt: SORT_ORDERS.DESC },
     ];
   }
 
-  // Default sorting with secondary sort
-  return [
-    {
-      [sort.field]: sort.order,
-    },
-    // Always add createdAt as secondary sort for consistency (except when already sorting by it)
-    ...(sort.field !== SORT_FIELDS.CREATED_AT
-      ? [
-          {
-            createdAt: SORT_ORDERS.DESC,
-          },
-        ]
-      : []),
+  const orderBy: Prisma.TaskOrderByWithRelationInput[] = [
+    { [sort.field]: sort.order },
   ];
+
+  if (sort.field !== SORT_FIELDS.CREATED_AT) {
+    orderBy.push({ createdAt: SORT_ORDERS.DESC });
+  }
+
+  return orderBy;
 };
 
 /**
@@ -431,7 +411,9 @@ export const parseMultiSort = (sortQuery?: string): SortOptions[] => {
 /**
  * Build multi-field Prisma sort options
  */
-export const buildMultiFieldSort = (sortOptions: SortOptions[]): any[] => {
+export const buildMultiFieldSort = (
+  sortOptions: SortOptions[],
+): Prisma.TaskOrderByWithRelationInput[] => {
   if (sortOptions.length === 0) {
     return [{ [DEFAULT_VALUES.SORT_FIELD]: DEFAULT_VALUES.SORT_ORDER }];
   }
@@ -441,12 +423,7 @@ export const buildMultiFieldSort = (sortOptions: SortOptions[]): any[] => {
       return { priority: order };
     }
     if (field === SORT_FIELDS.DUE_DATE) {
-      return {
-        dueDate: {
-          sort: order,
-          nulls: 'last',
-        },
-      };
+      return { dueDate: { sort: order, nulls: 'last' } };
     }
     return { [field]: order };
   });
@@ -485,10 +462,12 @@ export const extractCursorParams = (req: Request): CursorPaginationParams => {
 /**
  * Build cursor-based Prisma options
  */
-export const buildCursorPrismaOptions = (params: CursorPaginationParams) => {
+export const buildCursorPrismaOptions = (
+  params: CursorPaginationParams,
+): CursorPrismaOptions => {
   const { limit, cursor, sort } = params;
 
-  const options: any = {
+  const options: CursorPrismaOptions = {
     take: limit + 1, // Take one extra to check if there's a next page
     orderBy: buildPrismaOrderBy(sort),
   };
@@ -534,6 +513,7 @@ export const generatePaginationLinks = (
   total: number,
   queryParams?: Record<string, string>,
 ): PaginationLinks => {
+  // ... (implementación existente)
   const pages = Math.ceil(total / limit) || 1;
   const query = new URLSearchParams(queryParams);
 
@@ -542,23 +522,22 @@ export const generatePaginationLinks = (
   query.delete('limit');
 
   const baseQuery = query.toString();
-  const separator = baseQuery ? '&' : '';
 
   const links: PaginationLinks = {
-    self: `${baseUrl}?${baseQuery}${separator}page=${page}&limit=${limit}`,
+    self: `${baseUrl}?page=${page}&limit=${limit}${baseQuery ? `&${baseQuery}` : ''}`,
   };
 
   if (pages > 1) {
-    links.first = `${baseUrl}?${baseQuery}${separator}page=1&limit=${limit}`;
-    links.last = `${baseUrl}?${baseQuery}${separator}page=${pages}&limit=${limit}`;
+    links.first = `${baseUrl}?page=1&limit=${limit}${baseQuery ? `&${baseQuery}` : ''}`;
+    links.last = `${baseUrl}?page=${pages}&limit=${limit}${baseQuery ? `&${baseQuery}` : ''}`;
   }
 
   if (page > 1) {
-    links.prev = `${baseUrl}?${baseQuery}${separator}page=${page - 1}&limit=${limit}`;
+    links.prev = `${baseUrl}?page=${page - 1}&limit=${limit}${baseQuery ? `&${baseQuery}` : ''}`;
   }
 
   if (page < pages) {
-    links.next = `${baseUrl}?${baseQuery}${separator}page=${page + 1}&limit=${limit}`;
+    links.next = `${baseUrl}?page=${page + 1}&limit=${limit}${baseQuery ? `&${baseQuery}` : ''}`;
   }
 
   return links;
@@ -612,27 +591,23 @@ export const createEmptyPaginatedResult = <T>(): PaginatedResult<T> => {
  * Helper function to build complex Prisma where clauses for filtering
  */
 export const buildPrismaWhereClause = (
-  filters: Record<string, any>,
+  filters: TaskFilters,
   userId: string,
-) => {
-  const where: any = { userId };
+): Prisma.TaskWhereInput => {
+  const where: Prisma.TaskWhereInput = { userId };
 
   // Status filter
   if (filters.status) {
-    if (Array.isArray(filters.status)) {
-      where.status = { in: filters.status };
-    } else {
-      where.status = filters.status;
-    }
+    where.status = Array.isArray(filters.status)
+      ? { in: filters.status }
+      : filters.status;
   }
 
   // Priority filter
   if (filters.priority) {
-    if (Array.isArray(filters.priority)) {
-      where.priority = { in: filters.priority };
-    } else {
-      where.priority = filters.priority;
-    }
+    where.priority = Array.isArray(filters.priority)
+      ? { in: filters.priority }
+      : filters.priority;
   }
 
   // Category filter
@@ -672,9 +647,7 @@ export const buildPrismaWhereClause = (
     const tagsArray = Array.isArray(filters.tags)
       ? filters.tags
       : [filters.tags];
-    where.tags = {
-      hasSome: tagsArray,
-    };
+    where.tags = { hasSome: tagsArray };
   }
 
   // Text search

@@ -6,8 +6,6 @@
 import {
   TASK_STATUSES,
   TASK_PRIORITIES,
-  TaskFilters,
-  SortOptions,
   PaginationMeta,
 } from '@/utils/constants';
 

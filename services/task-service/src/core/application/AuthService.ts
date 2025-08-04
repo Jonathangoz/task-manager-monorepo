@@ -5,7 +5,7 @@
 import { Request, Response, NextFunction } from 'express';
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 // Corrected import to include authLogger
-import { logger, logError, loggers, authLogger } from '@/utils/logger';
+import { logger, logError, authLogger } from '@/utils/logger';
 import { config } from '@/config/environment';
 import {
   ERROR_CODES,
@@ -606,7 +606,7 @@ export class AuthService {
   /**
    * Obtener información adicional del usuario desde el Auth Service
    */
-  static async getUserProfile(userId: string): Promise<any> {
+  static async getUserProfile(userId: string): Promise<unknown> {
     AuthService.initializeClient();
 
     const startTime = Date.now();
@@ -660,7 +660,7 @@ export class AuthService {
   /**
    * Verificar si el Auth Service está disponible
    */
-  static async healthCheck(): Promise<{ healthy: boolean; details: any }> {
+  static async healthCheck(): Promise<{ healthy: boolean; details: unknown }> {
     AuthService.initializeClient();
 
     const startTime = Date.now();
