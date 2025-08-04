@@ -20,11 +20,11 @@ services:
     envVars:
       # Variables específicas del servicio
       - key: NODE_ENV
-        value: production
+        value: Task-Env
       - key: PORT
-        value: 10000
+        value: Task-Env
       - key: API_VERSION
-        value: v1
+        value: Task-Env
 
       # Variables de base de datos y cache
       - key: DATABASE_URL
@@ -41,29 +41,29 @@ services:
 
       # 🔑 JWT Configuration - VALORES DIRECTOS
       - key: JWT_SECRET
-        value: 'base64:u+vQTtcSFJR4GsfR7D4bvK6IAsACgvb8hW62FdlEqYCP/GoZQPNCw9Bmw4iVrrSrkj998JYRz41rldpInU/K9g=='
+        value: Task-Env
       - key: JWT_ISSUER
-        value: 'task-manager-auth'
+        value: Task-Env
       - key: JWT_EXPIRES_IN
-        value: '15m'
+        value: Task-Env
       - key: REFRESH_TOKEN_SECRET
-        value: 'base64:vfIeKTFck9rzwlhO4Jft2XgJmDstLnhn4ZB6anVLYeWvogGiVL/PoK+mvkHTdWYA7pQslxgzDuEMVdNPzpK2cg=='
+        value: Task-Env
       - key: REFRESH_TOKEN_EXPIRES_IN
-        value: '7d'
+        value: Task-Env
       - key: JWE_SECRET
-        value: 'base64:jMjjQLeL0B38/H6ujAR1eOi8cRKGxSQUQbuv72n9ew0='
+        value: Task-Env
       - key: JWE_ALGORITHM
-        value: 'dir'
+        value: Task-Env
       - key: JWE_ENCRYPTION
-        value: 'A256GCM'
+        value: Task-Env
 
       # 🔐 Security
       - key: AUTH_SERVICE_API_KEY
-        value: 'base64:2V9JFfBSkMoLGxi514RLAqhcfm5J6c50INEKK9cPaaI='
+        value: Task-Env
 
       # 🌐 CORS Configuration
       - key: CORS_ORIGIN
-        value: 'https://your-frontend-url.onrender.com'
+        value: Task-Env
 
       # 🔧 Logging y configuración - OPTIMIZADO PARA RENDER
       - key: LOG_LEVEL
@@ -132,11 +132,11 @@ services:
     envVars:
       # Variables específicas del servicio
       - key: NODE_ENV
-        value: production
+        value: Task-Env
       - key: PORT
         value: 3002
       - key: API_VERSION
-        value: v1
+        value: Task-Env
 
       # Variables de base de datos y cache
       - key: DATABASE_URL
@@ -157,15 +157,15 @@ services:
       - key: AUTH_SERVICE_VERIFY_ENDPOINT
         value: '/api/v1/auth/verify-token'
       - key: AUTH_SERVICE_API_KEY
-        value: 'base64:2V9JFfBSkMoLGxi514RLAqhcfm5J6c50INEKK9cPaaI='
+        value: Task-Env
       - key: AUTH_SERVICE_TIMEOUT
         value: '15000' # ✅ Más generoso para comunicación entre servicios
 
       # 🔑 JWT Configuration - MISMOS VALORES QUE AUTH
       - key: JWT_SECRET
-        value: 'base64:u+vQTtcSFJR4GsfR7D4bvK6IAsACgvb8hW62FdlEqYCP/GoZQPNCw9Bmw4iVrrSrkj998JYRz41rldpInU/K9g=='
+        value: Task-Env
       - key: JWT_ISSUER
-        value: 'task-manager-auth'
+        value: Task-Env
 
       # 🌐 CORS Configuration
       - key: CORS_ORIGIN
