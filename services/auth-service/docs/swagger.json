@@ -1,0 +1,1773 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Task Manager - Auth Service API",
+    "version": "1.0.0",
+    "description": "\n# 🔐 Authentication Service API\n\nMicroservicio de autenticación y gestión de usuarios para Task Manager.\n\n## Características principales\n- 🔑 Registro y login de usuarios\n- 🔐 Gestión de tokens JWT/JWE  \n- 👤 Perfiles de usuario\n- 🎫 Control de sesiones\n- 🛡️ Seguridad avanzada\n\n## Tecnologías\n- **Runtime**: Node.js 22+\n- **Database**: PostgreSQL + Prisma\n- **Cache**: Redis\n- **Auth**: JWT con JWE encryption\n- **Validation**: Zod\n\n## Autenticación\nPara endpoints protegidos, incluye el header:\n`Authorization: Bearer <access_token>`\n    ",
+    "contact": {
+      "name": "Task Manager Team",
+      "email": "dev@taskmanager.com"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3001/api/v1",
+      "description": "🔧 Desarrollo"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Access Token JWT (válido 15 minutos)"
+      }
+    },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "username",
+          "isActive",
+          "isVerified",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^c[a-z0-9]{24}$",
+            "description": "ID único del usuario (CUID)",
+            "example": "cluser123456789abc"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 255,
+            "description": "Email único",
+            "example": "john.doe@example.com"
+          },
+          "username": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 30,
+            "pattern": "^[a-zA-Z0-9_]+$",
+            "description": "Nombre de usuario único",
+            "example": "john_doe_2024"
+          },
+          "firstName": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 50,
+            "description": "Nombre",
+            "example": "John"
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 50,
+            "description": "Apellido",
+            "example": "Doe"
+          },
+          "avatar": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri",
+            "description": "URL del avatar",
+            "example": "https://cdn.example.com/avatars/user123.jpg"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Usuario activo",
+            "example": true
+          },
+          "isVerified": {
+            "type": "boolean",
+            "description": "Email verificado",
+            "example": true
+          },
+          "lastLoginAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Último login",
+            "example": "2024-01-20T10:30:00.000Z"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Fecha de creación",
+            "example": "2024-01-15T08:00:00.000Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Última actualización",
+            "example": "2024-01-20T10:30:00.000Z"
+          }
+        }
+      },
+      "UserProfile": {
+        "type": "object",
+        "description": "Perfil público del usuario",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/User/properties/id"
+          },
+          "username": {
+            "$ref": "#/components/schemas/User/properties/username"
+          },
+          "firstName": {
+            "$ref": "#/components/schemas/User/properties/firstName"
+          },
+          "lastName": {
+            "$ref": "#/components/schemas/User/properties/lastName"
+          },
+          "avatar": {
+            "$ref": "#/components/schemas/User/properties/avatar"
+          },
+          "isVerified": {
+            "$ref": "#/components/schemas/User/properties/isVerified"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/User/properties/createdAt"
+          }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": [
+          "email",
+          "username",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 255,
+            "description": "Email válido y único",
+            "example": "john.doe@example.com"
+          },
+          "username": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 30,
+            "pattern": "^[a-zA-Z0-9_]+$",
+            "description": "Username único (3-30 caracteres)",
+            "example": "john_doe_2024"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 128,
+            "description": "Contraseña segura (min 8 caracteres)",
+            "example": "SecurePass123!"
+          },
+          "firstName": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "Nombre (opcional)",
+            "example": "John"
+          },
+          "lastName": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "Apellido (opcional)",
+            "example": "Doe"
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Email registrado",
+            "example": "john.doe@example.com"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Contraseña del usuario",
+            "example": "SecurePass123!"
+          },
+          "rememberMe": {
+            "type": "boolean",
+            "description": "Mantener sesión activa",
+            "example": false,
+            "default": false
+          }
+        }
+      },
+      "UpdateProfileRequest": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 50,
+            "description": "Nuevo nombre",
+            "example": "John Updated"
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 50,
+            "description": "Nuevo apellido",
+            "example": "Doe Updated"
+          },
+          "avatar": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri",
+            "description": "Nueva URL del avatar",
+            "example": "https://cdn.example.com/avatars/user123-new.jpg"
+          }
+        }
+      },
+      "ChangePasswordRequest": {
+        "type": "object",
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ],
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "description": "Contraseña actual",
+            "example": "OldPassword123!"
+          },
+          "newPassword": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 128,
+            "description": "Nueva contraseña segura",
+            "example": "NewSecurePass456@"
+          }
+        }
+      },
+      "RefreshTokenRequest": {
+        "type": "object",
+        "required": [
+          "refreshToken"
+        ],
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "description": "Refresh token válido",
+            "example": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..."
+          }
+        }
+      },
+      "VerifyTokenRequest": {
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Access token a verificar",
+            "example": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..."
+          }
+        }
+      },
+      "AuthResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "Authentication successful"
+          },
+          "data": {
+            "type": "object",
+            "required": [
+              "user",
+              "accessToken",
+              "refreshToken",
+              "expiresIn",
+              "tokenType"
+            ],
+            "properties": {
+              "user": {
+                "$ref": "#/components/schemas/User"
+              },
+              "accessToken": {
+                "type": "string",
+                "description": "JWT access token (válido 15 minutos)",
+                "example": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..."
+              },
+              "refreshToken": {
+                "type": "string",
+                "description": "JWT refresh token (válido 7 días)",
+                "example": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..."
+              },
+              "expiresIn": {
+                "type": "number",
+                "description": "Tiempo de expiración en segundos",
+                "example": 900
+              },
+              "tokenType": {
+                "type": "string",
+                "example": "Bearer"
+              }
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
+          }
+        }
+      },
+      "UserResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "User data retrieved successfully"
+          },
+          "data": {
+            "$ref": "#/components/schemas/User"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
+          }
+        }
+      },
+      "TokenVerificationResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "Token is valid"
+          },
+          "data": {
+            "type": "object",
+            "required": [
+              "userId",
+              "email",
+              "username",
+              "isActive",
+              "isVerified"
+            ],
+            "properties": {
+              "userId": {
+                "type": "string",
+                "example": "cluser123456789abc"
+              },
+              "email": {
+                "type": "string",
+                "example": "user@example.com"
+              },
+              "username": {
+                "type": "string",
+                "example": "johndoe"
+              },
+              "sessionId": {
+                "type": "string",
+                "example": "sess_abc123"
+              },
+              "isActive": {
+                "type": "boolean",
+                "example": true
+              },
+              "isVerified": {
+                "type": "boolean",
+                "example": true
+              }
+            }
+          }
+        }
+      },
+      "UserSession": {
+        "type": "object",
+        "required": [
+          "id",
+          "sessionId",
+          "isActive",
+          "lastSeen",
+          "createdAt",
+          "expiresAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "clsession123456"
+          },
+          "sessionId": {
+            "type": "string",
+            "description": "ID único de la sesión",
+            "example": "sess_abc123456789"
+          },
+          "device": {
+            "type": "string",
+            "nullable": true,
+            "description": "Información del device/browser",
+            "example": "Chrome 120.0 on Windows 10"
+          },
+          "ipAddress": {
+            "type": "string",
+            "nullable": true,
+            "format": "ipv4",
+            "description": "Dirección IP de la sesión",
+            "example": "192.168.1.100"
+          },
+          "location": {
+            "type": "string",
+            "nullable": true,
+            "description": "Ubicación geográfica estimada",
+            "example": "Bucaramanga, Colombia"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Si la sesión está activa",
+            "example": true
+          },
+          "lastSeen": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Última actividad registrada",
+            "example": "2024-01-20T10:30:00.000Z"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Fecha de creación de la sesión",
+            "example": "2024-01-20T08:00:00.000Z"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Fecha de expiración de la sesión",
+            "example": "2024-01-27T08:00:00.000Z"
+          }
+        }
+      },
+      "SessionsResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "User sessions retrieved successfully"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserSession"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
+          }
+        }
+      },
+      "ResponseMeta": {
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp de la respuesta",
+            "example": "2024-01-20T10:30:00.000Z"
+          },
+          "correlationId": {
+            "type": "string",
+            "description": "ID de correlación para tracking",
+            "example": "req_abc123456789"
+          },
+          "requestId": {
+            "type": "string",
+            "description": "ID único de la request",
+            "example": "req_xyz987654321"
+          },
+          "path": {
+            "type": "string",
+            "description": "Path del endpoint",
+            "example": "/api/v1/auth/login"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE"
+            ],
+            "description": "Método HTTP usado",
+            "example": "POST"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message",
+          "error"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "message": {
+            "type": "string",
+            "description": "Mensaje de error legible",
+            "example": "Authentication failed"
+          },
+          "error": {
+            "type": "object",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "Código de error único",
+                "example": "INVALID_CREDENTIALS"
+              },
+              "details": {
+                "type": "string",
+                "nullable": true,
+                "description": "Detalles adicionales del error",
+                "example": "The provided email or password is incorrect"
+              }
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
+          }
+        }
+      },
+      "ValidationErrorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message",
+          "error"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "message": {
+            "type": "string",
+            "example": "Validation failed"
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "VALIDATION_ERROR"
+              },
+              "details": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "field",
+                    "message"
+                  ],
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "example": "email",
+                      "description": "Campo que falló la validación"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Invalid email format",
+                      "description": "Mensaje específico del error"
+                    },
+                    "value": {
+                      "type": "string",
+                      "nullable": true,
+                      "example": "invalid-email",
+                      "description": "Valor que causó el error"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "timestamp",
+          "uptime",
+          "version",
+          "environment",
+          "services"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "healthy",
+              "unhealthy",
+              "degraded"
+            ],
+            "description": "Estado general del servicio",
+            "example": "healthy"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp del health check",
+            "example": "2024-01-20T10:30:00.000Z"
+          },
+          "uptime": {
+            "type": "number",
+            "description": "Tiempo de funcionamiento en segundos",
+            "example": 3600
+          },
+          "version": {
+            "type": "string",
+            "description": "Versión del servicio",
+            "example": "1.0.0"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "production",
+              "test"
+            ],
+            "description": "Entorno donde se ejecuta",
+            "example": "production"
+          },
+          "services": {
+            "type": "object",
+            "required": [
+              "database",
+              "redis"
+            ],
+            "properties": {
+              "database": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "responseTime",
+                  "lastChecked"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "connected",
+                      "disconnected",
+                      "error"
+                    ],
+                    "example": "connected"
+                  },
+                  "responseTime": {
+                    "type": "number",
+                    "description": "Tiempo de respuesta en ms",
+                    "example": 15
+                  },
+                  "lastChecked": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2024-01-20T10:29:45.000Z"
+                  }
+                }
+              },
+              "redis": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "responseTime",
+                  "lastChecked"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "connected",
+                      "disconnected",
+                      "error"
+                    ],
+                    "example": "connected"
+                  },
+                  "responseTime": {
+                    "type": "number",
+                    "description": "Tiempo de respuesta en ms",
+                    "example": 5
+                  },
+                  "lastChecked": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2024-01-20T10:29:50.000Z"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "parameters": {
+      "UserIdParam": {
+        "name": "userId",
+        "in": "path",
+        "required": true,
+        "description": "ID único del usuario (CUID)",
+        "schema": {
+          "type": "string",
+          "pattern": "^c[a-z0-9]{24}",
+          "example": "cluser123456789abc"
+        }
+      },
+      "SessionIdParam": {
+        "name": "sessionId",
+        "in": "path",
+        "required": true,
+        "description": "ID único de la sesión",
+        "schema": {
+          "type": "string",
+          "example": "sess_abc123456789"
+        }
+      }
+    },
+    "responses": {
+      "UnauthorizedError": {
+        "description": "🚫 Token inválido, expirado o no proporcionado",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "examples": {
+              "TokenExpired": {
+                "summary": "Token expirado",
+                "value": {
+                  "success": false,
+                  "message": "Token has expired",
+                  "error": {
+                    "code": "TOKEN_EXPIRED"
+                  }
+                }
+              },
+              "TokenInvalid": {
+                "summary": "Token inválido",
+                "value": {
+                  "success": false,
+                  "message": "Invalid token",
+                  "error": {
+                    "code": "TOKEN_INVALID"
+                  }
+                }
+              },
+              "TokenMissing": {
+                "summary": "Token no proporcionado",
+                "value": {
+                  "success": false,
+                  "message": "Authentication token is required",
+                  "error": {
+                    "code": "TOKEN_REQUIRED"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "ForbiddenError": {
+        "description": "🔒 Acceso denegado - privilegios insuficientes",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "success": false,
+              "message": "Access denied",
+              "error": {
+                "code": "FORBIDDEN"
+              }
+            }
+          }
+        }
+      },
+      "NotFoundError": {
+        "description": "❌ Recurso no encontrado",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "success": false,
+              "message": "Resource not found",
+              "error": {
+                "code": "NOT_FOUND"
+              }
+            }
+          }
+        }
+      },
+      "ValidationError": {
+        "description": "⚠️ Error de validación de datos",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ValidationErrorResponse"
+            }
+          }
+        }
+      },
+      "RateLimitError": {
+        "description": "🚦 Límite de solicitudes excedido",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "success": false,
+              "message": "Too many requests, please try again later",
+              "error": {
+                "code": "RATE_LIMIT_EXCEEDED",
+                "details": "Maximum 100 requests per 15 minutes exceeded"
+              }
+            }
+          }
+        }
+      },
+      "InternalServerError": {
+        "description": "💥 Error interno del servidor",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "success": false,
+              "message": "Internal server error",
+              "error": {
+                "code": "INTERNAL_ERROR"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Register a new user",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "username",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "username": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 30
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 8
+                  },
+                  "firstName": {
+                    "type": "string"
+                  },
+                  "lastName": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User registered successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "409": {
+            "description": "User already exists"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "User login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful"
+          },
+          "401": {
+            "description": "Invalid credentials"
+          },
+          "429": {
+            "description": "Too many login attempts"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Refresh access token",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Token refreshed successfully"
+          },
+          "401": {
+            "description": "Invalid refresh token"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "User logout",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Logout successful"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout-all": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Logout from all sessions",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Logout from all sessions successful"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/verify-token": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Verify token (for inter-service communication)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "token"
+                ],
+                "properties": {
+                  "token": {
+                    "type": "string"
+                  },
+                  "service": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token is valid"
+          },
+          "401": {
+            "description": "Invalid token"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Get current user profile",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User profile retrieved successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Update current user profile",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "firstName": {
+                    "type": "string"
+                  },
+                  "lastName": {
+                    "type": "string"
+                  },
+                  "avatar": {
+                    "type": "string",
+                    "format": "uri"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Profile updated successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/change-password": {
+      "patch": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Change user password",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "currentPassword",
+                  "newPassword"
+                ],
+                "properties": {
+                  "currentPassword": {
+                    "type": "string"
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "minLength": 8
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password changed successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Invalid current password"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/sessions": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Get user active sessions",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sessions retrieved successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/sessions/{sessionId}": {
+      "delete": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Terminate a specific session",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sessionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session terminated successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Session not found"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/forgot-password": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Request password reset",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password reset email sent"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/reset-password": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Reset password with token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "token",
+                  "password",
+                  "email"
+                ],
+                "properties": {
+                  "token": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 8
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password reset successfully"
+          },
+          "400": {
+            "description": "Invalid or expired token"
+          }
+        }
+      }
+    },
+    "/api/v1/users/{id}": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get user by ID",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "User ID (CUID)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User retrieved successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Update user information (owner only)",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "User ID (CUID)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "firstName": {
+                    "type": "string"
+                  },
+                  "lastName": {
+                    "type": "string"
+                  },
+                  "avatar": {
+                    "type": "string",
+                    "format": "uri"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User updated successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - not owner"
+          },
+          "404": {
+            "description": "User not found"
+          },
+          "409": {
+            "description": "Email or username already exists"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Deactivate user account (soft delete, owner only)",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "User ID (CUID)"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User deactivated successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - not owner"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      }
+    },
+    "/api/v1/users/{id}/profile": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get public user profile",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "User ID (CUID)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public profile retrieved successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      }
+    },
+    "/api/v1/users/{id}/avatar": {
+      "patch": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Update user avatar (owner only)",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "User ID (CUID)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "avatar"
+                ],
+                "properties": {
+                  "avatar": {
+                    "type": "string",
+                    "format": "uri"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Avatar updated successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - not owner"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      }
+    },
+    "/api/v1/users/{id}/activate": {
+      "patch": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Reactivate user account (owner only)",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "User ID (CUID)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User reactivated successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - not owner"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      }
+    },
+    "/api/v1/users/{id}/verify-email": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Send email verification token (owner only)",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "User ID (CUID)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verification email sent"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - not owner"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      }
+    },
+    "/api/v1/users/{id}/verify-email/{token}": {
+      "patch": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Verify email with token (owner only)",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "User ID (CUID)"
+          },
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Verification token"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Email verified successfully"
+          },
+          "400": {
+            "description": "Invalid or expired token"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - not owner"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "🔐 Authentication",
+      "description": "Registro, login y gestión de tokens"
+    },
+    {
+      "name": "👤 User Management",
+      "description": "Gestión de perfiles y datos de usuario"
+    },
+    {
+      "name": "🎫 Session Management",
+      "description": "Control y monitoreo de sesiones activas"
+    },
+    {
+      "name": "🔍 Token Verification",
+      "description": "Endpoints internos para verificación de tokens"
+    },
+    {
+      "name": "❤️ Health & Monitoring",
+      "description": "Estado y monitoreo del servicio"
+    }
+  ],
+  "externalDocs": {
+    "description": "📚 Documentación completa en GitHub",
+    "url": "https://github.com/Jonathangoz/task-manager-monorepo"
+  }
+}

@@ -851,8 +851,8 @@ Para endpoints protegidos, incluye el header:
 // CONFIGURACIÓN SWAGGER-JSDOC
 // ==============================================
 const swaggerOptions: swaggerJsdoc.Options = {
-  swaggerDefinition,
-  apis: ['./src/routes/*.ts', './src/schemas/*.ts'],
+  swaggerDefinition: swaggerDefinition,
+  apis: ['./src/commons/controllers/*.ts', './src/commons/routes/*.ts'],
 };
 
 export const swaggerSpec = swaggerJsdoc(swaggerOptions) as OpenAPIV3.Document;

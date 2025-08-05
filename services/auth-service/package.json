@@ -29,8 +29,9 @@
     "type-check": "tsc --noEmit",
     "format:check": "prettier --check src/**/*.ts",
     "swagger:validate": "ts-node -r tsconfig-paths/register src/scripts/validate-swagger.ts",
-    "swagger:generate": "swagger-jsdoc -d src/utils/swagger.ts src/routes/*.ts -o docs/swagger.json",
-    "docs:serve": "swagger-ui-serve docs/swagger.json",
+    "swagger:generate": "ts-node -r tsconfig-paths/register -e \"import('./src/utils/swagger').then(m => require('fs').writeFileSync('docs/swagger.json', JSON.stringify(m.swaggerSpec, null, 2)))\"",
+    "swagger:build": "ts-node -r tsconfig-paths/register src/scripts/build-swagger.ts",
+    "docs:serve": "npx http-server docs -p 8080",
     "docs:build": "redoc-cli build docs/swagger.json --output docs/index.html"
   },
   "dependencies": {
