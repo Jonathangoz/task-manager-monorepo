@@ -12,20 +12,18 @@ const envSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'production', 'test'])
     .default('development'),
+
   PORT: z.coerce.number().positive().default(3001),
+
   API_VERSION: z.string().default('v1'),
 
-  // DATABASE CONFIGURATION
-  DATABASE_URL: z.string().min(1, 'URL de la Base de Datos es Requerida'),
-
-  // REDIS CONFIGURATION
-  REDIS_URL: z.string().min(1, 'URL de Redis es Requerida'),
+  // DATABASE & REDIS CONFIGURATION (inyectadas por render.yaml)
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
   REDIS_PREFIX: z.string().default('auth:'),
 
   // JWT CONFIGURATION
-  JWT_SECRET: z
-    .string()
-    .min(32, 'JWT Secret debe tener al menos 32 caracteres'),
+  JWT_SECRET: z.string().min(32, 'JWT Secret must be at least 32 characters'),
   JWT_EXPIRES_IN: z.string().default('15m'),
   JWT_ISSUER: z.string().default('task-manager-auth'),
 
@@ -50,38 +48,16 @@ const envSchema = z.object({
     .default('true'),
 
   // API_KEY
-  AUTH_SERVICE_API_KEY: z
-    .string()
-    .min(1, 'La API Key del servicio es requerida'),
+  AUTH_SERVICE_API_KEY: z.string().min(1, 'AUTH_SERVICE_API_KEY is required'),
 
   // RATE LIMITING CONFIGURATION
-  RATE_LIMIT_WINDOW_MS: z
-    .string()
-    .transform((val) => parseInt(val, 10))
-    .pipe(z.number().positive())
-    .default('900000'), // 15 minutos
-  RATE_LIMIT_MAX_REQUESTS: z
-    .string()
-    .transform((val) => parseInt(val, 10))
-    .pipe(z.number().positive())
-    .default('100'),
+  RATE_LIMIT_WINDOW_MS: z.coerce.number().positive().default(900000), // 15 minutos
+  RATE_LIMIT_MAX_REQUESTS: z.coerce.number().positive().default(100),
 
   // ACCOUNT SECURITY
-  MAX_LOGIN_ATTEMPTS: z
-    .string()
-    .transform((val) => parseInt(val, 10))
-    .pipe(z.number().positive())
-    .default('5'),
-  ACCOUNT_LOCK_TIME: z
-    .string()
-    .transform((val) => parseInt(val, 10))
-    .pipe(z.number().positive())
-    .default('1800000'), // 30 minutos
-  PASSWORD_RESET_TOKEN_EXPIRES: z
-    .string()
-    .transform((val) => parseInt(val, 10))
-    .pipe(z.number().positive())
-    .default('3600000'), // 1 hora
+  MAX_LOGIN_ATTEMPTS: z.coerce.number().positive().default(5),
+  ACCOUNT_LOCK_TIME: z.coerce.number().positive().default(1800000), // 30 minutos
+  PASSWORD_RESET_TOKEN_EXPIRES: z.coerce.number().positive().default(3600000), // 1 hora
 
   // LOGGING CONFIGURATION
   LOG_LEVEL: z
@@ -93,21 +69,9 @@ const envSchema = z.object({
     .default('true'),
 
   // CACHE TTL CONFIGURATION (segundos)
-  CACHE_TTL_USER_SESSIONS: z
-    .string()
-    .transform((val) => parseInt(val, 10))
-    .pipe(z.number().positive())
-    .default('900'), // 15 minutos
-  CACHE_TTL_USER_DATA: z
-    .string()
-    .transform((val) => parseInt(val, 10))
-    .pipe(z.number().positive())
-    .default('300'), // 5 minutos
-  CACHE_TTL_BLACKLIST: z
-    .string()
-    .transform((val) => parseInt(val, 10))
-    .pipe(z.number().positive())
-    .default('86400'), // 24 horas
+  CACHE_TTL_USER_SESSIONS: z.coerce.number().positive().default(900), // 15 minutos
+  CACHE_TTL_USER_DATA: z.coerce.number().positive().default(300), // 5 minutos
+  CACHE_TTL_BLACKLIST: z.coerce.number().positive().default(86400), // 24 horas
 
   // FEATURES & HEALTH CHECK
   HEALTH_CHECK_ENABLED: z

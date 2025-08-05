@@ -1,4 +1,5 @@
-# Render Blueprint corregido y vinculado a Environment Group
+# render.yaml - Versión Definitiva y Corregida
+
 services:
   # 🔐 Auth Service - Production
   - type: web
@@ -9,8 +10,7 @@ services:
     branch: main
     rootDir: ./services/auth-service
     buildCommand: |
-      echo "🏗️ Building Auth Service..."
-      cd ../.. && pnpm install --frozen-lockfile && cd ./services/auth-service
+      pnpm install --frozen-lockfile
       pnpm prisma:generate
       pnpm build
     startCommand: pnpm start:prod
@@ -28,10 +28,6 @@ services:
           type: keyvalue
           name: task-manager-cache-prod
           property: connectionString
-      - key: REDIS_PREFIX # Específico de este servicio
-        value: 'auth:'
-
-    # Las Variables ahora se llaman desde environmentGroup de render
 
   # ✅ Task Service - Production
   - type: web
@@ -42,19 +38,15 @@ services:
     branch: main
     rootDir: ./services/task-service
     buildCommand: |
-      echo "🏗️ Building Task Service..."
-      cd ../.. && pnpm install --frozen-lockfile && cd ./services/task-service
+      pnpm install --frozen-lockfile
       pnpm prisma:generate
       pnpm build
     startCommand: pnpm start:prod
     healthCheckPath: /api/v1/health
     autoDeploy: true
-    # ✅ PASO 1: Vincula también este servicio al mismo grupo de entorno.
     envVarGroups:
       - name: Task-Env
     envVars:
-      - key: PORT 
-        value: 3002
       - key: DATABASE_URL
         fromDatabase:
           name: task-manager-unified-db-prod
@@ -64,21 +56,15 @@ services:
           type: keyvalue
           name: task-manager-cache-prod
           property: connectionString
-      - key: REDIS_PREFIX # Específico de este servicio
-        value: 'tasks:'
-
-      # 🔗 Esta variable es específica para la comunicación entre servicios.
-      - key: AUTH_SERVICE_URL
+      - key: AUTH_SERVICE_URL # Variable específica para la comunicación entre servicios
         value: 'https://task-manager-auth-service.onrender.com'
-
-    # Las Variables ahora se llaman desde environmentGroup de render
 
   # Production Redis Cache
   - type: keyvalue
     name: task-manager-cache-prod
     plan: free
     region: oregon
-    ipAllowList: []
+    ipAllowList: [] # Para producción, considera restringir IPs aquí.
     maxmemoryPolicy: allkeys-lru
 
 databases:
