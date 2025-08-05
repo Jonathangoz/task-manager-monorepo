@@ -3,7 +3,7 @@ import { Server } from 'http';
 import http from 'http';
 // CORRECCIÓN: Importar la clase App, no la instancia de express
 import { App } from './app';
-import { environment } from '@/config/environment';
+import { environment, validateEnvironment } from '@/config/environment';
 import {
   dbLogger,
   redisLogger,
@@ -35,7 +35,7 @@ process.on('unhandledRejection', (reason: unknown) => {
 });
 
 class AuthServer {
-  // CORRECCIÓN: El tipo será http.Server, que es lo que devuelve http.createServer
+  // El tipo será http.Server, que es lo que devuelve http.createServer
   private serverInstance: http.Server;
   private cleanupIntervals: NodeJS.Timeout[] = [];
   private isShuttingDown = false;
@@ -46,22 +46,23 @@ class AuthServer {
   private readonly app: App;
 
   constructor() {
-    // CORRECCIÓN: Crear la instancia de App aquí
+    //Crear la instancia de App
     this.app = new App();
-    // CORRECCIÓN: Inicializar el servidor con la instancia de express de la app
     this.serverInstance = http.createServer(this.app.getApp());
   }
 
   // ✅ INICIO DEL SERVIDOR CON MEJOR MANEJO DE ERRORES
   public async start(): Promise<void> {
     try {
+      // ✅ PASO 1: Validar el entorno ANTES que nada. Si esto falla, no continuamos.
+      this.serverLogger.info('🚀 Validating environment variables...');
+      validateEnvironment();
+      this.serverLogger.info('✅ Environment variables are valid.');
+
       this.serverLogger.info('🚀 Starting Auth Service...', {
         nodeVersion: process.version,
         environment: environment.app.env,
         port: environment.app.port,
-        platform: process.platform,
-        arch: process.arch,
-        pid: process.pid,
       });
 
       // Verificar configuración crítica ANTES de inicializar
@@ -69,10 +70,10 @@ class AuthServer {
       await this.initializeDatabase();
       await this.initializeRedis();
 
-      // CORRECCIÓN: Inicializar la aplicación Express (middlewares, rutas, etc.)
+      // Inicializar la aplicación Express (middlewares, rutas, etc.)
       await this.app.initializeApp();
 
-      // 2. Iniciar el servidor HTTP DESPUÉS de que todo esté listo
+      // Iniciar el servidor HTTP DESPUÉS de que todo esté listo
       const port = environment.app.port;
       this.serverInstance.listen(port, () => {
         startup.serviceStarted(port, environment.app.env);
@@ -786,6 +787,10 @@ async function startServer(): Promise<void> {
     logError.critical(err, { context: 'globalStartServer' });
     process.exit(1);
   }
+}
+
+if (require.main === module) {
+  authServer.start();
 }
 
 // Iniciar servidor solo si es el módulo principal
