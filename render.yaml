@@ -1,4 +1,4 @@
-# Render Blueprint corregido - HEALTH CHECKS OPTIMIZADOS
+# Render Blueprint corregido y vinculado a Environment Group
 services:
   # 🔐 Auth Service - Production
   - type: web
@@ -14,19 +14,11 @@ services:
       pnpm prisma:generate
       pnpm build
     startCommand: pnpm start:prod
-    # CONFIGURACIÓN DE HEALTH CHECK OPTIMIZADA PARA RENDER
     healthCheckPath: /api/v1/health/ready
     autoDeploy: true
+    envVarGroups:
+      - name: Task-Env
     envVars:
-      # Variables específicas del servicio
-      - key: NODE_ENV
-        value: Task-Env
-      - key: PORT
-        value: Task-Env
-      - key: API_VERSION
-        value: Task-Env
-
-      # Variables de base de datos y cache
       - key: DATABASE_URL
         fromDatabase:
           name: task-manager-unified-db-prod
@@ -36,81 +28,10 @@ services:
           type: keyvalue
           name: task-manager-cache-prod
           property: connectionString
-      - key: REDIS_PREFIX
+      - key: REDIS_PREFIX # Específico de este servicio
         value: 'auth:'
 
-      # 🔑 JWT Configuration - VALORES DIRECTOS
-      - key: JWT_SECRET
-        value: Task-Env
-      - key: JWT_ISSUER
-        value: Task-Env
-      - key: JWT_EXPIRES_IN
-        value: Task-Env
-      - key: REFRESH_TOKEN_SECRET
-        value: Task-Env
-      - key: REFRESH_TOKEN_EXPIRES_IN
-        value: Task-Env
-      - key: JWE_SECRET
-        value: Task-Env
-      - key: JWE_ALGORITHM
-        value: Task-Env
-      - key: JWE_ENCRYPTION
-        value: Task-Env
-
-      # 🔐 Security
-      - key: AUTH_SERVICE_API_KEY
-        value: Task-Env
-
-      # 🌐 CORS Configuration
-      - key: CORS_ORIGIN
-        value: Task-Env
-
-      # 🔧 Logging y configuración - OPTIMIZADO PARA RENDER
-      - key: LOG_LEVEL
-        value: 'warn' # ✅ Reducir logs para mejor performance
-      - key: LOG_PRETTY
-        value: 'false'
-      - key: RATE_LIMIT_WINDOW_MS
-        value: '900000'
-      - key: RATE_LIMIT_MAX_REQUESTS
-        value: '100'
-      - key: HELMET_ENABLED
-        value: 'true'
-      - key: HEALTH_CHECK_ENABLED
-        value: 'true'
-      - key: SWAGGER_ENABLED
-        value: 'false' # ✅ Deshabilitado en producción
-
-      - key: MAX_LOGIN_ATTEMPTS
-        value: '5'
-      - key: ACCOUNT_LOCK_TIME
-        value: '1800000' # 30 minutos
-      - key: PASSWORD_RESET_TOKEN_EXPIRES
-        value: '3600000' # 1 hora
-      - key: EMAIL_VERIFICATION_ENABLED
-        value: 'false'
-
-      # TTLs de CACHE (en segundos)
-      - key: CACHE_TTL_USER_SESSIONS
-        value: '900' # 15 minutos
-      - key: CACHE_TTL_USER_DATA
-        value: '300' # 5 minutos
-      - key: CACHE_TTL_BLACKLIST
-        value: '86400' # 24 horas
-
-      # 🔧 Logging y configuración - OPTIMIZADO PARA RENDER
-      - key: LOG_LEVEL
-        value: 'warn' # Reducir logs para mejor performance
-
-      # ✅ TIMEOUTS CRÍTICOS PARA RENDER - MÁS GENEROSOS
-      - key: HTTP_REQUEST_TIMEOUT
-        value: '180000' # 3 minutos (más generoso)
-      - key: HEALTH_CHECK_TIMEOUT
-        value: '10000' # 10 segundos para health checks
-      - key: DATABASE_TIMEOUT
-        value: '45000' # 45 segundos para BD
-      - key: REDIS_TIMEOUT
-        value: '5000' # 5 segundos para Redis
+    # Las Variables ahora se llaman desde environmentGroup de render
 
   # ✅ Task Service - Production
   - type: web
@@ -126,19 +47,14 @@ services:
       pnpm prisma:generate
       pnpm build
     startCommand: pnpm start:prod
-    # ✅ HEALTH CHECK PATH CORREGIDO
     healthCheckPath: /api/v1/health
     autoDeploy: true
+    # ✅ PASO 1: Vincula también este servicio al mismo grupo de entorno.
+    envVarGroups:
+      - name: Task-Env
     envVars:
-      # Variables específicas del servicio
-      - key: NODE_ENV
-        value: Task-Env
-      - key: PORT
+      - key: PORT 
         value: 3002
-      - key: API_VERSION
-        value: Task-Env
-
-      # Variables de base de datos y cache
       - key: DATABASE_URL
         fromDatabase:
           name: task-manager-unified-db-prod
@@ -148,66 +64,14 @@ services:
           type: keyvalue
           name: task-manager-cache-prod
           property: connectionString
-      - key: REDIS_PREFIX
+      - key: REDIS_PREFIX # Específico de este servicio
         value: 'tasks:'
 
-      # 🔗 Comunicación entre servicios
+      # 🔗 Esta variable es específica para la comunicación entre servicios.
       - key: AUTH_SERVICE_URL
         value: 'https://task-manager-auth-service.onrender.com'
-      - key: AUTH_SERVICE_VERIFY_ENDPOINT
-        value: '/api/v1/auth/verify-token'
-      - key: AUTH_SERVICE_API_KEY
-        value: Task-Env
-      - key: AUTH_SERVICE_TIMEOUT
-        value: '15000' # ✅ Más generoso para comunicación entre servicios
 
-      # 🔑 JWT Configuration - MISMOS VALORES QUE AUTH
-      - key: JWT_SECRET
-        value: Task-Env
-      - key: JWT_ISSUER
-        value: Task-Env
-
-      # 🌐 CORS Configuration
-      - key: CORS_ORIGIN
-        value: 'https://your-frontend-url.onrender.com,https://task-manager-auth-service.onrender.com'
-
-      # Variables específicas de tareas
-      - key: DEFAULT_PAGE_SIZE
-        value: '20'
-      - key: MAX_PAGE_SIZE
-        value: '100'
-      - key: CACHE_TTL_TASKS
-        value: '300'
-      - key: CACHE_TTL_CATEGORIES
-        value: '600'
-      - key: CACHE_TTL_USER_TASKS
-        value: '180'
-
-      # Variables de logging y configuración
-      - key: LOG_LEVEL
-        value: 'warn' # ✅ Reducir logs
-      - key: LOG_PRETTY
-        value: 'false'
-      - key: RATE_LIMIT_WINDOW_MS
-        value: '900000'
-      - key: RATE_LIMIT_MAX_REQUESTS
-        value: '200'
-      - key: HELMET_ENABLED
-        value: 'true'
-      - key: HEALTH_CHECK_ENABLED
-        value: 'true'
-      - key: SWAGGER_ENABLED
-        value: 'false' # ✅ Deshabilitado en producción
-
-      # ✅ TIMEOUTS CRÍTICOS PARA RENDER
-      - key: HTTP_REQUEST_TIMEOUT
-        value: '180000'
-      - key: HEALTH_CHECK_TIMEOUT
-        value: '10000'
-      - key: DATABASE_TIMEOUT
-        value: '45000'
-      - key: REDIS_TIMEOUT
-        value: '5000'
+    # Las Variables ahora se llaman desde environmentGroup de render
 
   # Production Redis Cache
   - type: keyvalue
