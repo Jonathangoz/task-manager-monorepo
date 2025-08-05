@@ -15,6 +15,7 @@ import slowDown from 'express-slow-down';
 
 // Import tipos personalizados
 import { AppRequest } from '../types/express';
+import swaggerRoutes from '@/docs/swagger.routes';
 
 // Configuration
 import { environment } from '@/config/environment';
@@ -543,7 +544,6 @@ class App {
 
     // ✅ JSON parser optimizado con exclusión de health checks
     this.express.use((req: Request, res: Response, next: NextFunction) => {
-      // ✅ Health checks no necesitan parsing JSON (más rápido)
       if (
         req.path.includes('/health') ||
         req.path === '/ping' ||
@@ -833,6 +833,7 @@ class App {
 
     const apiVersion = `/api/${environment.app.apiVersion}`;
 
+    this.express.use('/api/v1', swaggerRoutes);
     this.express.get('/', this.createRootHandler());
     this.express.get('/health', (req, res) =>
       this.healthController.readinessCheck(req, res),

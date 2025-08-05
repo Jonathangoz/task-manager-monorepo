@@ -1,4 +1,4 @@
-// src/utils/swaggerHelpers.ts - Corregido sin tipos 'any'
+// src/utils/swaggerHelpers.ts
 import { ValidationResult } from '@/types/swaggerTypes';
 
 // Tipos específicos para las respuestas

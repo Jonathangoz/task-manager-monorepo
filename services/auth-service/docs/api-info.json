@@ -1,0 +1,11 @@
+{
+  "title": "Task Manager - Auth Service API",
+  "version": "1.0.0",
+  "servers": 1,
+  "paths": 18,
+  "schemas": 17,
+  "tags": 5,
+  "generatedAt": "2025-08-05T18:58:39.113Z",
+  "nodeVersion": "v22.15.0",
+  "totalEndpoints": 18
+}

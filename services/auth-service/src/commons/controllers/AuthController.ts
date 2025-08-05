@@ -426,7 +426,7 @@ export class AuthController {
    *     tags: [Authentication]
    *     summary: User logout
    *     security:
-   *       - bearerAuth: []
+   *       - BearerAuth: []
    *     responses:
    *       200:
    *         description: Logout successful
@@ -509,7 +509,7 @@ export class AuthController {
    *     tags: [Authentication]
    *     summary: Logout from all sessions
    *     security:
-   *       - bearerAuth: []
+   *       - BearerAuth: []
    *     responses:
    *       200:
    *         description: Logout from all sessions successful
@@ -706,7 +706,7 @@ export class AuthController {
    *     tags: [Authentication]
    *     summary: Get current user profile
    *     security:
-   *       - bearerAuth: []
+   *       - BearerAuth: []
    *     responses:
    *       200:
    *         description: User profile retrieved successfully
@@ -804,7 +804,7 @@ export class AuthController {
    *     tags: [Authentication]
    *     summary: Update current user profile
    *     security:
-   *       - bearerAuth: []
+   *       - BearerAuth: []
    *     requestBody:
    *       required: true
    *       content:
@@ -915,7 +915,7 @@ export class AuthController {
    *     tags: [Authentication]
    *     summary: Change user password
    *     security:
-   *       - bearerAuth: []
+   *       - BearerAuth: []
    *     requestBody:
    *       required: true
    *       content:
@@ -1008,7 +1008,7 @@ export class AuthController {
    *     tags: [Authentication]
    *     summary: Get user active sessions
    *     security:
-   *       - bearerAuth: []
+   *       - BearerAuth: []
    *     responses:
    *       200:
    *         description: Sessions retrieved successfully
@@ -1085,7 +1085,7 @@ export class AuthController {
    *     tags: [Authentication]
    *     summary: Terminate a specific session
    *     security:
-   *       - bearerAuth: []
+   *       - BearerAuth: []
    *     parameters:
    *       - in: path
    *         name: sessionId

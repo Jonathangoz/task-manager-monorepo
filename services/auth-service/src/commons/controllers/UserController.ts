@@ -28,7 +28,7 @@ export class UserController {
    *     tags: [Users]
    *     summary: Get users with pagination and filters
    *     security:
-   *       - bearerAuth: []
+   *       - BearerAuth: []
    *     parameters:
    *       - in: query
    *         name: page
@@ -70,11 +70,17 @@ export class UserController {
    *         schema:
    *           type: boolean
    *         description: Filter by verified status
-   *     responses:
-   *       200:
-   *         description: Users retrieved successfully
-   *       401:
-   *         description: Unauthorized
+   *         responses:
+   *            200:
+   *            description: Lista de usuarios obtenida exitosamente.
+   *          content:
+   *          application/json:
+   *            schema:
+   *              $ref: '#/components/schemas/UserResponse' // O un esquema específico de lista
+   *              401:
+   *              $ref: '#/components/responses/UnauthorizedError'
+   *              403:
+   *              $ref: '#/components/responses/ForbiddenError'
    */
   public getUsers = async (
     req: Request,
@@ -163,7 +169,7 @@ export class UserController {
    *     tags: [Users]
    *     summary: Get user by ID
    *     security:
-   *       - bearerAuth: []
+   *       - BearerAuth: []
    *     parameters:
    *       - in: path
    *         name: id
@@ -250,7 +256,7 @@ export class UserController {
    *     tags: [Users]
    *     summary: Get public user profile
    *     security:
-   *       - bearerAuth: []
+   *       - BearerAuth: []
    *     parameters:
    *       - in: path
    *         name: id
@@ -334,7 +340,7 @@ export class UserController {
    *     tags: [Users]
    *     summary: Update user information (owner only)
    *     security:
-   *       - bearerAuth: []
+   *       - BearerAuth: []
    *     parameters:
    *       - in: path
    *         name: id
@@ -535,7 +541,7 @@ export class UserController {
    *     tags: [Users]
    *     summary: Update user avatar (owner only)
    *     security:
-   *       - bearerAuth: []
+   *       - BearerAuth: []
    *     parameters:
    *       - in: path
    *         name: id
@@ -647,7 +653,7 @@ export class UserController {
    *     tags: [Users]
    *     summary: Deactivate user account (soft delete, owner only)
    *     security:
-   *       - bearerAuth: []
+   *       - BearerAuth: []
    *     parameters:
    *       - in: path
    *         name: id
@@ -742,7 +748,7 @@ export class UserController {
    *     tags: [Users]
    *     summary: Reactivate user account (owner only)
    *     security:
-   *       - bearerAuth: []
+   *       - BearerAuth: []
    *     parameters:
    *       - in: path
    *         name: id
@@ -823,7 +829,7 @@ export class UserController {
    *     tags: [Users]
    *     summary: Send email verification token (owner only)
    *     security:
-   *       - bearerAuth: []
+   *       - BearerAuth: []
    *     parameters:
    *       - in: path
    *         name: id
@@ -906,7 +912,7 @@ export class UserController {
    *     tags: [Users]
    *     summary: Verify email with token (owner only)
    *     security:
-   *       - bearerAuth: []
+   *       - BearerAuth: []
    *     parameters:
    *       - in: path
    *         name: id
