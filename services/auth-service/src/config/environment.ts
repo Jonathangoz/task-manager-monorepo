@@ -89,8 +89,9 @@ const envSchema = z.object({
 });
 
 // VALIDACIÓN CON MANEJO DE ERRORES
-function validateEnvironment() {
+export function validateEnvironment() {
   try {
+    // Se parsea directamente process.env
     return envSchema.parse(process.env);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -99,15 +100,27 @@ function validateEnvironment() {
         console.error(`  - ${err.path.join('.')}: ${err.message}`);
       });
       console.error(
-        '\n💡 Verifica tu archivo .env y asegúrate de que todas las variables requeridas estén definidas.',
+        '\n💡 Verifica tu archivo .env (local) o el Environment Group (Render) y asegúrate de que todas las variables requeridas estén definidas y sean correctas.',
       );
+      // Imprimir las claves que SÍ están presentes para ayudar a depurar
+      console.error('\n🔍 Variables de entorno disponibles (parcial):');
+      Object.keys(process.env).forEach((key) => {
+        if (
+          key.startsWith('JWT') ||
+          key.startsWith('REFRESH') ||
+          key.startsWith('JWE') ||
+          key === 'PORT' ||
+          key === 'NODE_ENV'
+        ) {
+          console.error(`  - ${key}=${process.env[key]}`);
+        }
+      });
       process.exit(1);
     }
     throw error;
   }
 }
 
-// Validar y parsear variables de entorno
 const env = validateEnvironment();
 
 // CONFIGURACIÓN EXPORTADA
